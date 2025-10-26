@@ -5,11 +5,11 @@ use anyhow::{Context, Result};
 use atty::Stream;
 use clap::Parser;
 
-const VERSION: &str = "2.4.0";
+const VERSION: &str = "2.4.1";
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // CLI
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod cli {
     use super::util::{DateTimeArg, SizeArg};
     use clap::{Parser, ValueEnum};
@@ -57,6 +57,7 @@ mod cli {
             match s {
                 "ext" => Ok(Self::Ext),
                 x if x.starts_with("dir") => {
+                    // dir or dir=N
                     let depth = x
                         .strip_prefix("dir=")
                         .and_then(|d| d.parse().ok())
@@ -80,7 +81,7 @@ mod cli {
         }
     }
 
-    /// `--sort` 複数キー/方向の指定を表現
+    /// `--sort` 複数キー/方向の指定を表現 (e.g. "lines:desc,chars:desc,name")
     #[derive(Debug, Clone)]
     pub struct SortSpec(pub Vec<(SortKey, bool)>);
 
@@ -116,9 +117,7 @@ mod cli {
         name = "count_lines",
         version = crate::VERSION,
         about = "ファイル行数/文字数/単語数の集計ツール",
-        long_about = Some(
-            include_str!("../usage.txt")
-        )
+        long_about = Some(include_str!("../usage.txt"))
     )]
     #[allow(clippy::struct_excessive_bools)]
     pub struct Args {
@@ -303,13 +302,13 @@ mod cli {
     }
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // App config + filters
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod config {
     use super::cli::{ByMode, OutputFormat, SortKey};
     use crate::util::logical_absolute;
-    use anyhow::Result;
+    use anyhow::{anyhow, Result};
     use chrono::{DateTime, Local};
     use evalexpr::Node;
     use std::collections::HashSet;
@@ -338,7 +337,7 @@ mod config {
     impl Filters {
         pub fn from_args(args: &crate::cli::Args) -> Result<Self> {
             let filter_ast = if let Some(expr) = &args.filter {
-                Some(evalexpr::build_operator_tree(expr).map_err(|e| anyhow::anyhow!(e))?)
+                Some(evalexpr::build_operator_tree(expr).map_err(|e| anyhow!(e))?)
             } else {
                 None
             };
@@ -413,34 +412,26 @@ mod config {
         type Error = anyhow::Error;
         fn try_from(args: crate::cli::Args) -> Result<Self> {
             let filters = Filters::from_args(&args)?;
-            let jobs = args.jobs.unwrap_or_else(num_cpus::get);
+            let jobs = args.jobs.unwrap_or_else(num_cpus::get).max(1);
             let paths = if args.paths.is_empty() {
                 vec![PathBuf::from(".")]
             } else {
                 args.paths
             };
 
-            let by_modes: Vec<ByKey> = if args.by.is_empty() {
-                vec![]
-            } else {
-                args.by
-                    .into_iter()
-                    .map(|b| match b {
-                        ByMode::Ext => ByKey::Ext,
-                        ByMode::Dir(d) => ByKey::Dir(d),
-                        ByMode::Mtime(g) => ByKey::Mtime(g),
-                        ByMode::None => unreachable!(),
-                    })
-                    .collect()
-            };
+            let by_modes: Vec<ByKey> = args
+                .by
+                .into_iter()
+                .filter(|b| !matches!(b, ByMode::None))
+                .map(|b| match b {
+                    ByMode::Ext => ByKey::Ext,
+                    ByMode::Dir(d) => ByKey::Dir(d),
+                    ByMode::Mtime(g) => ByKey::Mtime(g),
+                    ByMode::None => unreachable!(),
+                })
+                .collect();
 
-            let compare = args.compare.and_then(|v| {
-                if v.len() == 2 {
-                    Some((v[0].clone(), v[1].clone()))
-                } else {
-                    None
-                }
-            });
+            let compare = args.compare.and_then(|v| (v.len() == 2).then(|| (v[0].clone(), v[1].clone())));
 
             Ok(Self {
                 format: args.format,
@@ -484,9 +475,9 @@ mod config {
     pub use Filters as AppFilters;
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // Data types
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod types {
     use chrono::{DateTime, Local};
     use serde::Serialize;
@@ -574,9 +565,9 @@ mod types {
     pub use JsonSummary as OutSummary;
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // Utilities
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod util {
     use anyhow::Context as _;
     use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
@@ -684,7 +675,7 @@ mod util {
     }
 
     pub fn get_dir_key(path: &Path, depth: usize) -> String {
-        use std::path::Component;
+        use std::path::{Component, Path};
         let base = path.parent().unwrap_or(Path::new("."));
         let mut parts = Vec::with_capacity(depth);
         for comp in base.components() {
@@ -695,11 +686,7 @@ mod util {
                 }
             }
         }
-        if parts.is_empty() {
-            ".".to_string()
-        } else {
-            parts.join("/")
-        }
+        if parts.is_empty() { ".".to_string() } else { parts.join("/") }
     }
 
     pub fn mtime_bucket(dt: chrono::DateTime<Local>, g: crate::cli::Granularity) -> String {
@@ -714,9 +701,9 @@ mod util {
     }
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // File collection
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod files {
     use chrono::{DateTime, Local};
     use std::path::PathBuf;
@@ -726,24 +713,9 @@ mod files {
     use crate::types::{Entry, Meta};
 
     const DEFAULT_PRUNE_DIRS: &[&str] = &[
-        ".git",
-        ".hg",
-        ".svn",
-        "node_modules",
-        ".venv",
-        "venv",
-        "build",
-        "dist",
-        "target",
-        ".cache",
-        ".direnv",
-        ".mypy_cache",
-        ".pytest_cache",
-        "coverage",
-        "__pycache__",
-        ".idea",
-        ".next",
-        ".nuxt",
+        ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "build", "dist", "target",
+        ".cache", ".direnv", ".mypy_cache", ".pytest_cache", "coverage", "__pycache__", ".idea",
+        ".next", ".nuxt",
     ];
 
     pub fn collect_entries(config: &AppConfig) -> anyhow::Result<Vec<Entry>> {
@@ -875,13 +847,11 @@ mod files {
             ..
         } = &config.filters;
 
-        if !include_patterns.is_empty() {
-            let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if !include_patterns.iter().any(|p| p.matches(&name)) {
-                return false;
-            }
-        }
         let name = path.file_name().unwrap_or_default().to_string_lossy();
+
+        if !include_patterns.is_empty() && !include_patterns.iter().any(|p| p.matches(&name)) {
+            return false;
+        }
         if exclude_patterns.iter().any(|p| p.matches(&name)) {
             return false;
         }
@@ -1012,9 +982,9 @@ mod files {
     }
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // Compute
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod compute {
     use rayon::prelude::*;
 
@@ -1041,7 +1011,7 @@ mod compute {
     }
 
     pub fn apply_sort(stats: &mut [FileStats], config: &AppConfig) {
-        if config.total_only || config.summary_only {
+        if config.total_only || config.summary_only || config.sort_specs.is_empty() {
             return;
         }
         // 安定ソートを「最後のキーから」適用
@@ -1054,21 +1024,13 @@ mod compute {
                     SortKey::Name => a.path.cmp(&b.path),
                     SortKey::Ext => a.ext.cmp(&b.ext),
                 };
-                if *desc {
-                    ord.reverse()
-                } else {
-                    ord
-                }
+                if *desc { ord.reverse() } else { ord }
             });
         }
     }
 
     fn is_text_ok(entry: &Entry, config: &AppConfig) -> bool {
-        if !config.text_only {
-            true
-        } else {
-            entry.meta.is_text
-        }
+        if config.text_only { entry.meta.is_text } else { true }
     }
 
     fn measure(entry: &Entry, config: &AppConfig) -> Option<FileStats> {
@@ -1134,20 +1096,14 @@ mod compute {
         loop {
             line.clear();
             let n = reader.read_line(&mut line).ok()?;
-            if n == 0 {
-                break;
-            }
+            if n == 0 { break; }
             if line.ends_with('\n') {
                 line.pop();
-                if line.ends_with('\r') {
-                    line.pop();
-                }
+                if line.ends_with('\r') { line.pop(); }
             }
             lines += 1;
             chars += line.chars().count();
-            if config.words {
-                words += line.split_whitespace().count();
-            }
+            if config.words { words += line.split_whitespace().count(); }
         }
         let st = FileStats {
             path: path.to_path_buf(),
@@ -1163,59 +1119,26 @@ mod compute {
     }
 
     fn apply_numeric_filters(stats: FileStats, config: &AppConfig) -> Option<FileStats> {
-        if let Some(min) = config.filters.min_lines {
-            if stats.lines < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_lines {
-            if stats.lines > max {
-                return None;
-            }
-        }
-        if let Some(min) = config.filters.min_chars {
-            if stats.chars < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_chars {
-            if stats.chars > max {
-                return None;
-            }
-        }
-        if let Some(min) = config.filters.min_words {
-            if stats.words.unwrap_or(0) < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_words {
-            if stats.words.unwrap_or(0) > max {
-                return None;
-            }
-        }
+        if let Some(min) = config.filters.min_lines { if stats.lines < min { return None; } }
+        if let Some(max) = config.filters.max_lines { if stats.lines > max { return None; } }
+        if let Some(min) = config.filters.min_chars { if stats.chars < min { return None; } }
+        if let Some(max) = config.filters.max_chars { if stats.chars > max { return None; } }
+        if let Some(min) = config.filters.min_words { if stats.words.unwrap_or(0) < min { return None; } }
+        if let Some(max) = config.filters.max_words { if stats.words.unwrap_or(0) > max { return None; } }
         // 式フィルタ
         if let Some(ast) = &config.filters.filter_ast {
             let mut ctx = evalexpr::HashMapContext::new();
-            ctx.set_value("lines".into(), Value::Int(stats.lines as i64))
-                .ok()?;
-            ctx.set_value("chars".into(), Value::Int(stats.chars as i64))
-                .ok()?;
-            ctx.set_value("words".into(), Value::Int(stats.words.unwrap_or(0) as i64))
-                .ok()?;
-            ctx.set_value("size".into(), Value::Int(stats.size as i64))
-                .ok()?;
-            ctx.set_value("ext".into(), Value::String(stats.ext.clone()))
-                .ok()?;
-            ctx.set_value("name".into(), Value::String(stats.name.clone()))
-                .ok()?;
+            ctx.set_value("lines".into(), Value::Int(stats.lines as i64)).ok()?;
+            ctx.set_value("chars".into(), Value::Int(stats.chars as i64)).ok()?;
+            ctx.set_value("words".into(), Value::Int(stats.words.unwrap_or(0) as i64)).ok()?;
+            ctx.set_value("size".into(), Value::Int(stats.size as i64)).ok()?;
+            ctx.set_value("ext".into(), Value::String(stats.ext.clone())).ok()?;
+            ctx.set_value("name".into(), Value::String(stats.name.clone())).ok()?;
             if let Some(mt) = stats.mtime {
-                ctx.set_value("mtime".into(), Value::Int(mt.timestamp()))
-                    .ok()?;
+                ctx.set_value("mtime".into(), Value::Int(mt.timestamp())).ok()?;
             }
             let v = ast.eval_boolean_with_context(&ctx).ok()?;
-            if !v {
-                return None;
-            }
+            if !v { return None; }
         }
         Some(stats)
     }
@@ -1240,24 +1163,13 @@ mod compute {
             match key {
                 ByKey::Ext => {
                     for s in stats {
-                        let k = if s.ext.is_empty() {
-                            "(noext)".to_string()
-                        } else {
-                            s.ext.clone()
-                        };
+                        let k = if s.ext.is_empty() { "(noext)".to_string() } else { s.ext.clone() };
                         let e = map.entry(k).or_insert((0, 0, 0));
-                        e.0 += s.lines;
-                        e.1 += s.chars;
-                        e.2 += 1;
+                        e.0 += s.lines; e.1 += s.chars; e.2 += 1;
                     }
                     let mut v: Vec<Group> = map
                         .into_iter()
-                        .map(|(key, (l, c, n))| Group {
-                            key,
-                            lines: l,
-                            chars: c,
-                            count: n,
-                        })
+                        .map(|(key, (l, c, n))| Group { key, lines: l, chars: c, count: n })
                         .collect();
                     v.sort_by(|a, b| b.lines.cmp(&a.lines));
                     results.push(("By Extension".to_string(), v));
@@ -1266,18 +1178,11 @@ mod compute {
                     for s in stats {
                         let k = crate::util::get_dir_key(&s.path, *depth);
                         let e = map.entry(k).or_insert((0, 0, 0));
-                        e.0 += s.lines;
-                        e.1 += s.chars;
-                        e.2 += 1;
+                        e.0 += s.lines; e.1 += s.chars; e.2 += 1;
                     }
                     let mut v: Vec<Group> = map
                         .into_iter()
-                        .map(|(key, (l, c, n))| Group {
-                            key,
-                            lines: l,
-                            chars: c,
-                            count: n,
-                        })
+                        .map(|(key, (l, c, n))| Group { key, lines: l, chars: c, count: n })
                         .collect();
                     v.sort_by(|a, b| b.lines.cmp(&a.lines));
                     results.push((format!("By Directory (depth={depth})"), v));
@@ -1287,19 +1192,12 @@ mod compute {
                         if let Some(mt) = s.mtime {
                             let k = crate::util::mtime_bucket(mt, *g);
                             let e = map.entry(k).or_insert((0, 0, 0));
-                            e.0 += s.lines;
-                            e.1 += s.chars;
-                            e.2 += 1;
+                            e.0 += s.lines; e.1 += s.chars; e.2 += 1;
                         }
                     }
                     let mut v: Vec<Group> = map
                         .into_iter()
-                        .map(|(key, (l, c, n))| Group {
-                            key,
-                            lines: l,
-                            chars: c,
-                            count: n,
-                        })
+                        .map(|(key, (l, c, n))| Group { key, lines: l, chars: c, count: n })
                         .collect();
                     v.sort_by(|a, b| b.lines.cmp(&a.lines));
                     let gran = match g {
@@ -1315,9 +1213,9 @@ mod compute {
     }
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // Output
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod output {
     use std::io::Write;
 
@@ -1354,11 +1252,16 @@ mod output {
     }
 
     fn ratio(val: usize, total: usize) -> String {
-        if total == 0 {
-            "0.0".into()
-        } else {
-            format!("{:.1}", (val as f64) * 100.0 / (total as f64))
-        }
+        if total == 0 { "0.0".into() } else { format!("{:.1}", (val as f64) * 100.0 / (total as f64)) }
+    }
+
+    fn format_path_for(s: &t::Stats, config: &AppConfig) -> String {
+        crate::util::format_path(
+            &s.path,
+            config.abs_path,
+            config.abs_canonical,
+            config.trim_root.as_deref(),
+        )
     }
 
     fn output_table(
@@ -1373,68 +1276,31 @@ mod output {
             writeln!(out)?;
             if config.words {
                 if config.ratio {
-                    writeln!(
-                        out,
-                        "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\t   WORDS\tFILE"
-                    )?;
+                    writeln!(out, "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\t   WORDS\tFILE")?;
                 } else {
                     writeln!(out, "    LINES\t CHARACTERS\t   WORDS\tFILE")?;
                 }
+            } else if config.ratio {
+                writeln!(out, "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\tFILE")?;
             } else {
-                if config.ratio {
-                    writeln!(
-                        out,
-                        "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\tFILE"
-                    )?;
-                } else {
                 writeln!(out, "    LINES\t CHARACTERS\tFILE")?;
-                }
             }
             writeln!(out, "----------------------------------------------")?;
             let (tl, tc, _) = totals(stats);
             for s in limited(stats, config) {
-                let path = crate::util::format_path(
-                    &s.path,
-                    config.abs_path,
-                    config.abs_canonical,
-                    config.trim_root.as_deref(),
-                );
+                let path = format_path_for(s, config);
                 if config.words {
                     if config.ratio {
-                        writeln!(
-                            out,
-                            "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{:>7}\t{}",
-                            ratio(s.lines, tl),
-                            s.lines,
-                            ratio(s.chars, tc),
-                            s.chars,
-                            s.words.unwrap_or(0),
-                            path
-                        )?;
+                        writeln!(out, "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{:>7}\t{}",
+                            ratio(s.lines, tl), s.lines, ratio(s.chars, tc), s.chars, s.words.unwrap_or(0), path)?;
                     } else {
-                        writeln!(
-                            out,
-                            "{:>10}\t{:>10}\t{:>7}\t{}",
-                            s.lines,
-                            s.chars,
-                            s.words.unwrap_or(0),
-                            path
-                        )?;
+                        writeln!(out, "{:>10}\t{:>10}\t{:>7}\t{}", s.lines, s.chars, s.words.unwrap_or(0), path)?;
                     }
+                } else if config.ratio {
+                    writeln!(out, "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{}",
+                        ratio(s.lines, tl), s.lines, ratio(s.chars, tc), s.chars, path)?;
                 } else {
-                    if config.ratio {
-                        writeln!(
-                            out,
-                            "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{}",
-                            ratio(s.lines, tl),
-                            s.lines,
-                            ratio(s.chars, tc),
-                            s.chars,
-                            path
-                        )?;
-                    } else {
                     writeln!(out, "{:>10}\t{:>10}\t{}", s.lines, s.chars, path)?;
-                    }
                 }
             }
             writeln!(out, "---")?;
@@ -1445,15 +1311,9 @@ mod output {
             for (label, mut rows) in groups {
                 writeln!(out, "[{label}]")?;
                 writeln!(out, "{:>10}\t{:>10}\tKEY", "LINES", "CHARACTERS")?;
-                if let Some(n) = config.by_limit {
-                    rows.truncate(n);
-                }
+                if let Some(n) = config.by_limit { rows.truncate(n); }
                 for g in rows {
-                    writeln!(
-                        out,
-                        "{:>10}\t{:>10}\t{} ({} files)",
-                        g.lines, g.chars, g.key, g.count
-                    )?;
+                    writeln!(out, "{:>10}\t{:>10}\t{} ({} files)", g.lines, g.chars, g.key, g.count)?;
                 }
                 writeln!(out, "---")?;
             }
@@ -1468,22 +1328,11 @@ mod output {
     ) -> anyhow::Result<()> {
         let (total_lines, total_chars, total_words) = totals(stats);
         if config.words {
-            writeln!(
-                out,
-                "{:>10}\t{:>10}\t{:>7}\tTOTAL ({} files)\n",
-                total_lines,
-                total_chars,
-                total_words,
-                stats.len()
-            )?;
+            writeln!(out, "{:>10}\t{:>10}\t{:>7}\tTOTAL ({} files)\n",
+                total_lines, total_chars, total_words, stats.len())?;
         } else {
-            writeln!(
-                out,
-                "{:>10}\t{:>10}\tTOTAL ({} files)\n",
-                total_lines,
-                total_chars,
-                stats.len()
-            )?;
+            writeln!(out, "{:>10}\t{:>10}\tTOTAL ({} files)\n",
+                total_lines, total_chars, stats.len())?;
         }
         Ok(())
     }
@@ -1501,60 +1350,19 @@ mod output {
         };
         writeln!(out, "{header}")?;
         for s in limited(stats, config) {
-            let path = crate::util::format_path(
-                &s.path,
-                config.abs_path,
-                config.abs_canonical,
-                config.trim_root.as_deref(),
-            );
+            let path = format_path_for(s, config);
             if config.words {
-                writeln!(
-                    out,
-                    "{}{}{}{}{}{}{}",
-                    s.lines,
-                    sep,
-                    s.chars,
-                    sep,
-                    s.words.unwrap_or(0),
-                    sep,
-                    escape_if_needed(&path, sep)
-                )?;
+                writeln!(out, "{}{}{}{}{}{}{}", s.lines, sep, s.chars, sep, s.words.unwrap_or(0), sep, escape_if_needed(&path, sep))?;
             } else {
-                writeln!(
-                    out,
-                    "{}{}{}{}{}",
-                    s.lines,
-                    sep,
-                    s.chars,
-                    sep,
-                    escape_if_needed(&path, sep)
-                )?;
+                writeln!(out, "{}{}{}{}{}", s.lines, sep, s.chars, sep, escape_if_needed(&path, sep))?;
             }
         }
         if config.total_row {
             let (tl, tc, tw) = totals(stats);
             if config.words {
-                writeln!(
-                    out,
-                    "{}{}{}{}{}{}{}",
-                    tl,
-                    sep,
-                    tc,
-                    sep,
-                    tw,
-                    sep,
-                    escape_if_needed("TOTAL", sep)
-                )?;
+                writeln!(out, "{}{}{}{}{}{}{}", tl, sep, tc, sep, tw, sep, escape_if_needed("TOTAL", sep))?;
             } else {
-                writeln!(
-                    out,
-                    "{}{}{}{}{}",
-                    tl,
-                    sep,
-                    tc,
-                    sep,
-                    escape_if_needed("TOTAL", sep)
-                )?;
+                writeln!(out, "{}{}{}{}{}", tl, sep, tc, sep, escape_if_needed("TOTAL", sep))?;
             }
         }
         Ok(())
@@ -1569,98 +1377,44 @@ mod output {
             if config.ratio {
                 writeln!(out, "| LINES% | LINES | CHARS% | CHARS | WORDS | FILE |\n|---:|---:|---:|---:|---:|:---|")?;
             } else {
-                writeln!(
-                    out,
-                    "| LINES | CHARS | WORDS | FILE |\n|---:|---:|---:|:---|"
-                )?;
+                writeln!(out, "| LINES | CHARS | WORDS | FILE |\n|---:|---:|---:|:---|")?;
             }
+        } else if config.ratio {
+            writeln!(out, "| LINES% | LINES | CHARS% | CHARS | FILE |\n|---:|---:|---:|---:|:---|")?;
         } else {
-            if config.ratio {
-                writeln!(
-                    out,
-                    "| LINES% | LINES | CHARS% | CHARS | FILE |\n|---:|---:|---:|---:|:---|"
-                )?;
-            } else {
-                writeln!(out, "| LINES | CHARS | FILE |\n|---:|---:|:---|")?;
-            }
+            writeln!(out, "| LINES | CHARS | FILE |\n|---:|---:|:---|")?;
         }
         let (tl, tc, _) = totals(stats);
         for s in limited(stats, config) {
-            let path = crate::util::format_path(
-                &s.path,
-                config.abs_path,
-                config.abs_canonical,
-                config.trim_root.as_deref(),
-            )
-            .replace('|', "\\|");
+            let path = format_path_for(s, config).replace('|', "\\|");
             if config.words {
                 if config.ratio {
-                    writeln!(
-                        out,
-                        "| {} | {} | {} | {} | {} | {} |",
-                        ratio(s.lines, tl),
-                        s.lines,
-                        ratio(s.chars, tc),
-                        s.chars,
-                        s.words.unwrap_or(0),
-                        path
-                    )?;
+                    writeln!(out, "| {} | {} | {} | {} | {} | {} |",
+                        ratio(s.lines, tl), s.lines, ratio(s.chars, tc), s.chars, s.words.unwrap_or(0), path)?;
                 } else {
-                    writeln!(
-                        out,
-                        "| {} | {} | {} | {} |",
-                        s.lines,
-                        s.chars,
-                        s.words.unwrap_or(0),
-                        path
-                    )?;
+                    writeln!(out, "| {} | {} | {} | {} |", s.lines, s.chars, s.words.unwrap_or(0), path)?;
                 }
+            } else if config.ratio {
+                writeln!(out, "| {} | {} | {} | {} | {} |",
+                    ratio(s.lines, tl), s.lines, ratio(s.chars, tc), s.chars, path)?;
             } else {
-                if config.ratio {
-                    writeln!(
-                        out,
-                        "| {} | {} | {} | {} | {} |",
-                        ratio(s.lines, tl),
-                        s.lines,
-                        ratio(s.chars, tc),
-                        s.chars,
-                        path
-                    )?;
-                } else {
-                    writeln!(out, "| {} | {} | {} |", s.lines, s.chars, path)?;
-                }
+                writeln!(out, "| {} | {} | {} |", s.lines, s.chars, path)?;
             }
         }
         // 集計
         let groups = crate::compute::aggregate(stats, &config.by_modes);
         for (label, mut rows) in groups {
             writeln!(out, "\n### {label}\n")?;
-            writeln!(
-                out,
-                "| LINES | CHARS | KEY | COUNT |\n|---:|---:|:---|---:|"
-            )?;
-            if let Some(n) = config.by_limit {
-                rows.truncate(n);
-            }
+            writeln!(out, "| LINES | CHARS | KEY | COUNT |\n|---:|---:|:---|---:|")?;
+            if let Some(n) = config.by_limit { rows.truncate(n); }
             for g in rows {
-                writeln!(
-                    out,
-                    "| {} | {} | {} | {} |",
-                    g.lines,
-                    g.chars,
-                    g.key.replace('|', "\\|"),
-                    g.count
-                )?;
+                writeln!(out, "| {} | {} | {} | {} |", g.lines, g.chars, g.key.replace('|', "\\|"), g.count)?;
             }
         }
         Ok(())
     }
 
-    fn output_json(
-        stats: &[t::Stats],
-        config: &AppConfig,
-        out: &mut impl Write,
-    ) -> anyhow::Result<()> {
+    fn build_out_json(stats: &[t::Stats], config: &AppConfig) -> t::Out {
         let files: Vec<t::OutFile> = stats
             .iter()
             .map(|s| t::OutFile {
@@ -1689,101 +1443,35 @@ mod output {
         for (label, rows) in crate::compute::aggregate(stats, &config.by_modes) {
             let mut jr = Vec::new();
             let mut rows = rows;
-            if let Some(n) = config.by_limit {
-                rows.truncate(n);
-            }
+            if let Some(n) = config.by_limit { rows.truncate(n); }
             for g in rows {
-                jr.push(t::OutGroupRow {
-                    key: g.key,
-                    lines: g.lines,
-                    chars: g.chars,
-                    count: g.count,
-                });
+                jr.push(t::OutGroupRow { key: g.key, lines: g.lines, chars: g.chars, count: g.count });
             }
             groups_json.push(t::OutGroup { label, rows: jr });
         }
-        let out_json = t::Out {
+        t::Out {
             version: crate::VERSION,
             files,
             summary,
-            by: if groups_json.is_empty() {
-                None
-            } else {
-                Some(groups_json)
-            },
-        };
+            by: if groups_json.is_empty() { None } else { Some(groups_json) },
+        }
+    }
+
+    fn output_json(stats: &[t::Stats], config: &AppConfig, out: &mut impl Write) -> anyhow::Result<()> {
+        let out_json = build_out_json(stats, config);
         serde_json::to_writer_pretty(&mut *out, &out_json)?;
         writeln!(out)?;
         Ok(())
     }
 
-    fn output_yaml(
-        stats: &[t::Stats],
-        config: &AppConfig,
-        out: &mut impl Write,
-    ) -> anyhow::Result<()> {
-        use serde_yaml as y;
-        let files: Vec<t::OutFile> = stats
-            .iter()
-            .map(|s| t::OutFile {
-                file: crate::util::format_path(
-                    &s.path,
-                    config.abs_path,
-                    config.abs_canonical,
-                    config.trim_root.as_deref(),
-                ),
-                lines: s.lines,
-                chars: s.chars,
-                words: s.words,
-                size: s.size,
-                mtime: s.mtime.map(|d| d.to_rfc3339()),
-                ext: s.ext.clone(),
-            })
-            .collect();
-        let (tl, tc, tw) = totals(stats);
-        let summary = t::OutSummary {
-            lines: tl,
-            chars: tc,
-            words: config.words.then_some(tw),
-            files: stats.len(),
-        };
-        let mut groups_yaml = Vec::new();
-        for (label, rows) in crate::compute::aggregate(stats, &config.by_modes) {
-            let mut jr = Vec::new();
-            let mut rows = rows;
-            if let Some(n) = config.by_limit {
-                rows.truncate(n);
-            }
-            for g in rows {
-                jr.push(t::OutGroupRow {
-                    key: g.key,
-                    lines: g.lines,
-                    chars: g.chars,
-                    count: g.count,
-                });
-            }
-            groups_yaml.push(t::OutGroup { label, rows: jr });
-        }
-        let out_yaml = t::Out {
-            version: crate::VERSION,
-            files,
-            summary,
-            by: if groups_yaml.is_empty() {
-                None
-            } else {
-                Some(groups_yaml)
-            },
-        };
-        let s = y::to_string(&out_yaml)?;
+    fn output_yaml(stats: &[t::Stats], config: &AppConfig, out: &mut impl Write) -> anyhow::Result<()> {
+        let out_yaml = build_out_json(stats, config);
+        let s = serde_yaml::to_string(&out_yaml)?;
         writeln!(out, "{}", s)?;
         Ok(())
     }
 
-    fn output_jsonl(
-        stats: &[t::Stats],
-        config: &AppConfig,
-        out: &mut impl Write,
-    ) -> anyhow::Result<()> {
+    fn output_jsonl(stats: &[t::Stats], config: &AppConfig, out: &mut impl Write) -> anyhow::Result<()> {
         for s in stats {
             let item = serde_json::json!({
                 "type": "file",
@@ -1803,50 +1491,30 @@ mod output {
 
     #[inline]
     fn escape_if_needed(s: &str, sep: char) -> String {
-        if sep == ',' {
-            let escaped = s.replace('"', "\"\"");
-            format!("\"{escaped}\"")
-        } else {
-            s.to_string()
-        }
+        if sep == ',' { let escaped = s.replace('"', "\"\""); format!("\"{escaped}\"") } else { s.to_string() }
     }
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // Compare (simple)
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 mod compare {
     use anyhow::Result;
     use serde::Deserialize;
 
     #[derive(Debug, Deserialize)]
-    struct Summary {
-        lines: usize,
-        chars: usize,
-        words: Option<usize>,
-        files: usize,
-    }
+    struct Summary { lines: usize, chars: usize, words: Option<usize>, files: usize }
     #[derive(Debug, Deserialize)]
-    struct FileItem {
-        file: String,
-        lines: usize,
-        chars: usize,
-        words: Option<usize>,
-    }
+    struct FileItem { file: String, lines: usize, chars: usize, words: Option<usize> }
     #[derive(Debug, Deserialize)]
-    struct Snapshot {
-        files: Vec<FileItem>,
-        summary: Summary,
-    }
+    struct Snapshot { files: Vec<FileItem>, summary: Summary }
 
     pub fn run(old_path: &std::path::Path, new_path: &std::path::Path) -> Result<String> {
         let old: Snapshot = serde_json::from_reader(std::fs::File::open(old_path)?)?;
         let new: Snapshot = serde_json::from_reader(std::fs::File::open(new_path)?)?;
         use std::collections::HashMap;
         let mut om: HashMap<&str, &FileItem> = HashMap::new();
-        for f in &old.files {
-            om.insert(&f.file, f);
-        }
+        for f in &old.files { om.insert(&f.file, f); }
         let mut out = String::new();
         out.push_str("DIFF (new - old)\n");
         out.push_str(&format!(
@@ -1862,12 +1530,7 @@ mod compare {
             (new.summary.chars as isize - old.summary.chars as isize)
         ));
         if let (Some(ow), Some(nw)) = (old.summary.words, new.summary.words) {
-            out.push_str(&format!(
-                "Words: {} -> {} (Δ {})\n",
-                ow,
-                nw,
-                (nw as isize - ow as isize)
-            ));
+            out.push_str(&format!("Words: {} -> {} (Δ {})\n", ow, nw, (nw as isize - ow as isize)));
         }
         out.push_str("\n[Changed files]\n");
         for nf in &new.files {
@@ -1878,19 +1541,16 @@ mod compare {
                     out.push_str(&format!("{:>10} L  {:>10} C  {}\n", dl, dc, nf.file));
                 }
             } else {
-                out.push_str(&format!(
-                    "{:>10} L  {:>10} C  {} (added)\n",
-                    nf.lines as isize, nf.chars as isize, nf.file
-                ));
+                out.push_str(&format!("{:>10} L  {:>10} C  {} (added)\n", nf.lines as isize, nf.chars as isize, nf.file));
             }
         }
         Ok(out)
     }
 }
 
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 // main
-// -------------------------------------------------------------------------------------
+// =====================================================================================
 fn main() -> Result<()> {
     let args = cli::Args::parse();
     let config = config::AppConfig::try_from(args)?;
@@ -1915,9 +1575,7 @@ fn main() -> Result<()> {
     let mut stats = match compute::process_entries(&config) {
         Ok(v) => v,
         Err(e) => {
-            if config.strict {
-                return Err(e).context("failed to measure entries");
-            }
+            if config.strict { return Err(e).context("failed to measure entries"); }
             eprintln!("[warn] {}", e);
             Vec::new()
         }
