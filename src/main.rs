@@ -4,9 +4,7 @@
 use anyhow::Result;
 use atty::Stream;
 use clap::Parser;
-use std::path::PathBuf;
 
-use chrono::{DateTime, Local};
 
 const VERSION: &str = "2.2.0";
 
@@ -14,9 +12,10 @@ const VERSION: &str = "2.2.0";
 // CLI (Args / Enums)
 // ==========================
 mod cli {
-    use super::*;
+    use clap::Parser;
+    use std::path::PathBuf;
 
-    #[derive(Debug, Clone, clap::ValueEnum)]
+    #[derive(Debug, Clone, Copy, clap::ValueEnum)]
     pub enum OutputFormat {
         Table,
         Csv,
@@ -24,7 +23,7 @@ mod cli {
         Json,
     }
 
-    #[derive(Debug, Clone, clap::ValueEnum)]
+    #[derive(Debug, Clone, Copy, clap::ValueEnum)]
     pub enum SortKey {
         Lines,
         Chars,
@@ -34,7 +33,7 @@ mod cli {
     }
 
     #[derive(Parser, Debug)]
-    #[command(name = "count_lines", version = VERSION, about = "ファイル行数/文字数/単語数の集計ツール")]
+    #[command(name = "count_lines", version = crate::VERSION, about = "ファイル行数/文字数/単語数の集計ツール")]
     #[allow(clippy::struct_excessive_bools)]
     pub struct Args {
         /// 出力フォーマット
@@ -198,7 +197,9 @@ mod cli {
 // Config / Modes / Filters
 // ==========================
 mod config {
-    use super::*;
+    use anyhow::Result;
+    use chrono::{DateTime, Local};
+    use std::path::PathBuf;
 
     use crate::cli::{OutputFormat, SortKey};
 
@@ -226,6 +227,51 @@ mod config {
         pub max_chars: Option<usize>,
         pub min_words: Option<usize>,
         pub max_words: Option<usize>,
+    }
+
+    impl Filters {
+        pub fn from_args(args: &crate::cli::Args) -> Result<Self> {
+            Ok(Self {
+                include_patterns: crate::util::parse_patterns(&args.include)?,
+                exclude_patterns: crate::util::parse_patterns(&args.exclude)?,
+                include_paths: crate::util::parse_patterns(&args.include_path)?,
+                exclude_paths: crate::util::parse_patterns(&args.exclude_path)?,
+                exclude_dirs: crate::util::parse_patterns(&args.exclude_dir)?,
+                ext_filters: args
+                    .ext
+                    .as_ref()
+                    .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
+                    .unwrap_or_default(),
+                max_size: args
+                    .max_size
+                    .as_ref()
+                    .and_then(|s| crate::util::parse_size(s).ok()),
+                min_size: args
+                    .min_size
+                    .as_ref()
+                    .and_then(|s| crate::util::parse_size(s).ok()),
+                min_lines: args.min_lines,
+                max_lines: args.max_lines,
+                min_chars: args.min_chars,
+                max_chars: args.max_chars,
+                min_words: args.min_words,
+                max_words: args.max_words,
+            })
+        }
+    }
+
+    fn parse_by_mode(by: &Option<String>) -> Result<ByMode> {
+        match by {
+            None => Ok(ByMode::None),
+            Some(s) if s == "ext" => Ok(ByMode::Ext),
+            Some(s) if s.starts_with("dir") => {
+                let depth = s.strip_prefix("dir=")
+                    .and_then(|d| d.parse().ok())
+                    .unwrap_or(1);
+                Ok(ByMode::Dir(depth))
+            }
+            Some(s) => anyhow::bail!("Unknown --by mode: {s}"),
+        }
     }
 
     #[derive(Debug)]
@@ -260,47 +306,15 @@ mod config {
         pub total_row: bool,
     }
 
-    impl Config {
-        pub fn from_args(args: crate::cli::Args) -> anyhow::Result<Self> {
-            let by_mode = match args.by {
-                None => ByMode::None,
-                Some(ref s) if s == "ext" => ByMode::Ext,
-                Some(ref s) if s.starts_with("dir") => {
-                    let depth = s.strip_prefix("dir=")
-                        .and_then(|d| d.parse().ok())
-                        .unwrap_or(1);
-                    ByMode::Dir(depth)
-                }
-                Some(ref s) => anyhow::bail!("Unknown --by mode: {s}"),
-            };
+    impl TryFrom<crate::cli::Args> for Config {
+        type Error = anyhow::Error;
 
-            let filters = Filters {
-                include_patterns: crate::util::parse_patterns(&args.include)?,
-                exclude_patterns: crate::util::parse_patterns(&args.exclude)?,
-                include_paths: crate::util::parse_patterns(&args.include_path)?,
-                exclude_paths: crate::util::parse_patterns(&args.exclude_path)?,
-                exclude_dirs: crate::util::parse_patterns(&args.exclude_dir)?,
-                ext_filters: args
-                    .ext
-                    .as_ref()
-                    .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
-                    .unwrap_or_default(),
-                max_size: args.max_size.as_ref().and_then(|s| crate::util::parse_size(s).ok()),
-                min_size: args.min_size.as_ref().and_then(|s| crate::util::parse_size(s).ok()),
-                min_lines: args.min_lines,
-                max_lines: args.max_lines,
-                min_chars: args.min_chars,
-                max_chars: args.max_chars,
-                min_words: args.min_words,
-                max_words: args.max_words,
-            };
+        fn try_from(args: crate::cli::Args) -> Result<Self> {
+            let by_mode = parse_by_mode(&args.by)?;
+            let filters = Filters::from_args(&args)?;
 
             let jobs = args.jobs.unwrap_or_else(num_cpus::get);
-            let paths = if args.paths.is_empty() {
-                vec![PathBuf::from(".")]
-            } else {
-                args.paths
-            };
+            let paths = if args.paths.is_empty() { vec![PathBuf::from(".")] } else { args.paths };
 
             let mtime_since = args
                 .mtime_since
@@ -350,8 +364,8 @@ mod config {
 // Domain types (stats / JSON)
 // ==========================
 mod types {
-    use super::*;
     use serde::Serialize;
+    use std::path::PathBuf;
 
     #[derive(Debug, Clone)]
     pub struct FileStats {
@@ -417,9 +431,15 @@ mod types {
 // Utilities
 // ==========================
 mod util {
-    use super::*;
     use anyhow::Context as _;
+    use chrono::{DateTime, Local};
     use std::path::{Path, PathBuf};
+
+    // for parse_size()
+    const KB: u64 = 1024;
+    const MB: u64 = 1024 * KB;
+    const GB: u64 = 1024 * MB;
+    const TB: u64 = 1024 * GB;
 
     pub fn parse_patterns(patterns: &[String]) -> anyhow::Result<Vec<glob::Pattern>> {
         patterns
@@ -440,10 +460,10 @@ mod util {
             None
         };
 
-        let (num_str, multiplier) = parse_with_suffix(&["KiB", "KB", "K", "k"], 1024)
-            .or_else(|| parse_with_suffix(&["MiB", "MB", "M", "m"], 1024 * 1024))
-            .or_else(|| parse_with_suffix(&["GiB", "GB", "G", "g"], 1024 * 1024 * 1024))
-            .or_else(|| parse_with_suffix(&["TiB", "TB", "T", "t"], 1024 * 1024 * 1024 * 1024))
+        let (num_str, multiplier) = parse_with_suffix(&["KiB", "KB", "K", "k"], KB)
+            .or_else(|| parse_with_suffix(&["MiB", "MB", "M", "m"], MB))
+            .or_else(|| parse_with_suffix(&["GiB", "GB", "G", "g"], GB))
+            .or_else(|| parse_with_suffix(&["TiB", "TB", "T", "t"], TB))
             .unwrap_or((s.as_str(), 1));
 
         let num: u64 = num_str.parse().context("Invalid size number")?;
@@ -476,12 +496,10 @@ mod util {
         if path.is_absolute() {
             return path.to_path_buf();
         }
-        std::env::current_dir()
-            .map(|cwd| cwd.join(path))
-            .unwrap_or_else(|_| path.to_path_buf())
+        std::env::current_dir().map_or_else(|_| path.to_path_buf(), |cwd| cwd.join(path))
     }
 
-    pub fn format_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root: &Option<PathBuf>) -> String {
+    pub fn format_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root: Option<&Path>) -> String {
         let mut path = if abs_path {
             if abs_canonical {
                 path.canonicalize().unwrap_or_else(|_| logical_absolute(path))
@@ -502,6 +520,8 @@ mod util {
     }
 
     pub fn get_dir_key(path: &Path, depth: usize) -> String {
+        use std::path::Component; // place items before statements
+
         // ファイルは parent() に寄せてから components を数える
         let mut p = path;
         if path.file_name().is_some() {
@@ -510,7 +530,6 @@ mod util {
             }
         }
         // 以降は Normal ディレクトリのみカウント
-        use std::path::Component;
         let mut parts = Vec::new();
         for comp in p.components() {
             if let Component::Normal(s) = comp {
@@ -520,11 +539,7 @@ mod util {
                 }
             }
         }
-        if parts.is_empty() {
-            ".".to_string()
-        } else {
-            parts.join("/")
-        }
+        if parts.is_empty() { ".".to_string() } else { parts.join("/") }
     }
 }
 
@@ -533,6 +548,8 @@ mod util {
 // ==========================
 mod files {
     use super::*;
+    use chrono::{DateTime, Local};
+    use std::path::PathBuf;
     use walkdir::WalkDir;
 
     use crate::config::{AppConfig, AppFilters};
@@ -582,9 +599,7 @@ mod files {
         f.read_to_end(&mut buf)?;
         let mut out = Vec::new();
         for chunk in buf.split(|b| *b == 0) {
-            if chunk.is_empty() {
-                continue;
-            }
+            if chunk.is_empty() { continue; }
             let s = String::from_utf8_lossy(chunk);
             let trimmed = s.trim();
             if !trimmed.is_empty() {
@@ -598,61 +613,48 @@ mod files {
         let mut files = Vec::new();
         for root in &config.paths {
             let output = std::process::Command::new("git")
-                .arg("ls-files")
-                .arg("-z")
-                .arg("--cached")
-                .arg("--others")
+                .arg("ls-files").arg("-z")
+                .arg("--cached").arg("--others")
                 .arg("--exclude-standard")
                 .arg("--")
-                .arg(root)
+                .arg(".")
                 .current_dir(root)
                 .output()?;
 
-            if !output.status.success() {
-                anyhow::bail!("git ls-files failed");
-            }
+            if !output.status.success() { anyhow::bail!("git ls-files failed"); }
 
             for chunk in output.stdout.split(|b| *b == 0) {
-                if chunk.is_empty() {
-                    continue;
-                }
+                if chunk.is_empty() { continue; }
                 let s = String::from_utf8_lossy(chunk);
                 let s = s.trim();
-                if s.is_empty() {
-                    continue;
-                }
+                if s.is_empty() { continue; }
                 files.push(root.join(s));
             }
         }
         Ok(files)
     }
 
+    fn is_hidden(path: &std::path::Path) -> bool {
+        path.file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+    }
+
     fn should_process_entry(entry: &walkdir::DirEntry, config: &AppConfig) -> bool {
         let path = entry.path();
 
         // 隠しファイル/ディレクトリの除外
-        if !config.hidden {
-            if let Some(name) = path.file_name() {
-                if name.to_string_lossy().starts_with('.') {
-                    return false;
-                }
-            }
-        }
+        if !config.hidden && is_hidden(path) { return false; }
 
         // デフォルト剪定
         if !config.no_default_prune && entry.file_type().is_dir() {
             let name = entry.file_name().to_string_lossy();
-            if DEFAULT_PRUNE_DIRS.contains(&name.as_ref()) {
-                return false;
-            }
+            if DEFAULT_PRUNE_DIRS.contains(&name.as_ref()) { return false; }
         }
 
         // 除外ディレクトリ
         if entry.file_type().is_dir() {
             for pattern in &config.filters.exclude_dirs {
-                if pattern.matches_path(path) {
-                    return false;
-                }
+                if pattern.matches_path(path) { return false; }
             }
         }
 
@@ -674,63 +676,35 @@ mod files {
         // ファイル名 (include)
         if !include_patterns.is_empty() {
             let name = path.file_name().unwrap_or_default().to_string_lossy();
-            if !include_patterns.iter().any(|p| p.matches(&name)) {
-                return false;
-            }
+            if !include_patterns.iter().any(|p| p.matches(&name)) { return false; }
         }
 
         // ファイル名 (exclude)
         let name = path.file_name().unwrap_or_default().to_string_lossy();
-        if exclude_patterns.iter().any(|p| p.matches(&name)) {
-            return false;
-        }
+        if exclude_patterns.iter().any(|p| p.matches(&name)) { return false; }
 
         // パス (include)
-        if !include_paths.is_empty() && !include_paths.iter().any(|p| p.matches_path(path)) {
-            return false;
-        }
+        if !include_paths.is_empty() && !include_paths.iter().any(|p| p.matches_path(path)) { return false; }
 
         // パス (exclude)
-        if exclude_paths.iter().any(|p| p.matches_path(path)) {
-            return false;
-        }
+        if exclude_paths.iter().any(|p| p.matches_path(path)) { return false; }
 
         // 拡張子
         if !ext_filters.is_empty() {
             if let Some(ext) = path.extension() {
                 let ext_lower = ext.to_string_lossy().to_lowercase();
-                if !ext_filters.contains(&ext_lower) {
-                    return false;
-                }
-            } else {
-                return false;
-            }
+                if !ext_filters.contains(&ext_lower) { return false; }
+            } else { return false; }
         }
 
         // サイズ/mtime（metadata は 1 度だけ取得）
         if let Ok(metadata) = std::fs::metadata(path) {
-            if let Some(max_size) = max_size {
-                if metadata.len() > *max_size {
-                    return false;
-                }
-            }
-            if let Some(min_size) = min_size {
-                if metadata.len() < *min_size {
-                    return false;
-                }
-            }
+            if let Some(max_size) = max_size { if metadata.len() > *max_size { return false; } }
+            if let Some(min_size) = min_size { if metadata.len() < *min_size { return false; } }
             if let Ok(modified) = metadata.modified() {
                 let modified: DateTime<Local> = modified.into();
-                if let Some(since) = &config.mtime_since {
-                    if modified < *since {
-                        return false;
-                    }
-                }
-                if let Some(until) = &config.mtime_until {
-                    if modified > *until {
-                        return false;
-                    }
-                }
+                if let Some(since) = &config.mtime_since { if modified < *since { return false; } }
+                if let Some(until) = &config.mtime_until { if modified > *until { return false; } }
             }
         }
 
@@ -747,17 +721,10 @@ mod files {
                 .filter_entry(|e| should_process_entry(e, config));
 
             for entry in walker {
-                let entry = match entry {
-                    Ok(e) => e,
-                    Err(_) => continue,
-                };
-                if !entry.file_type().is_file() {
-                    continue;
-                }
+                let Ok(entry) = entry else { continue };
+                if !entry.file_type().is_file() { continue; }
                 let path = entry.path();
-                if !matches_filters(path, config) {
-                    continue;
-                }
+                if !matches_filters(path, config) { continue; }
                 files.push(path.to_path_buf());
             }
         }
@@ -770,7 +737,6 @@ mod files {
 // Measuring / Sorting
 // ==========================
 mod compute {
-    use super::*;
     use rayon::prelude::*;
 
     use crate::cli::SortKey;
@@ -783,16 +749,10 @@ mod compute {
         let files = crate::files::collect_files(config)?;
 
         // Use a dedicated pool here instead of setting a global one.
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(config.jobs)
-            .build()?;
+        let pool = rayon::ThreadPoolBuilder::new().num_threads(config.jobs).build()?;
 
-        let stats: Vec<FileStats> = pool.install(|| {
-            files
-                .par_iter()
-                .filter_map(|path| measure_file(path, config))
-                .collect()
-        });
+        let stats: Vec<FileStats> = pool
+            .install(|| files.par_iter().filter_map(|path| measure_file(path, config)).collect());
 
         Ok(stats)
     }
@@ -834,22 +794,14 @@ mod compute {
             let mut buf = Vec::new();
             f.read_to_end(&mut buf).ok()?;
 
-            if config.text_only && buf.contains(&0) {
-                return None;
-            }
+            if config.text_only && buf.contains(&0) { return None; }
 
             let s = String::from_utf8_lossy(&buf);
             let bytes = s.as_bytes();
 
             // 行数：'\n' の数 +（末尾が改行でなければ +1、空なら 0）
-            let nl = bytes.iter().filter(|&&b| b == b'\n').count();
-            let lines = if bytes.is_empty() {
-                0
-            } else if bytes.last() == Some(&b'\n') {
-                nl
-            } else {
-                nl + 1
-            };
+            let nl = bytecount::count(bytes, b'\n');
+            let lines = if bytes.is_empty() { 0 } else if bytes.last() == Some(&b'\n') { nl } else { nl + 1 };
 
             // 文字数：改行含む
             let chars = s.chars().count();
@@ -861,9 +813,7 @@ mod compute {
         }
 
         // 従来モード：行ごと読み（改行は文字数に含めない）
-        if config.text_only && !is_text_file(path) {
-            return None;
-        }
+        if config.text_only && !is_text_file(path) { return None; }
         let file = File::open(path).ok()?;
         let reader = BufReader::new(file);
 
@@ -875,9 +825,7 @@ mod compute {
             let line = line.ok()?;
             lines += 1;
             chars += line.chars().count();
-            if config.words {
-                words += line.split_whitespace().count();
-            }
+            if config.words { words += line.split_whitespace().count(); }
         }
 
         let stats = FileStats { path: path.to_path_buf(), lines, chars, words: if config.words { Some(words) } else { None } };
@@ -885,36 +833,12 @@ mod compute {
     }
 
     fn apply_numeric_filters(stats: FileStats, config: &AppConfig) -> Option<FileStats> {
-        if let Some(min) = config.filters.min_lines {
-            if stats.lines < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_lines {
-            if stats.lines > max {
-                return None;
-            }
-        }
-        if let Some(min) = config.filters.min_chars {
-            if stats.chars < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_chars {
-            if stats.chars > max {
-                return None;
-            }
-        }
-        if let Some(min) = config.filters.min_words {
-            if stats.words.unwrap_or(0) < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_words {
-            if stats.words.unwrap_or(0) > max {
-                return None;
-            }
-        }
+        if let Some(min) = config.filters.min_lines { if stats.lines < min { return None; } }
+        if let Some(max) = config.filters.max_lines { if stats.lines > max { return None; } }
+        if let Some(min) = config.filters.min_chars { if stats.chars < min { return None; } }
+        if let Some(max) = config.filters.max_chars { if stats.chars > max { return None; } }
+        if let Some(min) = config.filters.min_words { if stats.words.unwrap_or(0) < min { return None; } }
+        if let Some(max) = config.filters.max_words { if stats.words.unwrap_or(0) > max { return None; } }
         Some(stats)
     }
 }
@@ -932,18 +856,18 @@ mod output {
     pub fn emit(stats: &[t::Stats], config: &AppConfig) -> anyhow::Result<()> {
         match config.format {
             OutputFormat::Json => output_json(stats, config)?,
-            OutputFormat::Csv => output_delimited(stats, config, ',')?,
-            OutputFormat::Tsv => output_delimited(stats, config, '\t')?,
-            OutputFormat::Table => output_table(stats, config)?,
+            OutputFormat::Csv => output_delimited(stats, config, ','),
+            OutputFormat::Tsv => output_delimited(stats, config, '\t'),
+            OutputFormat::Table => output_table(stats, config),
         }
         Ok(())
     }
 
-    fn output_table(stats: &[t::Stats], config: &AppConfig) -> anyhow::Result<()> {
+    fn output_table(stats: &[t::Stats], config: &AppConfig) {
         // total-only: 一覧も by も出さず、最後のサマリだけ
         if config.total_only {
             output_summary(stats, config);
-            return Ok(());
+            return;
         }
 
         // summary-only でないときだけ一覧を出す
@@ -957,9 +881,15 @@ mod output {
             println!("----------------------------------------------");
 
             for stat in limited(stats, config) {
-                let path = crate::util::format_path(&stat.path, config.abs_path, config.abs_canonical, &config.trim_root);
+                let path = crate::util::format_path(&stat.path, config.abs_path, config.abs_canonical, config.trim_root.as_deref());
                 if config.words {
-                    println!("{:10}\t{:10}\t{:7}\t{}", stat.lines, stat.chars, stat.words.unwrap_or(0), path);
+                    println!(
+                        "{:10}\t{:10}\t{:7}\t{}",
+                        stat.lines,
+                        stat.chars,
+                        stat.words.unwrap_or(0),
+                        path
+                    );
                 } else {
                     println!("{:10}\t{:10}\t{}", stat.lines, stat.chars, path);
                 }
@@ -970,14 +900,13 @@ mod output {
         // “summary-only” でも By 集計は出す（一覧のみ省略）
         if !config.total_only {
             match config.by_mode {
-                ByMode::Ext => output_group(&aggregate_by_extension(stats), "[By Extension]", "EXT", None)?,
-                ByMode::Dir(depth) => output_group(&aggregate_by_directory(stats, depth), "[By Directory]", &format!("DIR (depth={depth})"), None)?,
+                ByMode::Ext => output_group(&aggregate_by_extension(stats), "[By Extension]", "EXT", None),
+                ByMode::Dir(depth) => output_group(&aggregate_by_directory(stats, depth), "[By Directory]", &format!("DIR (depth={depth})"), None),
                 ByMode::None => {}
             }
         }
 
         output_summary(stats, config);
-        Ok(())
     }
 
     fn limited<'a>(stats: &'a [t::Stats], config: &AppConfig) -> &'a [t::Stats] {
@@ -985,7 +914,7 @@ mod output {
         &stats[..limit]
     }
 
-    fn output_group(groups: &[Group], title: &str, key_label: &str, limit: Option<usize>) -> anyhow::Result<()> {
+    fn output_group(groups: &[Group], title: &str, key_label: &str, limit: Option<usize>) {
         println!("{title}");
         println!("{:>10}\t{:>10}\t{key_label}", "LINES", "CHARACTERS");
 
@@ -994,7 +923,6 @@ mod output {
             println!("{:10}\t{:10}\t{} ({} files)", g.lines, g.chars, g.key, g.count);
         }
         println!("---");
-        Ok(())
     }
 
     fn output_summary(stats: &[t::Stats], config: &AppConfig) {
@@ -1003,31 +931,26 @@ mod output {
         if config.words {
             println!(
                 "{:10}\t{:10}\t{:7}\tTOTAL ({} files)\n",
-                total_lines,
-                total_chars,
-                total_words,
-                stats.len()
+                total_lines, total_chars, total_words, stats.len()
             );
         } else {
             println!(
                 "{:10}\t{:10}\tTOTAL ({} files)\n",
-                total_lines,
-                total_chars,
-                stats.len()
+                total_lines, total_chars, stats.len()
             );
         }
     }
 
-    fn output_delimited(stats: &[t::Stats], config: &AppConfig, sep: char) -> anyhow::Result<()> {
+    fn output_delimited(stats: &[t::Stats], config: &AppConfig, sep: char) {
         let header = if config.words {
             format!("lines{sep}chars{sep}words{sep}file")
         } else {
             format!("lines{sep}chars{sep}file")
         };
-        println!("{}", header);
+        println!("{header}");
 
         for stat in limited(stats, config) {
-            let path = crate::util::format_path(&stat.path, config.abs_path, config.abs_canonical, &config.trim_root);
+            let path = crate::util::format_path(&stat.path, config.abs_path, config.abs_canonical, config.trim_root.as_deref());
             if config.words {
                 println!(
                     "{}{}{}{}{}{}{}",
@@ -1056,32 +979,21 @@ mod output {
             if config.words {
                 println!(
                     "{}{}{}{}{}{}{}",
-                    total_lines,
-                    sep,
-                    total_chars,
-                    sep,
-                    total_words,
-                    sep,
-                    escape_if_needed("TOTAL", sep)
+                    total_lines, sep, total_chars, sep, total_words, sep, escape_if_needed("TOTAL", sep)
                 );
             } else {
                 println!(
                     "{}{}{}{}{}",
-                    total_lines,
-                    sep,
-                    total_chars,
-                    sep,
-                    escape_if_needed("TOTAL", sep)
+                    total_lines, sep, total_chars, sep, escape_if_needed("TOTAL", sep)
                 );
             }
         }
-        Ok(())
     }
 
     fn escape_if_needed(s: &str, sep: char) -> String {
         if sep == ',' {
             let escaped = s.replace('"', "\"\"");
-            format!("\"{}\"", escaped)
+            format!("\"{escaped}\"")
         } else {
             s.to_string()
         }
@@ -1091,7 +1003,7 @@ mod output {
         let files: Vec<t::OutFile> = stats
             .iter()
             .map(|s| t::OutFile {
-                file: crate::util::format_path(&s.path, config.abs_path, config.abs_canonical, &config.trim_root),
+                file: crate::util::format_path(&s.path, config.abs_path, config.abs_canonical, config.trim_root.as_deref()),
                 lines: s.lines,
                 chars: s.chars,
                 words: s.words,
@@ -1192,7 +1104,7 @@ mod output {
 // ==========================
 fn main() -> Result<()> {
     let args = cli::Args::parse();
-    let config = config::AppConfig::from_args(args)?;
+    let config = config::AppConfig::try_from(args)?;
 
     if !matches!(config.format, cli::OutputFormat::Json) && atty::is(Stream::Stdout) {
         eprintln!("count_lines v{} · parallel={}", VERSION, config.jobs);
