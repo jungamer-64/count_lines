@@ -4,8 +4,7 @@
 use anyhow::Result;
 use atty::Stream;
 use clap::Parser;
-use std::env;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
 
@@ -267,7 +266,9 @@ mod config {
                 None => ByMode::None,
                 Some(ref s) if s == "ext" => ByMode::Ext,
                 Some(ref s) if s.starts_with("dir") => {
-                    let depth = s.strip_prefix("dir=").and_then(|d| d.parse().ok()).unwrap_or(1);
+                    let depth = s.strip_prefix("dir=")
+                        .and_then(|d| d.parse().ok())
+                        .unwrap_or(1);
                     ByMode::Dir(depth)
                 }
                 Some(ref s) => anyhow::bail!("Unknown --by mode: {s}"),
@@ -295,10 +296,20 @@ mod config {
             };
 
             let jobs = args.jobs.unwrap_or_else(num_cpus::get);
-            let paths = if args.paths.is_empty() { vec![PathBuf::from(".")] } else { args.paths };
+            let paths = if args.paths.is_empty() {
+                vec![PathBuf::from(".")]
+            } else {
+                args.paths
+            };
 
-            let mtime_since = args.mtime_since.as_ref().and_then(|s| crate::util::parse_datetime(s).ok());
-            let mtime_until = args.mtime_until.as_ref().and_then(|s| crate::util::parse_datetime(s).ok());
+            let mtime_since = args
+                .mtime_since
+                .as_ref()
+                .and_then(|s| crate::util::parse_datetime(s).ok());
+            let mtime_until = args
+                .mtime_until
+                .as_ref()
+                .and_then(|s| crate::util::parse_datetime(s).ok());
 
             Ok(Self {
                 format: args.format,
@@ -408,6 +419,7 @@ mod types {
 mod util {
     use super::*;
     use anyhow::Context as _;
+    use std::path::{Path, PathBuf};
 
     pub fn parse_patterns(patterns: &[String]) -> anyhow::Result<Vec<glob::Pattern>> {
         patterns
@@ -460,11 +472,11 @@ mod util {
         anyhow::bail!("Cannot parse datetime: {s}")
     }
 
-    pub fn logical_absolute(path: &Path) -> std::path::PathBuf {
+    pub fn logical_absolute(path: &Path) -> PathBuf {
         if path.is_absolute() {
             return path.to_path_buf();
         }
-        env::current_dir()
+        std::env::current_dir()
             .map(|cwd| cwd.join(path))
             .unwrap_or_else(|_| path.to_path_buf())
     }
@@ -493,7 +505,9 @@ mod util {
         // ファイルは parent() に寄せてから components を数える
         let mut p = path;
         if path.file_name().is_some() {
-            if let Some(parent) = path.parent() { p = parent; }
+            if let Some(parent) = path.parent() {
+                p = parent;
+            }
         }
         // 以降は Normal ディレクトリのみカウント
         use std::path::Component;
@@ -501,10 +515,16 @@ mod util {
         for comp in p.components() {
             if let Component::Normal(s) = comp {
                 parts.push(s.to_string_lossy().into_owned());
-                if parts.len() >= depth { break; }
+                if parts.len() >= depth {
+                    break;
+                }
             }
         }
-        if parts.is_empty() { ".".to_string() } else { parts.join("/") }
+        if parts.is_empty() {
+            ".".to_string()
+        } else {
+            parts.join("/")
+        }
     }
 }
 
@@ -540,7 +560,7 @@ mod files {
         collect_find_files(config)
     }
 
-    fn read_files_from(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    fn read_files_from(path: &std::path::Path) -> anyhow::Result<Vec<PathBuf>> {
         use std::fs::File;
         use std::io::{BufRead, BufReader};
         let file = File::open(path)?;
@@ -554,7 +574,7 @@ mod files {
             .collect())
     }
 
-    fn read_files_from0(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    fn read_files_from0(path: &std::path::Path) -> anyhow::Result<Vec<PathBuf>> {
         use std::fs::File;
         use std::io::Read;
         let mut f = File::open(path)?;
@@ -562,8 +582,10 @@ mod files {
         f.read_to_end(&mut buf)?;
         let mut out = Vec::new();
         for chunk in buf.split(|b| *b == 0) {
-            if chunk.is_empty() { continue; }
-            let s = String::from_utf8_lossy(chunk).to_string();
+            if chunk.is_empty() {
+                continue;
+            }
+            let s = String::from_utf8_lossy(chunk);
             let trimmed = s.trim();
             if !trimmed.is_empty() {
                 out.push(PathBuf::from(trimmed));
@@ -591,10 +613,14 @@ mod files {
             }
 
             for chunk in output.stdout.split(|b| *b == 0) {
-                if chunk.is_empty() { continue; }
+                if chunk.is_empty() {
+                    continue;
+                }
                 let s = String::from_utf8_lossy(chunk);
                 let s = s.trim();
-                if s.is_empty() { continue; }
+                if s.is_empty() {
+                    continue;
+                }
                 files.push(root.join(s));
             }
         }
@@ -633,7 +659,7 @@ mod files {
         true
     }
 
-    fn matches_filters(path: &Path, config: &AppConfig) -> bool {
+    fn matches_filters(path: &std::path::Path, config: &AppConfig) -> bool {
         let AppFilters {
             include_patterns,
             exclude_patterns,
@@ -684,18 +710,26 @@ mod files {
         // サイズ/mtime（metadata は 1 度だけ取得）
         if let Ok(metadata) = std::fs::metadata(path) {
             if let Some(max_size) = max_size {
-                if metadata.len() > *max_size { return false; }
+                if metadata.len() > *max_size {
+                    return false;
+                }
             }
             if let Some(min_size) = min_size {
-                if metadata.len() < *min_size { return false; }
+                if metadata.len() < *min_size {
+                    return false;
+                }
             }
             if let Ok(modified) = metadata.modified() {
                 let modified: DateTime<Local> = modified.into();
                 if let Some(since) = &config.mtime_since {
-                    if modified < *since { return false; }
+                    if modified < *since {
+                        return false;
+                    }
                 }
                 if let Some(until) = &config.mtime_until {
-                    if modified > *until { return false; }
+                    if modified > *until {
+                        return false;
+                    }
                 }
             }
         }
@@ -713,10 +747,17 @@ mod files {
                 .filter_entry(|e| should_process_entry(e, config));
 
             for entry in walker {
-                let entry = match entry { Ok(e) => e, Err(_) => continue };
-                if !entry.file_type().is_file() { continue; }
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => continue,
+                };
+                if !entry.file_type().is_file() {
+                    continue;
+                }
                 let path = entry.path();
-                if !matches_filters(path, config) { continue; }
+                if !matches_filters(path, config) {
+                    continue;
+                }
                 files.push(path.to_path_buf());
             }
         }
@@ -736,18 +777,22 @@ mod compute {
     use crate::config::AppConfig;
     use crate::types::Stats as FileStats;
 
+    const READ_BUF_BYTES: usize = 8192;
+
     pub fn process_files(config: &AppConfig) -> anyhow::Result<Vec<FileStats>> {
         let files = crate::files::collect_files(config)?;
 
-        rayon::ThreadPoolBuilder::new()
+        // Use a dedicated pool here instead of setting a global one.
+        let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(config.jobs)
-            .build_global()
-            .ok();
+            .build()?;
 
-        let stats: Vec<FileStats> = files
-            .par_iter()
-            .filter_map(|path| measure_file(path, config))
-            .collect();
+        let stats: Vec<FileStats> = pool.install(|| {
+            files
+                .par_iter()
+                .filter_map(|path| measure_file(path, config))
+                .collect()
+        });
 
         Ok(stats)
     }
@@ -769,17 +814,17 @@ mod compute {
         });
     }
 
-    fn is_text_file(path: &Path) -> bool {
+    fn is_text_file(path: &std::path::Path) -> bool {
         use std::fs::File;
         use std::io::Read;
         let Ok(mut file) = File::open(path) else { return false; };
-        let mut buffer = [0u8; 8192];
+        let mut buffer = [0u8; READ_BUF_BYTES];
         let n = file.read(&mut buffer).unwrap_or(0);
         // NULL バイトがあればバイナリと判定
         !buffer[..n].contains(&0)
     }
 
-    fn measure_file(path: &Path, config: &AppConfig) -> Option<FileStats> {
+    fn measure_file(path: &std::path::Path, config: &AppConfig) -> Option<FileStats> {
         use std::fs::File;
         use std::io::{BufRead, BufReader, Read};
 
@@ -840,12 +885,36 @@ mod compute {
     }
 
     fn apply_numeric_filters(stats: FileStats, config: &AppConfig) -> Option<FileStats> {
-        if let Some(min) = config.filters.min_lines { if stats.lines < min { return None; } }
-        if let Some(max) = config.filters.max_lines { if stats.lines > max { return None; } }
-        if let Some(min) = config.filters.min_chars { if stats.chars < min { return None; } }
-        if let Some(max) = config.filters.max_chars { if stats.chars > max { return None; } }
-        if let Some(min) = config.filters.min_words { if stats.words.unwrap_or(0) < min { return None; } }
-        if let Some(max) = config.filters.max_words { if stats.words.unwrap_or(0) > max { return None; } }
+        if let Some(min) = config.filters.min_lines {
+            if stats.lines < min {
+                return None;
+            }
+        }
+        if let Some(max) = config.filters.max_lines {
+            if stats.lines > max {
+                return None;
+            }
+        }
+        if let Some(min) = config.filters.min_chars {
+            if stats.chars < min {
+                return None;
+            }
+        }
+        if let Some(max) = config.filters.max_chars {
+            if stats.chars > max {
+                return None;
+            }
+        }
+        if let Some(min) = config.filters.min_words {
+            if stats.words.unwrap_or(0) < min {
+                return None;
+            }
+        }
+        if let Some(max) = config.filters.max_words {
+            if stats.words.unwrap_or(0) > max {
+                return None;
+            }
+        }
         Some(stats)
     }
 }
