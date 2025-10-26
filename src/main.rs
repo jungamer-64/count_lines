@@ -1,997 +1,1063 @@
-// src/main.rs
+// src/main.rs (refactored)
 #![allow(clippy::multiple_crate_versions)]
 
-use anyhow::{Context, Result};
-use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
+use anyhow::Result;
+use atty::Stream;
 use clap::Parser;
-use rayon::prelude::*;
-use serde::Serialize;
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
+
+// Crate-level re-exports for ergonomics in this file
+use chrono::{DateTime, Local};
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
 const VERSION: &str = "2.2.0";
 
-#[derive(Parser, Debug)]
-#[command(name = "count_lines", version = VERSION, about = "ファイル行数/文字数/単語数の集計ツール")]
-#[allow(clippy::struct_excessive_bools)]
-struct Args {
-    /// 出力フォーマット
-    #[arg(long, value_enum, default_value = "table")]
-    format: OutputFormat,
+// ==========================
+// CLI (Args / Enums)
+// ==========================
+mod cli {
+    use super::*;
 
-    /// ソートキー
-    #[arg(long, value_enum, default_value = "lines")]
-    sort: SortKey,
+    #[derive(Debug, Clone, clap::ValueEnum)]
+    pub enum OutputFormat {
+        Table,
+        Csv,
+        Tsv,
+        Json,
+    }
 
-    /// 降順ソート
-    #[arg(long)]
-    desc: bool,
+    #[derive(Debug, Clone, clap::ValueEnum)]
+    pub enum SortKey {
+        Lines,
+        Chars,
+        Words,
+        Name,
+        Ext,
+    }
 
-    /// 上位N件のみ表示
-    #[arg(long)]
-    top: Option<usize>,
+    #[derive(Parser, Debug)]
+    #[command(name = "count_lines", version = VERSION, about = "ファイル行数/文字数/単語数の集計ツール")]
+    #[allow(clippy::struct_excessive_bools)]
+    pub struct Args {
+        /// 出力フォーマット
+        #[arg(long, value_enum, default_value = "table")]
+        pub format: OutputFormat,
 
-    /// サマリ軸 (ext, dir, dir=N)
-    #[arg(long)]
-    by: Option<String>,
+        /// ソートキー
+        #[arg(long, value_enum, default_value = "lines")]
+        pub sort: SortKey,
 
-    /// サマリのみ表示
-    #[arg(long)]
-    summary_only: bool,
+        /// 降順ソート
+        #[arg(long)]
+        pub desc: bool,
 
-    /// 合計のみ表示
-    #[arg(long)]
-    total_only: bool,
+        /// 上位N件のみ表示
+        #[arg(long)]
+        pub top: Option<usize>,
 
-    /// 含めるファイル名パターン
-    #[arg(long)]
-    include: Vec<String>,
+        /// サマリ軸 (ext, dir, dir=N)
+        #[arg(long)]
+        pub by: Option<String>,
 
-    /// 除外するファイル名パターン
-    #[arg(long)]
-    exclude: Vec<String>,
+        /// サマリのみ表示
+        #[arg(long)]
+        pub summary_only: bool,
 
-    /// 含めるパスパターン
-    #[arg(long)]
-    include_path: Vec<String>,
+        /// 合計のみ表示
+        #[arg(long)]
+        pub total_only: bool,
 
-    /// 除外するパスパターン
-    #[arg(long)]
-    exclude_path: Vec<String>,
+        /// 含めるファイル名パターン
+        #[arg(long)]
+        pub include: Vec<String>,
 
-    /// 除外ディレクトリパターン
-    #[arg(long)]
-    exclude_dir: Vec<String>,
+        /// 除外するファイル名パターン
+        #[arg(long)]
+        pub exclude: Vec<String>,
 
-    /// 拡張子フィルタ (カンマ区切り)
-    #[arg(long)]
-    ext: Option<String>,
+        /// 含めるパスパターン
+        #[arg(long)]
+        pub include_path: Vec<String>,
 
-    /// 最大ファイルサイズ
-    #[arg(long)]
-    max_size: Option<String>,
+        /// 除外するパスパターン
+        #[arg(long)]
+        pub exclude_path: Vec<String>,
 
-    /// 最小行数
-    #[arg(long)]
-    min_lines: Option<usize>,
+        /// 除外ディレクトリパターン
+        #[arg(long)]
+        pub exclude_dir: Vec<String>,
 
-    /// 最大行数
-    #[arg(long)]
-    max_lines: Option<usize>,
+        /// 拡張子フィルタ (カンマ区切り)
+        #[arg(long)]
+        pub ext: Option<String>,
 
-    /// 最小文字数
-    #[arg(long)]
-    min_chars: Option<usize>,
+        /// 最大ファイルサイズ
+        #[arg(long)]
+        pub max_size: Option<String>,
 
-    /// 最大文字数
-    #[arg(long)]
-    max_chars: Option<usize>,
+        /// 最小行数
+        #[arg(long)]
+        pub min_lines: Option<usize>,
 
-    /// 単語数も計測
-    #[arg(long)]
-    words: bool,
+        /// 最大行数
+        #[arg(long)]
+        pub max_lines: Option<usize>,
 
-    /// 最小単語数
-    #[arg(long)]
-    min_words: Option<usize>,
+        /// 最小文字数
+        #[arg(long)]
+        pub min_chars: Option<usize>,
 
-    /// 最大単語数
-    #[arg(long)]
-    max_words: Option<usize>,
+        /// 最大文字数
+        #[arg(long)]
+        pub max_chars: Option<usize>,
 
-    /// テキストファイルのみ
-    #[arg(long)]
-    text_only: bool,
+        /// 単語数も計測
+        #[arg(long)]
+        pub words: bool,
 
-    /// ファイル一覧を読み込む (改行区切り)
-    #[arg(long)]
-    files_from: Option<PathBuf>,
+        /// 最小単語数
+        #[arg(long)]
+        pub min_words: Option<usize>,
 
-    /// 隠しファイルも対象
-    #[arg(long)]
-    hidden: bool,
+        /// 最大単語数
+        #[arg(long)]
+        pub max_words: Option<usize>,
 
-    /// シンボリックリンクを辿る
-    #[arg(long)]
-    follow: bool,
+        /// テキストファイルのみ
+        #[arg(long)]
+        pub text_only: bool,
 
-    /// .gitignore を尊重
-    #[arg(long)]
-    git: bool,
+        /// ファイル一覧を読み込む (改行区切り)
+        #[arg(long)]
+        pub files_from: Option<PathBuf>,
 
-    /// 並列数
-    #[arg(long)]
-    jobs: Option<usize>,
+        /// 隠しファイルも対象
+        #[arg(long)]
+        pub hidden: bool,
 
-    /// 既定の剪定を無効化
-    #[arg(long)]
-    no_default_prune: bool,
+        /// シンボリックリンクを辿る
+        #[arg(long)]
+        pub follow: bool,
 
-    /// 絶対パス出力
-    #[arg(long)]
-    abs_path: bool,
+        /// .gitignore を尊重
+        #[arg(long)]
+        pub git: bool,
 
-    /// パス先頭を削除
-    #[arg(long)]
-    trim_root: Option<PathBuf>,
+        /// 並列数
+        #[arg(long)]
+        pub jobs: Option<usize>,
 
-    /// 色なし
-    #[arg(long)]
-    no_color: bool,
+        /// 既定の剪定を無効化
+        #[arg(long)]
+        pub no_default_prune: bool,
 
-    /// 指定日時以降
-    #[arg(long)]
-    mtime_since: Option<String>,
+        /// 絶対パス出力
+        #[arg(long)]
+        pub abs_path: bool,
 
-    /// 指定日時以前
-    #[arg(long)]
-    mtime_until: Option<String>,
+        /// パス先頭を削除
+        #[arg(long)]
+        pub trim_root: Option<PathBuf>,
 
-    /// 対象パス
-    paths: Vec<PathBuf>,
+        /// 色なし
+        #[arg(long)]
+        pub no_color: bool,
+
+        /// 指定日時以降
+        #[arg(long)]
+        pub mtime_since: Option<String>,
+
+        /// 指定日時以前
+        #[arg(long)]
+        pub mtime_until: Option<String>,
+
+        /// 対象パス
+        pub paths: Vec<PathBuf>,
+    }
 }
 
-#[derive(Debug, Clone, clap::ValueEnum)]
-enum OutputFormat {
-    Table,
-    Csv,
-    Tsv,
-    Json,
-}
+// ==========================
+// Config / Modes / Filters
+// ==========================
+mod config {
+    use super::*;
 
-#[derive(Debug, Clone, clap::ValueEnum)]
-enum SortKey {
-    Lines,
-    Chars,
-    Words,
-    Name,
-    Ext,
-}
+    use crate::cli::{OutputFormat, SortKey};
 
-#[derive(Debug)]
-#[allow(clippy::struct_excessive_bools)]
-struct Config {
-    format: OutputFormat,
-    sort_key: SortKey,
-    sort_desc: bool,
-    top_n: Option<usize>,
-    by_mode: ByMode,
-    summary_only: bool,
-    total_only: bool,
-    filters: Filters,
-    hidden: bool,
-    follow: bool,
-    use_git: bool,
-    jobs: usize,
-    no_default_prune: bool,
-    abs_path: bool,
-    trim_root: Option<PathBuf>,
-    #[allow(dead_code)]
-    no_color: bool,
-    words: bool,
-    text_only: bool,
-    files_from: Option<PathBuf>,
-    paths: Vec<PathBuf>,
-    mtime_since: Option<DateTime<Local>>,
-    mtime_until: Option<DateTime<Local>>,
-}
+    #[derive(Debug)]
+    pub enum ByMode {
+        None,
+        Ext,
+        Dir(usize),
+    }
 
-#[derive(Debug)]
-enum ByMode {
-    None,
-    Ext,
-    Dir(usize),
-}
+    #[derive(Debug, Default)]
+    #[allow(clippy::struct_field_names)]
+    pub struct Filters {
+        pub include_patterns: Vec<glob::Pattern>,
+        pub exclude_patterns: Vec<glob::Pattern>,
+        pub include_paths: Vec<glob::Pattern>,
+        pub exclude_paths: Vec<glob::Pattern>,
+        pub exclude_dirs: Vec<glob::Pattern>,
+        pub ext_filters: Vec<String>,
+        pub max_size: Option<u64>,
+        pub min_lines: Option<usize>,
+        pub max_lines: Option<usize>,
+        pub min_chars: Option<usize>,
+        pub max_chars: Option<usize>,
+        pub min_words: Option<usize>,
+        pub max_words: Option<usize>,
+    }
 
-#[derive(Debug, Default)]
-#[allow(clippy::struct_field_names)]
-struct Filters {
-    include_patterns: Vec<glob::Pattern>,
-    exclude_patterns: Vec<glob::Pattern>,
-    include_paths: Vec<glob::Pattern>,
-    exclude_paths: Vec<glob::Pattern>,
-    exclude_dirs: Vec<glob::Pattern>,
-    ext_filters: Vec<String>,
-    max_size: Option<u64>,
-    min_lines: Option<usize>,
-    max_lines: Option<usize>,
-    min_chars: Option<usize>,
-    max_chars: Option<usize>,
-    min_words: Option<usize>,
-    max_words: Option<usize>,
-}
+    #[derive(Debug)]
+    #[allow(clippy::struct_excessive_bools)]
+    pub struct Config {
+        pub format: OutputFormat,
+        pub sort_key: SortKey,
+        pub sort_desc: bool,
+        pub top_n: Option<usize>,
+        pub by_mode: ByMode,
+        pub summary_only: bool,
+        pub total_only: bool,
+        pub filters: Filters,
+        pub hidden: bool,
+        pub follow: bool,
+        pub use_git: bool,
+        pub jobs: usize,
+        pub no_default_prune: bool,
+        pub abs_path: bool,
+        pub trim_root: Option<PathBuf>,
+        #[allow(dead_code)]
+        pub no_color: bool,
+        pub words: bool,
+        pub text_only: bool,
+        pub files_from: Option<PathBuf>,
+        pub paths: Vec<PathBuf>,
+        pub mtime_since: Option<DateTime<Local>>,
+        pub mtime_until: Option<DateTime<Local>>,
+    }
 
-#[derive(Debug, Clone)]
-struct FileStats {
-    path: PathBuf,
-    lines: usize,
-    chars: usize,
-    words: Option<usize>,
-}
+    impl Config {
+        pub fn from_args(args: crate::cli::Args) -> anyhow::Result<Self> {
+            let by_mode = match args.by {
+                std::option::Option::None => ByMode::None,
+                Some(ref s) if s == "ext" => ByMode::Ext,
+                Some(ref s) if s.starts_with("dir") => {
+                    let depth = s.strip_prefix("dir=").and_then(|d| d.parse().ok()).unwrap_or(1);
+                    ByMode::Dir(depth)
+                }
+                Some(ref s) => anyhow::bail!("Unknown --by mode: {s}"),
+            };
+            
 
-#[derive(Debug, Serialize)]
-struct JsonOutput {
-    files: Vec<JsonFile>,
-    summary: JsonSummary,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    by_extension: Option<Vec<JsonByExt>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    by_directory: Option<Vec<JsonByDir>>,
-}
+            let filters = Filters {
+                include_patterns: crate::util::parse_patterns(&args.include)?,
+                exclude_patterns: crate::util::parse_patterns(&args.exclude)?,
+                include_paths: crate::util::parse_patterns(&args.include_path)?,
+                exclude_paths: crate::util::parse_patterns(&args.exclude_path)?,
+                exclude_dirs: crate::util::parse_patterns(&args.exclude_dir)?,
+                ext_filters: args
+                    .ext
+                    .as_ref()
+                    .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
+                    .unwrap_or_default(),
+                max_size: args.max_size.as_ref().and_then(|s| crate::util::parse_size(s).ok()),
+                min_lines: args.min_lines,
+                max_lines: args.max_lines,
+                min_chars: args.min_chars,
+                max_chars: args.max_chars,
+                min_words: args.min_words,
+                max_words: args.max_words,
+            };
 
-#[derive(Debug, Serialize)]
-struct JsonFile {
-    file: String,
-    lines: usize,
-    chars: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    words: Option<usize>,
-}
+            let jobs = args.jobs.unwrap_or_else(num_cpus::get);
+            let paths = if args.paths.is_empty() {
+                vec![PathBuf::from(".")]
+            } else {
+                args.paths
+            };
 
-#[derive(Debug, Serialize)]
-struct JsonSummary {
-    lines: usize,
-    chars: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    words: Option<usize>,
-    files: usize,
-}
-
-#[derive(Debug, Serialize)]
-struct JsonByExt {
-    ext: String,
-    lines: usize,
-    chars: usize,
-    count: usize,
-}
-
-#[derive(Debug, Serialize)]
-struct JsonByDir {
-    dir: String,
-    lines: usize,
-    chars: usize,
-    count: usize,
-}
-
-impl Config {
-    fn from_args(args: Args) -> Result<Self> {
-        let by_mode = match args.by {
-            None => ByMode::None,
-            Some(ref s) if s == "ext" => ByMode::Ext,
-            Some(ref s) if s.starts_with("dir") => {
-                let depth = s.strip_prefix("dir=")
-                    .and_then(|d| d.parse().ok())
-                    .unwrap_or(1);
-                ByMode::Dir(depth)
-            }
-            Some(ref s) => anyhow::bail!("Unknown --by mode: {s}"),
-        };
-
-        let filters = Filters {
-            include_patterns: parse_patterns(&args.include)?,
-            exclude_patterns: parse_patterns(&args.exclude)?,
-            include_paths: parse_patterns(&args.include_path)?,
-            exclude_paths: parse_patterns(&args.exclude_path)?,
-            exclude_dirs: parse_patterns(&args.exclude_dir)?,
-            ext_filters: args.ext
+            let mtime_since = args
+                .mtime_since
                 .as_ref()
-                .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
-                .unwrap_or_default(),
-            max_size: args.max_size.as_ref().and_then(|s| parse_size(s).ok()),
-            min_lines: args.min_lines,
-            max_lines: args.max_lines,
-            min_chars: args.min_chars,
-            max_chars: args.max_chars,
-            min_words: args.min_words,
-            max_words: args.max_words,
+                .and_then(|s| crate::util::parse_datetime(s).ok());
+            let mtime_until = args
+                .mtime_until
+                .as_ref()
+                .and_then(|s| crate::util::parse_datetime(s).ok());
+
+            Ok(Self {
+                format: args.format,
+                sort_key: args.sort,
+                sort_desc: args.desc,
+                top_n: args.top,
+                by_mode,
+                summary_only: args.summary_only,
+                total_only: args.total_only,
+                filters,
+                hidden: args.hidden,
+                follow: args.follow,
+                use_git: args.git,
+                jobs,
+                no_default_prune: args.no_default_prune,
+                abs_path: args.abs_path,
+                trim_root: args.trim_root,
+                no_color: args.no_color,
+                words: args.words,
+                text_only: args.text_only,
+                files_from: args.files_from,
+                paths,
+                mtime_since,
+                mtime_until,
+            })
+        }
+    }
+
+    pub use Config as AppConfig;
+    pub use Filters as AppFilters;
+}
+
+// ==========================
+// Domain types (stats / JSON)
+// ==========================
+mod types {
+    use super::*;
+    use serde::Serialize;
+
+    #[derive(Debug, Clone)]
+    pub struct FileStats {
+        pub path: PathBuf,
+        pub lines: usize,
+        pub chars: usize,
+        pub words: Option<usize>,
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct JsonOutput {
+        pub files: Vec<JsonFile>,
+        pub summary: JsonSummary,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub by_extension: Option<Vec<JsonByExt>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub by_directory: Option<Vec<JsonByDir>>,
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct JsonFile {
+        pub file: String,
+        pub lines: usize,
+        pub chars: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub words: Option<usize>,
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct JsonSummary {
+        pub lines: usize,
+        pub chars: usize,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        pub words: Option<usize>,
+        pub files: usize,
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct JsonByExt {
+        pub ext: String,
+        pub lines: usize,
+        pub chars: usize,
+        pub count: usize,
+    }
+
+    #[derive(Debug, Serialize)]
+    pub struct JsonByDir {
+        pub dir: String,
+        pub lines: usize,
+        pub chars: usize,
+        pub count: usize,
+    }
+
+    pub use FileStats as Stats;
+    pub use JsonByDir as OutByDir;
+    pub use JsonByExt as OutByExt;
+    pub use JsonFile as OutFile;
+    pub use JsonOutput as Out;
+    pub use JsonSummary as OutSummary;
+}
+
+// ==========================
+// Utilities
+// ==========================
+mod util {
+    use super::*;
+    use anyhow::Context as _;
+
+    pub fn parse_patterns(patterns: &[String]) -> anyhow::Result<Vec<glob::Pattern>> {
+        patterns
+            .iter()
+            .map(|p| glob::Pattern::new(p).context("Invalid pattern"))
+            .collect()
+    }
+
+    pub fn parse_size(s: &str) -> anyhow::Result<u64> {
+        let s = s.trim();
+
+        let parse_with_suffix = |suffixes: &[&str], multiplier: u64| {
+            for suffix in suffixes {
+                if let Some(stripped) = s.strip_suffix(suffix) {
+                    return Some((stripped, multiplier));
+                }
+            }
+            None
         };
 
-        let jobs = args.jobs.unwrap_or_else(num_cpus::get);
-        let paths = if args.paths.is_empty() {
-            vec![PathBuf::from(".")]
+        let (num_str, multiplier) = parse_with_suffix(&["KiB", "KB", "K", "k"], 1024)
+            .or_else(|| parse_with_suffix(&["MiB", "MB", "M", "m"], 1024 * 1024))
+            .or_else(|| parse_with_suffix(&["GiB", "GB", "G", "g"], 1024 * 1024 * 1024))
+            .or_else(|| parse_with_suffix(&["TiB", "TB", "T", "t"], 1024 * 1024 * 1024 * 1024))
+            .unwrap_or((s, 1));
+
+        let num: u64 = num_str.parse().context("Invalid size number")?;
+        Ok(num * multiplier)
+    }
+
+    pub fn parse_datetime(s: &str) -> anyhow::Result<DateTime<Local>> {
+        use chrono::{NaiveDate, NaiveDateTime, TimeZone};
+
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+            return Ok(dt.with_timezone(&Local));
+        }
+        if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+            return Local
+                .from_local_datetime(&ndt)
+                .single()
+                .context("Ambiguous datetime");
+        }
+        if let Ok(nd) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+            let ndt = nd.and_hms_opt(0, 0, 0).context("Invalid time")?;
+            return Local
+                .from_local_datetime(&ndt)
+                .single()
+                .context("Ambiguous datetime");
+        }
+        anyhow::bail!("Cannot parse datetime: {s}")
+    }
+
+    pub fn format_path(path: &Path, abs_path: bool, trim_root: &Option<PathBuf>) -> String {
+        let mut path = if abs_path {
+            path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
         } else {
-            args.paths
+            path.to_path_buf()
         };
 
-        let mtime_since = args.mtime_since.as_ref().and_then(|s| parse_datetime(s).ok());
-        let mtime_until = args.mtime_until.as_ref().and_then(|s| parse_datetime(s).ok());
-
-        Ok(Self {
-            format: args.format,
-            sort_key: args.sort,
-            sort_desc: args.desc,
-            top_n: args.top,
-            by_mode,
-            summary_only: args.summary_only,
-            total_only: args.total_only,
-            filters,
-            hidden: args.hidden,
-            follow: args.follow,
-            use_git: args.git,
-            jobs,
-            no_default_prune: args.no_default_prune,
-            abs_path: args.abs_path,
-            trim_root: args.trim_root,
-            no_color: args.no_color,
-            words: args.words,
-            text_only: args.text_only,
-            files_from: args.files_from,
-            paths,
-            mtime_since,
-            mtime_until,
-        })
-    }
-}
-
-fn parse_patterns(patterns: &[String]) -> Result<Vec<glob::Pattern>> {
-    patterns
-        .iter()
-        .map(|p| glob::Pattern::new(p).context("Invalid pattern"))
-        .collect()
-}
-
-fn parse_size(s: &str) -> Result<u64> {
-    let s = s.trim();
-    
-    let parse_with_suffix = |suffixes: &[&str], multiplier: u64| {
-        for suffix in suffixes {
-            if let Some(stripped) = s.strip_suffix(suffix) {
-                return Some((stripped, multiplier));
+        if let Some(root) = trim_root {
+            if let Ok(stripped) = path.strip_prefix(root) {
+                path = stripped.to_path_buf();
             }
         }
-        None
-    };
-    
-    let (num_str, multiplier) = parse_with_suffix(&["KiB", "KB", "K", "k"], 1024)
-        .or_else(|| parse_with_suffix(&["MiB", "MB", "M", "m"], 1024 * 1024))
-        .or_else(|| parse_with_suffix(&["GiB", "GB", "G", "g"], 1024 * 1024 * 1024))
-        .or_else(|| parse_with_suffix(&["TiB", "TB", "T", "t"], 1024 * 1024 * 1024 * 1024))
-        .unwrap_or((s, 1));
 
-    let num: u64 = num_str.parse().context("Invalid size number")?;
-    Ok(num * multiplier)
-}
-
-fn parse_datetime(s: &str) -> Result<DateTime<Local>> {
-    // 簡易的な日時パース (ISO8601形式など)
-    if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
-        return Ok(dt.with_timezone(&Local));
+        path.display().to_string()
     }
-    if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-        return Local.from_local_datetime(&ndt).single().context("Ambiguous datetime");
-    }
-    if let Ok(nd) = chrono::NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-        let ndt = nd.and_hms_opt(0, 0, 0).context("Invalid time")?;
-        return Local.from_local_datetime(&ndt).single().context("Ambiguous datetime");
-    }
-    anyhow::bail!("Cannot parse datetime: {s}")
-}
-
-fn collect_files(config: &Config) -> Result<Vec<PathBuf>> {
-    if let Some(ref from_file) = config.files_from {
-        return read_files_from(from_file);
-    }
-
-    if config.use_git {
-        if let Ok(files) = collect_git_files(config) {
-            return Ok(files);
+    pub fn get_dir_key(path: &Path, depth: usize) -> String {
+        // ファイルは parent() に寄せてから components を数える
+        let mut p = path;
+        if path.file_name().is_some() {
+            if let Some(parent) = path.parent() { p = parent; }
         }
-    }
-
-    collect_find_files(config)
+        // 以降は Normal ディレクトリのみカウント
+        use std::path::Component;
+        let mut parts = Vec::new();
+        for comp in p.components() {
+            if let Component::Normal(s) = comp {
+                parts.push(s.to_string_lossy().into_owned());
+                if parts.len() >= depth { break; }
+            }
+        }
+        if parts.is_empty() { ".".to_string() } else { parts.join("/") }
+    }    
 }
 
-fn read_files_from(path: &Path) -> Result<Vec<PathBuf>> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    Ok(reader
-        .lines()
-        .map_while(Result::ok)
-        .filter(|line| !line.trim().is_empty())
-        .map(PathBuf::from)
-        .collect())
-}
+// ==========================
+// File selection (git / walk)
+// ==========================
+mod files {
+    use super::*;
+    use walkdir::WalkDir;
 
-fn collect_git_files(config: &Config) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
-    for root in &config.paths {
-        let output = std::process::Command::new("git")
-            .arg("ls-files")
-            .arg("--cached")
-            .arg("--others")
-            .arg("--exclude-standard")
-            .arg("--")
-            .arg(root)
-            .current_dir(root)
-            .output()?;
+    use crate::config::{AppConfig, AppFilters};
 
-        if !output.status.success() {
-            anyhow::bail!("git ls-files failed");
+    pub fn collect_files(config: &AppConfig) -> anyhow::Result<Vec<PathBuf>> {
+        if let Some(ref from) = config.files_from {
+            return read_files_from(from);
         }
 
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        files.extend(
-            stdout
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(|line| root.join(line)),
-        );
+        if config.use_git {
+            if let Ok(files) = collect_git_files(config) {
+                return Ok(files);
+            }
+        }
+
+        collect_find_files(config)
     }
-    Ok(files)
-}
 
-fn collect_find_files(config: &Config) -> Result<Vec<PathBuf>> {
-    let mut files = Vec::new();
+    fn read_files_from(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        Ok(reader
+            .lines()
+            .map_while(Result::ok)
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .map(PathBuf::from)
+            .collect())
+    }
 
-    for root in &config.paths {
-        let walker = WalkDir::new(root)
-            .follow_links(config.follow)
-            .into_iter()
-            .filter_entry(|e| should_process_entry(e, config));
+    fn collect_git_files(config: &AppConfig) -> anyhow::Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
+        for root in &config.paths {
+            let output = std::process::Command::new("git")
+                .arg("ls-files")
+                .arg("--cached")
+                .arg("--others")
+                .arg("--exclude-standard")
+                .arg("--")
+                .arg(root)
+                .current_dir(root)
+                .output()?;
 
-        for entry in walker {
-            let entry = entry?;
-            if !entry.file_type().is_file() {
-                continue;
+            if !output.status.success() {
+                anyhow::bail!("git ls-files failed");
             }
 
-            let path = entry.path();
-            if !matches_filters(path, config) {
-                continue;
-            }
-
-            files.push(path.to_path_buf());
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            files.extend(stdout.lines().filter(|l| !l.trim().is_empty()).map(|l| root.join(l)));
         }
+        Ok(files)
     }
 
-    Ok(files)
-}
+    fn should_process_entry(entry: &walkdir::DirEntry, config: &AppConfig) -> bool {
+        let path = entry.path();
 
-fn should_process_entry(entry: &walkdir::DirEntry, config: &Config) -> bool {
-    let path = entry.path();
+        // 隠しファイル/ディレクトリの除外
+        if !config.hidden {
+            if let Some(name) = path.file_name() {
+                if name.to_string_lossy().starts_with('.') {
+                    return false;
+                }
+            }
+        }
 
-    // 隠しファイル/ディレクトリの除外
-    if !config.hidden {
-        if let Some(name) = path.file_name() {
-            if name.to_string_lossy().starts_with('.') {
+        // デフォルト剪定
+        if !config.no_default_prune && entry.file_type().is_dir() {
+            let name = entry.file_name().to_string_lossy();
+            let default_prune = [
+                ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "build", "dist", "target",
+                ".cache", ".direnv", ".mypy_cache", ".pytest_cache", "coverage", "__pycache__", ".idea",
+                ".next", ".nuxt",
+            ];
+            if default_prune.contains(&name.as_ref()) {
                 return false;
             }
         }
-    }
 
-    // デフォルト剪定
-    if !config.no_default_prune && entry.file_type().is_dir() {
-        let name = entry.file_name().to_string_lossy();
-        let default_prune = [
-            ".git", ".hg", ".svn", "node_modules", ".venv", "venv",
-            "build", "dist", "target", ".cache", ".direnv",
-            ".mypy_cache", ".pytest_cache", "coverage", "__pycache__",
-            ".idea", ".next", ".nuxt",
-        ];
-        if default_prune.contains(&name.as_ref()) {
-            return false;
+        // 除外ディレクトリ
+        if entry.file_type().is_dir() {
+            for pattern in &config.filters.exclude_dirs {
+                if pattern.matches_path(path) {
+                    return false;
+                }
+            }
         }
+
+        true
     }
 
-    // 除外ディレクトリ
-    if entry.file_type().is_dir() {
-        for pattern in &config.filters.exclude_dirs {
-            if pattern.matches_path(path) {
+    fn matches_filters(path: &Path, config: &AppConfig) -> bool {
+        let AppFilters {
+            include_patterns,
+            exclude_patterns,
+            include_paths,
+            exclude_paths,
+            ext_filters,
+            max_size,
+            ..
+        } = &config.filters;
+
+        // ファイル名 (include)
+        if !include_patterns.is_empty() {
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            if !include_patterns.iter().any(|p| p.matches(&name)) {
                 return false;
             }
         }
-    }
 
-    true
-}
-
-fn matches_filters(path: &Path, config: &Config) -> bool {
-    let filters = &config.filters;
-
-    // ファイル名パターン (include)
-    if !filters.include_patterns.is_empty() {
+        // ファイル名 (exclude)
         let name = path.file_name().unwrap_or_default().to_string_lossy();
-        if !filters.include_patterns.iter().any(|p| p.matches(&name)) {
+        if exclude_patterns.iter().any(|p| p.matches(&name)) {
             return false;
         }
-    }
 
-    // ファイル名パターン (exclude)
-    let name = path.file_name().unwrap_or_default().to_string_lossy();
-    if filters.exclude_patterns.iter().any(|p| p.matches(&name)) {
-        return false;
-    }
-
-    // パスパターン (include)
-    if !filters.include_paths.is_empty() {
-        if !filters.include_paths.iter().any(|p| p.matches_path(path)) {
+        // パス (include)
+        if !include_paths.is_empty() && !include_paths.iter().any(|p| p.matches_path(path)) {
             return false;
         }
-    }
 
-    // パスパターン (exclude)
-    if filters.exclude_paths.iter().any(|p| p.matches_path(path)) {
-        return false;
-    }
+        // パス (exclude)
+        if exclude_paths.iter().any(|p| p.matches_path(path)) {
+            return false;
+        }
 
-    // 拡張子フィルタ
-    if !filters.ext_filters.is_empty() {
-        if let Some(ext) = path.extension() {
-            let ext_lower = ext.to_string_lossy().to_lowercase();
-            if !filters.ext_filters.contains(&ext_lower) {
+        // 拡張子
+        if !ext_filters.is_empty() {
+            if let Some(ext) = path.extension() {
+                let ext_lower = ext.to_string_lossy().to_lowercase();
+                if !ext_filters.contains(&ext_lower) {
+                    return false;
+                }
+            } else {
                 return false;
             }
-        } else {
-            return false;
         }
-    }
 
-    // サイズフィルタ
-    if let Some(max_size) = filters.max_size {
+        // サイズ
+        if let Some(max_size) = max_size {
+            if let Ok(metadata) = std::fs::metadata(path) {
+                if metadata.len() > *max_size {
+                    return false;
+                }
+            }
+        }
+
+        // mtime
         if let Ok(metadata) = std::fs::metadata(path) {
-            if metadata.len() > max_size {
-                return false;
-            }
-        }
-    }
-
-    // mtime フィルタ
-    #[allow(clippy::collapsible_if)]
-    if let Ok(metadata) = std::fs::metadata(path) {
-        if let Ok(modified) = metadata.modified() {
-            let modified: DateTime<Local> = modified.into();
-            if let Some(since) = &config.mtime_since {
-                if modified < *since {
-                    return false;
+            if let Ok(modified) = metadata.modified() {
+                let modified: DateTime<Local> = modified.into();
+                if let Some(since) = &config.mtime_since {
+                    if modified < *since {
+                        return false;
+                    }
                 }
-            }
-            if let Some(until) = &config.mtime_until {
-                if modified > *until {
-                    return false;
+                if let Some(until) = &config.mtime_until {
+                    if modified > *until {
+                        return false;
+                    }
                 }
             }
         }
+
+        true
     }
 
-    true
-}
+    pub fn collect_find_files(config: &AppConfig) -> anyhow::Result<Vec<PathBuf>> {
+        let mut files = Vec::new();
 
-fn measure_file(path: &Path, config: &Config) -> Option<FileStats> {
-    // テキストファイルチェック
-    if config.text_only && !is_text_file(path) {
-        return None;
-    }
+        for root in &config.paths {
+            let walker = WalkDir::new(root)
+                .follow_links(config.follow)
+                .into_iter()
+                .filter_entry(|e| should_process_entry(e, config));
 
-    let file = File::open(path).ok()?;
-    let reader = BufReader::new(file);
-
-    let mut lines = 0;
-    let mut chars = 0;
-    let mut words = 0;
-
-    for line in reader.lines() {
-        let line = line.ok()?;
-        lines += 1;
-        chars += line.chars().count();
-        if config.words {
-            words += line.split_whitespace().count();
-        }
-    }
-
-    let stats = FileStats {
-        path: path.to_path_buf(),
-        lines,
-        chars,
-        words: if config.words { Some(words) } else { None },
-    };
-
-    // 行数・文字数・単語数フィルタ
-    if let Some(min) = config.filters.min_lines {
-        if stats.lines < min {
-            return None;
-        }
-    }
-    if let Some(max) = config.filters.max_lines {
-        if stats.lines > max {
-            return None;
-        }
-    }
-    if let Some(min) = config.filters.min_chars {
-        if stats.chars < min {
-            return None;
-        }
-    }
-    if let Some(max) = config.filters.max_chars {
-        if stats.chars > max {
-            return None;
-        }
-    }
-    if let Some(min) = config.filters.min_words {
-        if stats.words.unwrap_or(0) < min {
-            return None;
-        }
-    }
-    if let Some(max) = config.filters.max_words {
-        if stats.words.unwrap_or(0) > max {
-            return None;
-        }
-    }
-
-    Some(stats)
-}
-
-fn is_text_file(path: &Path) -> bool {
-    let Ok(mut file) = File::open(path) else {
-        return false;
-    };
-
-    let mut buffer = [0u8; 8192];
-    let n = file.read(&mut buffer).unwrap_or(0);
-
-    // NULL バイトがあればバイナリと判定
-    !buffer[..n].contains(&0)
-}
-
-fn process_files(config: &Config) -> Result<Vec<FileStats>> {
-    let files = collect_files(config)?;
-
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(config.jobs)
-        .build_global()
-        .ok();
-
-    let stats: Vec<FileStats> = files
-        .par_iter()
-        .filter_map(|path| measure_file(path, config))
-        .collect();
-
-    Ok(stats)
-}
-
-fn format_path(path: &Path, config: &Config) -> String {
-    let mut path = if config.abs_path {
-        path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-    } else {
-        path.to_path_buf()
-    };
-
-    if let Some(ref trim_root) = config.trim_root {
-        if let Ok(stripped) = path.strip_prefix(trim_root) {
-            path = stripped.to_path_buf();
-        }
-    }
-
-    path.display().to_string()
-}
-
-fn sort_stats(stats: &mut [FileStats], config: &Config) {
-    stats.sort_by(|a, b| {
-        let cmp = match config.sort_key {
-            SortKey::Lines => a.lines.cmp(&b.lines),
-            SortKey::Chars => a.chars.cmp(&b.chars),
-            SortKey::Words => a.words.unwrap_or(0).cmp(&b.words.unwrap_or(0)),
-            SortKey::Name => a.path.cmp(&b.path),
-            SortKey::Ext => {
-                let ext_a = a.path.extension().unwrap_or_default();
-                let ext_b = b.path.extension().unwrap_or_default();
-                ext_a.cmp(ext_b)
+            for entry in walker {
+                let entry = entry?;
+                if !entry.file_type().is_file() {
+                    continue;
+                }
+                let path = entry.path();
+                if !matches_filters(path, config) {
+                    continue;
+                }
+                files.push(path.to_path_buf());
             }
+        }
+
+        Ok(files)
+    }
+}
+
+// ==========================
+// Measuring / Sorting
+// ==========================
+mod compute {
+    use super::*;
+    use rayon::prelude::*;
+
+    use crate::cli::SortKey;
+    use crate::config::AppConfig;
+    use crate::types::Stats as FileStats;
+
+    pub fn process_files(config: &AppConfig) -> anyhow::Result<Vec<FileStats>> {
+        let files = crate::files::collect_files(config)?;
+
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(config.jobs)
+            .build_global()
+            .ok();
+
+        let stats: Vec<FileStats> = files
+            .par_iter()
+            .filter_map(|path| measure_file(path, config))
+            .collect();
+
+        Ok(stats)
+    }
+
+    pub fn sort_stats(stats: &mut [FileStats], config: &AppConfig) {
+        stats.sort_by(|a, b| {
+            let cmp = match config.sort_key {
+                SortKey::Lines => a.lines.cmp(&b.lines),
+                SortKey::Chars => a.chars.cmp(&b.chars),
+                SortKey::Words => a.words.unwrap_or(0).cmp(&b.words.unwrap_or(0)),
+                SortKey::Name => a.path.cmp(&b.path),
+                SortKey::Ext => {
+                    let ext_a = a.path.extension().unwrap_or_default();
+                    let ext_b = b.path.extension().unwrap_or_default();
+                    ext_a.cmp(ext_b)
+                }
+            };
+            if config.sort_desc { cmp.reverse() } else { cmp }
+        });
+    }
+
+    fn is_text_file(path: &Path) -> bool {
+        use std::fs::File;
+        use std::io::Read;
+        let Ok(mut file) = File::open(path) else { return false; };
+        let mut buffer = [0u8; 8192];
+        let n = file.read(&mut buffer).unwrap_or(0);
+        // NULL バイトがあればバイナリと判定
+        !buffer[..n].contains(&0)
+    }
+
+    fn measure_file(path: &Path, config: &AppConfig) -> Option<FileStats> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
+        if config.text_only && !is_text_file(path) {
+            return None;
+        }
+
+        let file = File::open(path).ok()?;
+        let reader = BufReader::new(file);
+
+        let mut lines = 0;
+        let mut chars = 0;
+        let mut words = 0;
+
+        for line in reader.lines() {
+            let line = line.ok()?;
+            lines += 1;
+            chars += line.chars().count();
+            if config.words {
+                words += line.split_whitespace().count();
+            }
+        }
+
+        let stats = FileStats {
+            path: path.to_path_buf(),
+            lines,
+            chars,
+            words: if config.words { Some(words) } else { None },
         };
-        if config.sort_desc {
-            cmp.reverse()
-        } else {
-            cmp
+
+        // 行数・文字数・単語数フィルタ
+        if let Some(min) = config.filters.min_lines {
+            if stats.lines < min { return None; }
         }
-    });
-}
-
-fn output_table(stats: &[FileStats], config: &Config) {
-    println!();
-    if config.words {
-        println!("    LINES\t CHARACTERS\t   WORDS\tFILE");
-    } else {
-        println!("    LINES\t CHARACTERS\tFILE");
-    }
-    println!("----------------------------------------------");
-
-    let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
-    for stat in &stats[..limit] {
-        let path = format_path(&stat.path, config);
-        if config.words {
-            println!(
-                "{:10}\t{:10}\t{:7}\t{}",
-                stat.lines,
-                stat.chars,
-                stat.words.unwrap_or(0),
-                path
-            );
-        } else {
-            println!("{:10}\t{:10}\t{}", stat.lines, stat.chars, path);
+        if let Some(max) = config.filters.max_lines {
+            if stats.lines > max { return None; }
         }
-    }
-    println!("---");
-}
+        if let Some(min) = config.filters.min_chars {
+            if stats.chars < min { return None; }
+        }
+        if let Some(max) = config.filters.max_chars {
+            if stats.chars > max { return None; }
+        }
+        if let Some(min) = config.filters.min_words {
+            if stats.words.unwrap_or(0) < min { return None; }
+        }
+        if let Some(max) = config.filters.max_words {
+            if stats.words.unwrap_or(0) > max { return None; }
+        }
 
-fn output_by_extension(stats: &[FileStats], _config: &Config) {
-    let mut by_ext: HashMap<String, (usize, usize, usize)> = HashMap::new();
-
-    for stat in stats {
-        let ext = stat
-            .path
-            .extension()
-            .map_or_else(|| "(noext)".to_string(), |e| e.to_string_lossy().to_lowercase());
-
-        let entry = by_ext.entry(ext).or_insert((0, 0, 0));
-        entry.0 += stat.lines;
-        entry.1 += stat.chars;
-        entry.2 += 1;
-    }
-
-    println!("[By Extension]");
-    println!("{:>10}\t{:>10}\tEXT", "LINES", "CHARACTERS");
-
-    let mut entries: Vec<_> = by_ext.into_iter().collect();
-    entries.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
-
-    for (ext, (lines, chars, count)) in entries {
-        println!("{lines:10}\t{chars:10}\t{ext} ({count} files)");
-    }
-    println!("---");
-}
-
-fn output_by_directory(stats: &[FileStats], _config: &Config, depth: usize) {
-    let mut by_dir: HashMap<String, (usize, usize, usize)> = HashMap::new();
-
-    for stat in stats {
-        let dir_key = get_dir_key(&stat.path, depth);
-        let entry = by_dir.entry(dir_key).or_insert((0, 0, 0));
-        entry.0 += stat.lines;
-        entry.1 += stat.chars;
-        entry.2 += 1;
-    }
-
-    println!("[By Directory]");
-    println!(
-        "{:>10}\t{:>10}\tDIR (depth={depth})",
-        "LINES", "CHARACTERS"
-    );
-
-    let mut entries: Vec<_> = by_dir.into_iter().collect();
-    entries.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
-
-    for (dir, (lines, chars, count)) in entries {
-        println!("{lines:10}\t{chars:10}\t{dir} ({count} files)");
-    }
-    println!("---");
-}
-
-fn get_dir_key(path: &Path, depth: usize) -> String {
-    let components: Vec<_> = path.components().take(depth).collect();
-    components
-        .iter()
-        .map(|c| c.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
-}
-
-fn output_summary(stats: &[FileStats], config: &Config) {
-    let total_lines: usize = stats.iter().map(|s| s.lines).sum();
-    let total_chars: usize = stats.iter().map(|s| s.chars).sum();
-    let total_words: usize = stats.iter().filter_map(|s| s.words).sum();
-
-    if config.words {
-        println!(
-            "{:10}\t{:10}\t{:7}\tTOTAL ({} files)\n",
-            total_lines,
-            total_chars,
-            total_words,
-            stats.len()
-        );
-    } else {
-        println!(
-            "{:10}\t{:10}\tTOTAL ({} files)\n",
-            total_lines,
-            total_chars,
-            stats.len()
-        );
+        Some(stats)
     }
 }
 
-fn output_json(stats: &[FileStats], config: &Config) -> Result<()> {
-    let files: Vec<JsonFile> = stats
-        .iter()
-        .map(|s| JsonFile {
-            file: format_path(&s.path, config),
-            lines: s.lines,
-            chars: s.chars,
-            words: s.words,
-        })
-        .collect();
+// ==========================
+// Output formatting
+// ==========================
+mod output {
+    use crate::cli::OutputFormat;
+    use crate::config::{AppConfig, ByMode};
+    use crate::types as t;
 
-    let total_lines: usize = stats.iter().map(|s| s.lines).sum();
-    let total_chars: usize = stats.iter().map(|s| s.chars).sum();
-    let total_words: usize = stats.iter().filter_map(|s| s.words).sum();
+    pub fn emit(stats: &[t::Stats], config: &AppConfig) -> anyhow::Result<()> {
+        match config.format {
+            OutputFormat::Json => output_json(stats, config)?,
+            OutputFormat::Csv => output_delimited(stats, config, ',')?,
+            OutputFormat::Tsv => output_delimited(stats, config, '\t')?,
+            OutputFormat::Table => output_table(stats, config)?,
+        }
+        Ok(())
+    }
 
-    let summary = JsonSummary {
-        lines: total_lines,
-        chars: total_chars,
-        words: if config.words { Some(total_words) } else { None },
-        files: stats.len(),
-    };
-
-    let by_extension = match config.by_mode {
-        ByMode::Ext => {
-            let mut by_ext: HashMap<String, (usize, usize, usize)> = HashMap::new();
-            for stat in stats {
-                let ext = stat
-                    .path
-                    .extension()
-                    .map_or_else(String::new, |e| e.to_string_lossy().to_lowercase());
-                let entry = by_ext.entry(ext).or_insert((0, 0, 0));
-                entry.0 += stat.lines;
-                entry.1 += stat.chars;
-                entry.2 += 1;
+    fn output_table(stats: &[t::Stats], config: &AppConfig) -> anyhow::Result<()> {
+        // total-only: 一覧も by も出さず、最後のサマリだけ
+        if config.total_only {
+            output_summary(stats, config);
+            return Ok(());
+        }
+    
+        // summary-only でないときだけ一覧を出す
+        if !config.summary_only {
+            println!();
+            if config.words {
+                println!("    LINES\t CHARACTERS\t   WORDS\tFILE");
+            } else {
+                println!("    LINES\t CHARACTERS\tFILE");
             }
-            Some(
-                by_ext
-                    .into_iter()
-                    .map(|(ext, (lines, chars, count))| JsonByExt {
-                        ext: if ext.is_empty() { "(noext)".to_string() } else { ext },
-                        lines,
-                        chars,
-                        count,
-                    })
-                    .collect(),
-            )
-        }
-        _ => None,
-    };
-
-    let by_directory = match config.by_mode {
-        ByMode::Dir(depth) => {
-            let mut by_dir: HashMap<String, (usize, usize, usize)> = HashMap::new();
-            for stat in stats {
-                let dir_key = get_dir_key(&stat.path, depth);
-                let entry = by_dir.entry(dir_key).or_insert((0, 0, 0));
-                entry.0 += stat.lines;
-                entry.1 += stat.chars;
-                entry.2 += 1;
+            println!("----------------------------------------------");
+    
+            let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
+            for stat in &stats[..limit] {
+                let path = crate::util::format_path(&stat.path, config.abs_path, &config.trim_root);
+                if config.words {
+                    println!("{:10}\t{:10}\t{:7}\t{}", stat.lines, stat.chars, stat.words.unwrap_or(0), path);
+                } else {
+                    println!("{:10}\t{:10}\t{}", stat.lines, stat.chars, path);
+                }
             }
-            Some(
-                by_dir
-                    .into_iter()
-                    .map(|(dir, (lines, chars, count))| JsonByDir {
-                        dir,
-                        lines,
-                        chars,
-                        count,
-                    })
-                    .collect(),
-            )
+            println!("---");
+    
+            // “サマリのみ”でないときだけ By 集計
+            match config.by_mode {
+                ByMode::Ext => output_by_extension(stats)?,
+                ByMode::Dir(depth) => output_by_directory(stats, depth)?,
+                ByMode::None => {}
+            }
         }
-        _ => None,
-    };
+    
+        output_summary(stats, config);
+        Ok(())
+    }
+    
 
-    let output = JsonOutput {
-        files,
-        summary,
-        by_extension,
-        by_directory,
-    };
+    fn output_by_extension(stats: &[t::Stats]) -> anyhow::Result<()> {
+        use std::collections::HashMap;
+        let mut by_ext: HashMap<String, (usize, usize, usize)> = HashMap::new();
 
-    println!("{}", serde_json::to_string_pretty(&output)?);
-    Ok(())
-}
+        for stat in stats {
+            let ext = stat
+                .path
+                .extension()
+                .map_or_else(|| "(noext)".to_string(), |e| e.to_string_lossy().to_lowercase());
 
-fn output_csv(stats: &[FileStats], config: &Config) {
-    if config.words {
-        println!("lines,chars,words,file");
-    } else {
-        println!("lines,chars,file");
+            let entry = by_ext.entry(ext).or_insert((0, 0, 0));
+            entry.0 += stat.lines;
+            entry.1 += stat.chars;
+            entry.2 += 1;
+        }
+
+        println!("[By Extension]");
+        println!("{:>10}\t{:>10}\tEXT", "LINES", "CHARACTERS");
+
+        let mut entries: Vec<_> = by_ext.into_iter().collect();
+        entries.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+
+        for (ext, (lines, chars, count)) in entries {
+            println!("{lines:10}\t{chars:10}\t{ext} ({count} files)");
+        }
+        println!("---");
+        Ok(())
     }
 
-    let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
-    for stat in &stats[..limit] {
-        let path = format_path(&stat.path, config);
-        let escaped_path = path.replace('"', "\"\"");
+    fn output_by_directory(stats: &[t::Stats], depth: usize) -> anyhow::Result<()> {
+        use std::collections::HashMap;
+        let mut by_dir: HashMap<String, (usize, usize, usize)> = HashMap::new();
+
+        for stat in stats {
+            let dir_key = crate::util::get_dir_key(&stat.path, depth);
+            let entry = by_dir.entry(dir_key).or_insert((0, 0, 0));
+            entry.0 += stat.lines;
+            entry.1 += stat.chars;
+            entry.2 += 1;
+        }
+
+        println!("[By Directory]");
+        println!("{:>10}\t{:>10}\tDIR (depth={depth})", "LINES", "CHARACTERS");
+
+        let mut entries: Vec<_> = by_dir.into_iter().collect();
+        entries.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+
+        for (dir, (lines, chars, count)) in entries {
+            println!("{lines:10}\t{chars:10}\t{dir} ({count} files)");
+        }
+        println!("---");
+        Ok(())
+    }
+
+    fn output_summary(stats: &[t::Stats], config: &AppConfig) {
+        let total_lines: usize = stats.iter().map(|s| s.lines).sum();
+        let total_chars: usize = stats.iter().map(|s| s.chars).sum();
+        let total_words: usize = stats.iter().filter_map(|s| s.words).sum();
+
         if config.words {
             println!(
-                "{},{},{},\"{}\"",
-                stat.lines,
-                stat.chars,
-                stat.words.unwrap_or(0),
-                escaped_path
+                "{:10}\t{:10}\t{:7}\tTOTAL ({} files)\n",
+                total_lines,
+                total_chars,
+                total_words,
+                stats.len()
             );
         } else {
-            println!("{},{},\"{}\"", stat.lines, stat.chars, escaped_path);
-        }
-    }
-}
-
-fn output_tsv(stats: &[FileStats], config: &Config) {
-    if config.words {
-        println!("lines\tchars\twords\tfile");
-    } else {
-        println!("lines\tchars\tfile");
-    }
-
-    let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
-    for stat in &stats[..limit] {
-        let path = format_path(&stat.path, config);
-        if config.words {
             println!(
-                "{}\t{}\t{}\t{}",
-                stat.lines,
-                stat.chars,
-                stat.words.unwrap_or(0),
-                path
+                "{:10}\t{:10}\tTOTAL ({} files)\n",
+                total_lines,
+                total_chars,
+                stats.len()
             );
-        } else {
-            println!("{}\t{}\t{}", stat.lines, stat.chars, path);
         }
+    }
+
+    fn output_delimited(stats: &[t::Stats], config: &AppConfig, sep: char) -> anyhow::Result<()> {
+        let header = if config.words {
+            format!("lines{sep}chars{sep}words{sep}file")
+        } else {
+            format!("lines{sep}chars{sep}file")
+        };
+        println!("{}", header);
+
+        let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
+        for stat in &stats[..limit] {
+            let path = crate::util::format_path(&stat.path, config.abs_path, &config.trim_root);
+            if config.words {
+                println!(
+                    "{}{}{}{}{}{}{}",
+                    stat.lines,
+                    sep,
+                    stat.chars,
+                    sep,
+                    stat.words.unwrap_or(0),
+                    sep,
+                    escape_if_needed(&path, sep)
+                );
+            } else {
+                println!(
+                    "{}{}{}{}{}",
+                    stat.lines,
+                    sep,
+                    stat.chars,
+                    sep,
+                    escape_if_needed(&path, sep)
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn escape_if_needed(s: &str, sep: char) -> String {
+        if sep == ',' {
+            let escaped = s.replace('"', "\"\"");
+            format!("\"{}\"", escaped)
+        } else {
+            s.to_string()
+        }
+    }
+
+    fn output_json(stats: &[t::Stats], config: &AppConfig) -> anyhow::Result<()> {
+        use std::collections::HashMap;
+
+        let files: Vec<t::OutFile> = stats
+            .iter()
+            .map(|s| t::OutFile {
+                file: crate::util::format_path(&s.path, config.abs_path, &config.trim_root),
+                lines: s.lines,
+                chars: s.chars,
+                words: s.words,
+            })
+            .collect();
+
+        let total_lines: usize = stats.iter().map(|s| s.lines).sum();
+        let total_chars: usize = stats.iter().map(|s| s.chars).sum();
+        let total_words: usize = stats.iter().filter_map(|s| s.words).sum();
+
+        let summary = t::OutSummary {
+            lines: total_lines,
+            chars: total_chars,
+            words: if config.words { Some(total_words) } else { None },
+            files: stats.len(),
+        };
+
+        let by_extension = match config.by_mode {
+            ByMode::Ext => {
+                let mut by_ext: HashMap<String, (usize, usize, usize)> = HashMap::new();
+                for stat in stats {
+                    let ext = stat
+                        .path
+                        .extension()
+                        .map_or_else(String::new, |e| e.to_string_lossy().to_lowercase());
+                    let entry = by_ext.entry(ext).or_insert((0, 0, 0));
+                    entry.0 += stat.lines;
+                    entry.1 += stat.chars;
+                    entry.2 += 1;
+                }
+                Some(
+                    by_ext
+                        .into_iter()
+                        .map(|(ext, (lines, chars, count))| t::OutByExt {
+                            ext: if ext.is_empty() { "(noext)".to_string() } else { ext },
+                            lines,
+                            chars,
+                            count,
+                        })
+                        .collect(),
+                )
+            }
+            _ => None,
+        };
+
+        let by_directory = match config.by_mode {
+            ByMode::Dir(depth) => {
+                let mut by_dir: HashMap<String, (usize, usize, usize)> = HashMap::new();
+                for stat in stats {
+                    let dir_key = crate::util::get_dir_key(&stat.path, depth);
+                    let entry = by_dir.entry(dir_key).or_insert((0, 0, 0));
+                    entry.0 += stat.lines;
+                    entry.1 += stat.chars;
+                    entry.2 += 1;
+                }
+                Some(
+                    by_dir
+                        .into_iter()
+                        .map(|(dir, (lines, chars, count))| t::OutByDir { dir, lines, chars, count })
+                        .collect(),
+                )
+            }
+            _ => None,
+        };
+
+        let output = t::Out { files, summary, by_extension, by_directory };
+        println!("{}", serde_json::to_string_pretty(&output)?);
+        Ok(())
     }
 }
 
+// ==========================
+// Main
+// ==========================
 fn main() -> Result<()> {
-    let args = Args::parse();
-    let config = Config::from_args(args)?;
+    let args = cli::Args::parse();
+    let config = config::AppConfig::from_args(args)?;
 
-    if !matches!(config.format, OutputFormat::Json) && atty::is(atty::Stream::Stdout) {
+    if !matches!(config.format, cli::OutputFormat::Json) && atty::is(Stream::Stdout) {
         eprintln!("count_lines v{} · parallel={}", VERSION, config.jobs);
     }
 
-    let mut stats = process_files(&config)?;
-    sort_stats(&mut stats, &config);
+    let mut stats = compute::process_files(&config)?;
+    compute::sort_stats(&mut stats, &config);
 
-    match config.format {
-        OutputFormat::Json => {
-            output_json(&stats, &config)?;
-        }
-        OutputFormat::Csv => {
-            output_csv(&stats, &config);
-        }
-        OutputFormat::Tsv => {
-            output_tsv(&stats, &config);
-        }
-        OutputFormat::Table => {
-            if !config.total_only && !config.summary_only {
-                output_table(&stats, &config);
-            }
+    output::emit(&stats, &config)?;
 
-            if !config.total_only {
-                match config.by_mode {
-                    ByMode::Ext => output_by_extension(&stats, &config),
-                    ByMode::Dir(depth) => output_by_directory(&stats, &config, depth),
-                    ByMode::None => {}
-                }
-            }
-
-            output_summary(&stats, &config);
-        }
-    }
 
     Ok(())
 }
