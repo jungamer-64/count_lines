@@ -1,9 +1,10 @@
-// src/main.rs (refactored)
+// src/main.rs (refactored + portability/ergonomic upgrades)
 #![allow(clippy::multiple_crate_versions)]
 
 use anyhow::Result;
 use atty::Stream;
 use clap::Parser;
+use std::env;
 
 // Crate-level re-exports for ergonomics in this file
 use chrono::{DateTime, Local};
@@ -58,11 +59,11 @@ mod cli {
         #[arg(long)]
         pub by: Option<String>,
 
-        /// サマリのみ表示
+        /// サマリのみ表示（一覧は出力しないが By 集計は出す）
         #[arg(long)]
         pub summary_only: bool,
 
-        /// 合計のみ表示
+        /// 合計のみ表示（一覧と By 集計は出さない）
         #[arg(long)]
         pub total_only: bool,
 
@@ -93,6 +94,10 @@ mod cli {
         /// 最大ファイルサイズ
         #[arg(long)]
         pub max_size: Option<String>,
+
+        /// 最小ファイルサイズ
+        #[arg(long)]
+        pub min_size: Option<String>,
 
         /// 最小行数
         #[arg(long)]
@@ -130,6 +135,10 @@ mod cli {
         #[arg(long)]
         pub files_from: Option<PathBuf>,
 
+        /// ファイル一覧を読み込む (NUL 区切り)
+        #[arg(long)]
+        pub files_from0: Option<PathBuf>,
+
         /// 隠しファイルも対象
         #[arg(long)]
         pub hidden: bool,
@@ -150,9 +159,13 @@ mod cli {
         #[arg(long)]
         pub no_default_prune: bool,
 
-        /// 絶対パス出力
+        /// 絶対パス出力（論理的：シンボリック解決なし）
         #[arg(long)]
         pub abs_path: bool,
+
+        /// 絶対パスを実体解決（canonicalize）で出力
+        #[arg(long)]
+        pub abs_canonical: bool,
 
         /// パス先頭を削除
         #[arg(long)]
@@ -162,6 +175,10 @@ mod cli {
         #[arg(long)]
         pub no_color: bool,
 
+        /// CSV/TSV 末尾に TOTAL 行を出力
+        #[arg(long)]
+        pub total_row: bool,
+
         /// 指定日時以降
         #[arg(long)]
         pub mtime_since: Option<String>,
@@ -169,6 +186,10 @@ mod cli {
         /// 指定日時以前
         #[arg(long)]
         pub mtime_until: Option<String>,
+
+        /// 改行も文字数に含める（直感的カウント）
+        #[arg(long)]
+        pub count_newlines_in_chars: bool,
 
         /// 対象パス
         pub paths: Vec<PathBuf>,
@@ -200,6 +221,7 @@ mod config {
         pub exclude_dirs: Vec<glob::Pattern>,
         pub ext_filters: Vec<String>,
         pub max_size: Option<u64>,
+        pub min_size: Option<u64>,
         pub min_lines: Option<usize>,
         pub max_lines: Option<usize>,
         pub min_chars: Option<usize>,
@@ -225,15 +247,19 @@ mod config {
         pub jobs: usize,
         pub no_default_prune: bool,
         pub abs_path: bool,
+        pub abs_canonical: bool,
         pub trim_root: Option<PathBuf>,
         #[allow(dead_code)]
         pub no_color: bool,
         pub words: bool,
+        pub count_newlines_in_chars: bool,
         pub text_only: bool,
         pub files_from: Option<PathBuf>,
+        pub files_from0: Option<PathBuf>,
         pub paths: Vec<PathBuf>,
         pub mtime_since: Option<DateTime<Local>>,
         pub mtime_until: Option<DateTime<Local>>,
+        pub total_row: bool,
     }
 
     impl Config {
@@ -247,7 +273,6 @@ mod config {
                 }
                 Some(ref s) => anyhow::bail!("Unknown --by mode: {s}"),
             };
-            
 
             let filters = Filters {
                 include_patterns: crate::util::parse_patterns(&args.include)?,
@@ -261,6 +286,7 @@ mod config {
                     .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
                     .unwrap_or_default(),
                 max_size: args.max_size.as_ref().and_then(|s| crate::util::parse_size(s).ok()),
+                min_size: args.min_size.as_ref().and_then(|s| crate::util::parse_size(s).ok()),
                 min_lines: args.min_lines,
                 max_lines: args.max_lines,
                 min_chars: args.min_chars,
@@ -300,14 +326,18 @@ mod config {
                 jobs,
                 no_default_prune: args.no_default_prune,
                 abs_path: args.abs_path,
+                abs_canonical: args.abs_canonical,
                 trim_root: args.trim_root,
                 no_color: args.no_color,
                 words: args.words,
+                count_newlines_in_chars: args.count_newlines_in_chars,
                 text_only: args.text_only,
                 files_from: args.files_from,
+                files_from0: args.files_from0,
                 paths,
                 mtime_since,
                 mtime_until,
+                total_row: args.total_row,
             })
         }
     }
@@ -441,9 +471,22 @@ mod util {
         anyhow::bail!("Cannot parse datetime: {s}")
     }
 
-    pub fn format_path(path: &Path, abs_path: bool, trim_root: &Option<PathBuf>) -> String {
+    pub fn logical_absolute(path: &Path) -> std::path::PathBuf {
+        if path.is_absolute() {
+            return path.to_path_buf();
+        }
+        env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    }
+
+    pub fn format_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root: &Option<PathBuf>) -> String {
         let mut path = if abs_path {
-            path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
+            if abs_canonical {
+                path.canonicalize().unwrap_or_else(|_| logical_absolute(path))
+            } else {
+                logical_absolute(path)
+            }
         } else {
             path.to_path_buf()
         };
@@ -485,6 +528,9 @@ mod files {
     use crate::config::{AppConfig, AppFilters};
 
     pub fn collect_files(config: &AppConfig) -> anyhow::Result<Vec<PathBuf>> {
+        if let Some(ref from0) = config.files_from0 {
+            return read_files_from0(from0);
+        }
         if let Some(ref from) = config.files_from {
             return read_files_from(from);
         }
@@ -512,11 +558,30 @@ mod files {
             .collect())
     }
 
+    fn read_files_from0(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+        use std::fs::File;
+        use std::io::Read;
+        let mut f = File::open(path)?;
+        let mut buf = Vec::new();
+        f.read_to_end(&mut buf)?;
+        let mut out = Vec::new();
+        for chunk in buf.split(|b| *b == 0) {
+            if chunk.is_empty() { continue; }
+            let s = String::from_utf8_lossy(chunk).to_string();
+            let trimmed = s.trim();
+            if !trimmed.is_empty() {
+                out.push(PathBuf::from(trimmed));
+            }
+        }
+        Ok(out)
+    }
+
     fn collect_git_files(config: &AppConfig) -> anyhow::Result<Vec<PathBuf>> {
         let mut files = Vec::new();
         for root in &config.paths {
             let output = std::process::Command::new("git")
                 .arg("ls-files")
+                .arg("-z")
                 .arg("--cached")
                 .arg("--others")
                 .arg("--exclude-standard")
@@ -529,8 +594,14 @@ mod files {
                 anyhow::bail!("git ls-files failed");
             }
 
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            files.extend(stdout.lines().filter(|l| !l.trim().is_empty()).map(|l| root.join(l)));
+            let stdout = &output.stdout;
+            for chunk in stdout.split(|b| *b == 0) {
+                if chunk.is_empty() { continue; }
+                let s = String::from_utf8_lossy(chunk);
+                let s = s.trim();
+                if s.is_empty() { continue; }
+                files.push(root.join(s));
+            }
         }
         Ok(files)
     }
@@ -580,6 +651,7 @@ mod files {
             exclude_paths,
             ext_filters,
             max_size,
+            min_size,
             ..
         } = &config.filters;
 
@@ -619,10 +691,18 @@ mod files {
             }
         }
 
-        // サイズ
+        // サイズ（上限）
         if let Some(max_size) = max_size {
             if let Ok(metadata) = std::fs::metadata(path) {
                 if metadata.len() > *max_size {
+                    return false;
+                }
+            }
+        }
+        // サイズ（下限）
+        if let Some(min_size) = min_size {
+            if let Ok(metadata) = std::fs::metadata(path) {
+                if metadata.len() < *min_size {
                     return false;
                 }
             }
@@ -730,12 +810,53 @@ mod compute {
 
     fn measure_file(path: &Path, config: &AppConfig) -> Option<FileStats> {
         use std::fs::File;
-        use std::io::{BufRead, BufReader};
+        use std::io::{BufRead, BufReader, Read};
 
+        // 改行も文字数に含めるモード：一括読みで正確にカウント
+        if config.count_newlines_in_chars {
+            let mut f = File::open(path).ok()?;
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf).ok()?;
+
+            if config.text_only && buf.contains(&0) {
+                return None;
+            }
+
+            let s = String::from_utf8_lossy(&buf);
+            let bytes = s.as_bytes();
+
+            // 行数：'\n' の数 +（末尾が改行でなければ +1、空なら 0）
+            let nl = bytes.iter().filter(|&&b| b == b'\n').count();
+            let lines = if bytes.is_empty() {
+                0
+            } else if bytes.last() == Some(&b'\n') {
+                nl
+            } else {
+                nl + 1
+            };
+
+            // 文字数：改行含む
+            let chars = s.chars().count();
+
+            let words = if config.words {
+                s.split_whitespace().count()
+            } else {
+                0
+            };
+
+            let stats = FileStats {
+                path: path.to_path_buf(),
+                lines,
+                chars,
+                words: if config.words { Some(words) } else { None },
+            };
+            return apply_numeric_filters(stats, config);
+        }
+
+        // 従来モード：行ごと読み（改行は文字数に含めない）
         if config.text_only && !is_text_file(path) {
             return None;
         }
-
         let file = File::open(path).ok()?;
         let reader = BufReader::new(file);
 
@@ -752,14 +873,11 @@ mod compute {
             }
         }
 
-        let stats = FileStats {
-            path: path.to_path_buf(),
-            lines,
-            chars,
-            words: if config.words { Some(words) } else { None },
-        };
+        let stats = FileStats { path: path.to_path_buf(), lines, chars, words: if config.words { Some(words) } else { None } };
+        apply_numeric_filters(stats, config)
+    }
 
-        // 行数・文字数・単語数フィルタ
+    fn apply_numeric_filters(stats: FileStats, config: &AppConfig) -> Option<FileStats> {
         if let Some(min) = config.filters.min_lines {
             if stats.lines < min { return None; }
         }
@@ -778,7 +896,6 @@ mod compute {
         if let Some(max) = config.filters.max_words {
             if stats.words.unwrap_or(0) > max { return None; }
         }
-
         Some(stats)
     }
 }
@@ -807,7 +924,7 @@ mod output {
             output_summary(stats, config);
             return Ok(());
         }
-    
+
         // summary-only でないときだけ一覧を出す
         if !config.summary_only {
             println!();
@@ -817,10 +934,10 @@ mod output {
                 println!("    LINES\t CHARACTERS\tFILE");
             }
             println!("----------------------------------------------");
-    
+
             let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
             for stat in &stats[..limit] {
-                let path = crate::util::format_path(&stat.path, config.abs_path, &config.trim_root);
+                let path = crate::util::format_path(&stat.path, config.abs_path, config.abs_canonical, &config.trim_root);
                 if config.words {
                     println!("{:10}\t{:10}\t{:7}\t{}", stat.lines, stat.chars, stat.words.unwrap_or(0), path);
                 } else {
@@ -828,19 +945,20 @@ mod output {
                 }
             }
             println!("---");
-    
-            // “サマリのみ”でないときだけ By 集計
+        }
+
+        // “summary-only” でも By 集計は出す（一覧のみ省略）
+        if !config.total_only {
             match config.by_mode {
                 ByMode::Ext => output_by_extension(stats)?,
                 ByMode::Dir(depth) => output_by_directory(stats, depth)?,
                 ByMode::None => {}
             }
         }
-    
+
         output_summary(stats, config);
         Ok(())
     }
-    
 
     fn output_by_extension(stats: &[t::Stats]) -> anyhow::Result<()> {
         use std::collections::HashMap;
@@ -929,7 +1047,7 @@ mod output {
 
         let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
         for stat in &stats[..limit] {
-            let path = crate::util::format_path(&stat.path, config.abs_path, &config.trim_root);
+            let path = crate::util::format_path(&stat.path, config.abs_path, config.abs_canonical, &config.trim_root);
             if config.words {
                 println!(
                     "{}{}{}{}{}{}{}",
@@ -952,6 +1070,33 @@ mod output {
                 );
             }
         }
+
+        if config.total_row {
+            let total_lines: usize = stats.iter().map(|s| s.lines).sum();
+            let total_chars: usize = stats.iter().map(|s| s.chars).sum();
+            let total_words: usize = stats.iter().filter_map(|s| s.words).sum();
+            if config.words {
+                println!(
+                    "{}{}{}{}{}{}{}",
+                    total_lines,
+                    sep,
+                    total_chars,
+                    sep,
+                    total_words,
+                    sep,
+                    escape_if_needed("TOTAL", sep)
+                );
+            } else {
+                println!(
+                    "{}{}{}{}{}",
+                    total_lines,
+                    sep,
+                    total_chars,
+                    sep,
+                    escape_if_needed("TOTAL", sep)
+                );
+            }
+        }
         Ok(())
     }
 
@@ -970,7 +1115,7 @@ mod output {
         let files: Vec<t::OutFile> = stats
             .iter()
             .map(|s| t::OutFile {
-                file: crate::util::format_path(&s.path, config.abs_path, &config.trim_root),
+                file: crate::util::format_path(&s.path, config.abs_path, config.abs_canonical, &config.trim_root),
                 lines: s.lines,
                 chars: s.chars,
                 words: s.words,
@@ -1057,7 +1202,6 @@ fn main() -> Result<()> {
     compute::sort_stats(&mut stats, &config);
 
     output::emit(&stats, &config)?;
-
 
     Ok(())
 }
