@@ -1,20 +1,17 @@
-// src/main.rs
+// src/main.rs (refactored / more idiomatic)
 #![allow(clippy::multiple_crate_versions)]
 
-use anyhow::Context;
-use anyhow::Result as AnyResult;
+use anyhow::{Context, Result};
 use atty::Stream;
 use clap::Parser;
 
 const VERSION: &str = "2.3.1";
 
-/// count_lines (refactored / idiomatic)
-/// - 既存フラグ互換・出力互換
-/// - I/O を BufWriter 統一、エラーハンドリングを明示化
-/// - イテレータ指向で読みやすさ向上
-/// - ソート/集計のロジックを分離して見通し改善
-/// - 速度上の肝はそのまま（read_line 再利用、bytecount、並列、メタデータ条件取得）
+// -------------------------------------------------------------------------------------
+// CLI
+// -------------------------------------------------------------------------------------
 mod cli {
+    use super::util::{DateTimeArg, SizeArg};
     use clap::{Parser, ValueEnum};
     use std::path::PathBuf;
 
@@ -33,6 +30,32 @@ mod cli {
         Words,
         Name,
         Ext,
+    }
+
+    /// Aggregation key for summary output.
+    #[derive(Debug, Clone, Copy)]
+    pub enum ByMode {
+        None,
+        Ext,
+        Dir(usize),
+    }
+
+    impl std::str::FromStr for ByMode {
+        type Err = String;
+        fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+            match s {
+                "ext" => Ok(Self::Ext),
+                x if x.starts_with("dir") => {
+                    // Accept: "dir" (=1), "dir=2", ...
+                    let depth = x
+                        .strip_prefix("dir=")
+                        .and_then(|d| d.parse().ok())
+                        .unwrap_or(1);
+                    Ok(Self::Dir(depth))
+                }
+                other => Err(format!("Unknown --by mode: {other}")),
+            }
+        }
     }
 
     #[derive(Parser, Debug)]
@@ -57,7 +80,7 @@ mod cli {
 
         /// サマリ軸 (ext, dir, dir=N)
         #[arg(long)]
-        pub by: Option<String>,
+        pub by: Option<ByMode>,
 
         /// サマリのみ表示（一覧は出力しないが By 集計は出す）
         #[arg(long)]
@@ -91,13 +114,13 @@ mod cli {
         #[arg(long)]
         pub ext: Option<String>,
 
-        /// 最大ファイルサイズ
+        /// 最大ファイルサイズ (例: 10K, 5MiB)
         #[arg(long)]
-        pub max_size: Option<String>,
+        pub max_size: Option<SizeArg>,
 
         /// 最小ファイルサイズ
         #[arg(long)]
-        pub min_size: Option<String>,
+        pub min_size: Option<SizeArg>,
 
         /// 最小行数
         #[arg(long)]
@@ -179,13 +202,13 @@ mod cli {
         #[arg(long)]
         pub total_row: bool,
 
-        /// 指定日時以降
+        /// 指定日時以降 (RFC3339 / %Y-%m-%d %H:%M:%S / %Y-%m-%d)
         #[arg(long)]
-        pub mtime_since: Option<String>,
+        pub mtime_since: Option<DateTimeArg>,
 
         /// 指定日時以前
         #[arg(long)]
-        pub mtime_until: Option<String>,
+        pub mtime_until: Option<DateTimeArg>,
 
         /// 改行も文字数に含める（直感的カウント）
         #[arg(long)]
@@ -196,22 +219,16 @@ mod cli {
     }
 }
 
+// -------------------------------------------------------------------------------------
+// App config + filters
+// -------------------------------------------------------------------------------------
 mod config {
-    //! CLI → AppConfig/Filters 変換と補助解析
-
+    use super::cli::{ByMode, OutputFormat, SortKey};
+    use crate::util::logical_absolute;
     use anyhow::Result;
     use chrono::{DateTime, Local};
     use std::collections::HashSet;
     use std::path::PathBuf;
-
-    use crate::cli::{OutputFormat, SortKey};
-
-    #[derive(Debug)]
-    pub enum ByMode {
-        None,
-        Ext,
-        Dir(usize),
-    }
 
     #[derive(Debug, Default)]
     #[allow(clippy::struct_field_names)]
@@ -245,8 +262,8 @@ mod config {
                     .as_ref()
                     .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
                     .unwrap_or_default(),
-                max_size: args.max_size.as_deref().and_then(|s| crate::util::parse_size(s).ok()),
-                min_size: args.min_size.as_deref().and_then(|s| crate::util::parse_size(s).ok()),
+                max_size: args.max_size.map(|s| s.0),
+                min_size: args.min_size.map(|s| s.0),
                 min_lines: args.min_lines,
                 max_lines: args.max_lines,
                 min_chars: args.min_chars,
@@ -254,22 +271,6 @@ mod config {
                 min_words: args.min_words,
                 max_words: args.max_words,
             })
-        }
-    }
-
-    fn parse_by_mode(by: &Option<String>) -> Result<ByMode> {
-        match by {
-            None => Ok(ByMode::None),
-            Some(s) if s == "ext" => Ok(ByMode::Ext),
-            Some(s) if s.starts_with("dir") => {
-                // dir (=1) / dir=2 / dir=3 ...
-                let depth = s
-                    .strip_prefix("dir=")
-                    .and_then(|d| d.parse().ok())
-                    .unwrap_or(1);
-                Ok(ByMode::Dir(depth))
-            }
-            Some(s) => anyhow::bail!("Unknown --by mode: {s}"),
         }
     }
 
@@ -307,11 +308,8 @@ mod config {
 
     impl TryFrom<crate::cli::Args> for Config {
         type Error = anyhow::Error;
-
         fn try_from(args: crate::cli::Args) -> Result<Self> {
-            let by_mode = parse_by_mode(&args.by)?;
             let filters = Filters::from_args(&args)?;
-
             let jobs = args.jobs.unwrap_or_else(num_cpus::get);
             let paths = if args.paths.is_empty() {
                 vec![PathBuf::from(".")]
@@ -319,21 +317,12 @@ mod config {
                 args.paths
             };
 
-            let mtime_since = args
-                .mtime_since
-                .as_deref()
-                .and_then(|s| crate::util::parse_datetime(s).ok());
-            let mtime_until = args
-                .mtime_until
-                .as_deref()
-                .and_then(|s| crate::util::parse_datetime(s).ok());
-
             Ok(Self {
                 format: args.format,
                 sort_key: args.sort,
                 sort_desc: args.desc,
                 top_n: args.top,
-                by_mode,
+                by_mode: args.by.unwrap_or(ByMode::None),
                 summary_only: args.summary_only,
                 total_only: args.total_only,
                 filters,
@@ -344,7 +333,7 @@ mod config {
                 no_default_prune: args.no_default_prune,
                 abs_path: args.abs_path,
                 abs_canonical: args.abs_canonical,
-                trim_root: args.trim_root,
+                trim_root: args.trim_root.map(|p| logical_absolute(&p)),
                 no_color: args.no_color,
                 words: args.words,
                 count_newlines_in_chars: args.count_newlines_in_chars,
@@ -352,21 +341,22 @@ mod config {
                 files_from: args.files_from,
                 files_from0: args.files_from0,
                 paths,
-                mtime_since,
-                mtime_until,
+                mtime_since: args.mtime_since.map(|d| d.0),
+                mtime_until: args.mtime_until.map(|d| d.0),
                 total_row: args.total_row,
             })
         }
     }
 
-    pub use ByMode as AppByMode;
+    pub use super::cli::ByMode as AppByMode;
     pub use Config as AppConfig;
     pub use Filters as AppFilters;
 }
 
+// -------------------------------------------------------------------------------------
+// Data types
+// -------------------------------------------------------------------------------------
 mod types {
-    //! 計測結果および JSON 出力用型
-
     use serde::Serialize;
     use std::path::PathBuf;
 
@@ -430,14 +420,15 @@ mod types {
     pub use JsonSummary as OutSummary;
 }
 
+// -------------------------------------------------------------------------------------
+// Utilities
+// -------------------------------------------------------------------------------------
 mod util {
-    //! 文字列/サイズ/日時/パス関連のユーティリティ
-
     use anyhow::Context as _;
-    use chrono::{DateTime, Local};
+    use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
     use std::path::{Path, PathBuf};
 
-    // for parse_size()
+    // for SizeArg parsing
     const KB: u64 = 1024;
     const MB: u64 = 1024 * KB;
     const GB: u64 = 1024 * MB;
@@ -451,49 +442,65 @@ mod util {
             .collect()
     }
 
-    pub fn parse_size(s: &str) -> anyhow::Result<u64> {
-        let s = s.trim().replace('_', "");
-        let lower = s.to_ascii_lowercase();
+    /// Value parser for sizes used directly at CLI boundary.
+    #[derive(Debug, Clone, Copy)]
+    pub struct SizeArg(pub u64);
+    impl std::str::FromStr for SizeArg {
+        type Err = String;
+        fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+            let s = s.trim().replace('_', "");
+            let lower = s.to_ascii_lowercase();
 
-        let parse_with_suffix = |suffixes: &[&str], multiplier: u64| {
-            for suffix in suffixes {
-                if let Some(stripped) = lower.strip_suffix(suffix) {
-                    return Some((stripped.trim(), multiplier));
+            let parse_with_suffix = |suffixes: &[&str], multiplier: u64| {
+                for suffix in suffixes {
+                    if let Some(stripped) = lower.strip_suffix(suffix) {
+                        return Some((stripped.trim(), multiplier));
+                    }
                 }
-            }
-            None
-        };
+                None
+            };
 
-        let (num_str, mul) = parse_with_suffix(&["kib", "kb", "k"], KB)
-            .or_else(|| parse_with_suffix(&["mib", "mb", "m"], MB))
-            .or_else(|| parse_with_suffix(&["gib", "gb", "g"], GB))
-            .or_else(|| parse_with_suffix(&["tib", "tb", "t"], TB))
-            .unwrap_or((lower.as_str(), 1));
+            let (num_str, mul) = parse_with_suffix(&["kib", "kb", "k"], KB)
+                .or_else(|| parse_with_suffix(&["mib", "mb", "m"], MB))
+                .or_else(|| parse_with_suffix(&["gib", "gb", "g"], GB))
+                .or_else(|| parse_with_suffix(&["tib", "tb", "t"], TB))
+                .unwrap_or((lower.as_str(), 1));
 
-        let num: u64 = num_str.parse().context("Invalid size number")?;
-        Ok(num * mul)
+            let num: u64 = num_str
+                .parse()
+                .map_err(|_| format!("Invalid size number: {num_str}"))?;
+            Ok(SizeArg(num * mul))
+        }
     }
 
-    pub fn parse_datetime(s: &str) -> anyhow::Result<DateTime<Local>> {
-        use chrono::{NaiveDate, NaiveDateTime, TimeZone};
-
-        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
-            return Ok(dt.with_timezone(&Local));
+    /// Value parser for datetimes at CLI boundary.
+    #[derive(Debug, Clone, Copy)]
+    pub struct DateTimeArg(pub DateTime<Local>);
+    impl std::str::FromStr for DateTimeArg {
+        type Err = String;
+        fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+                return Ok(DateTimeArg(dt.with_timezone(&Local)));
+            }
+            if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
+                return Local
+                    .from_local_datetime(&ndt)
+                    .single()
+                    .ok_or_else(|| "Ambiguous datetime".to_string())
+                    .map(DateTimeArg);
+            }
+            if let Ok(nd) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
+                let ndt = nd
+                    .and_hms_opt(0, 0, 0)
+                    .ok_or_else(|| "Invalid time".to_string())?;
+                return Local
+                    .from_local_datetime(&ndt)
+                    .single()
+                    .ok_or_else(|| "Ambiguous datetime".to_string())
+                    .map(DateTimeArg);
+            }
+            Err(format!("Cannot parse datetime: {s}"))
         }
-        if let Ok(ndt) = NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S") {
-            return Local
-                .from_local_datetime(&ndt)
-                .single()
-                .context("Ambiguous datetime");
-        }
-        if let Ok(nd) = NaiveDate::parse_from_str(s, "%Y-%m-%d") {
-            let ndt = nd.and_hms_opt(0, 0, 0).context("Invalid time")?;
-            return Local
-                .from_local_datetime(&ndt)
-                .single()
-                .context("Ambiguous datetime");
-        }
-        anyhow::bail!("Cannot parse datetime: {s}")
     }
 
     #[inline]
@@ -505,7 +512,12 @@ mod util {
     }
 
     /// 出力用のパス成形（abs/canonical/trim_root）
-    pub fn format_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root: Option<&Path>) -> String {
+    pub fn format_path(
+        path: &Path,
+        abs_path: bool,
+        abs_canonical: bool,
+        trim_root: Option<&Path>,
+    ) -> String {
         let mut path = if abs_path {
             if abs_canonical {
                 // canonicalize 失敗時は logical にフォールバック
@@ -542,13 +554,18 @@ mod util {
             }
         }
 
-        if parts.is_empty() { ".".to_string() } else { parts.join("/") }
+        if parts.is_empty() {
+            ".".to_string()
+        } else {
+            parts.join("/")
+        }
     }
 }
 
+// -------------------------------------------------------------------------------------
+// File collection
+// -------------------------------------------------------------------------------------
 mod files {
-    //! ファイル列挙：--files-from/--git/通常 walkdir、各種フィルタを適用
-
     use chrono::{DateTime, Local};
     use std::path::PathBuf;
     use walkdir::WalkDir;
@@ -556,9 +573,24 @@ mod files {
     use crate::config::{AppConfig, AppFilters};
 
     const DEFAULT_PRUNE_DIRS: &[&str] = &[
-        ".git", ".hg", ".svn", "node_modules", ".venv", "venv", "build", "dist", "target",
-        ".cache", ".direnv", ".mypy_cache", ".pytest_cache", "coverage", "__pycache__", ".idea",
-        ".next", ".nuxt",
+        ".git",
+        ".hg",
+        ".svn",
+        "node_modules",
+        ".venv",
+        "venv",
+        "build",
+        "dist",
+        "target",
+        ".cache",
+        ".direnv",
+        ".mypy_cache",
+        ".pytest_cache",
+        "coverage",
+        "__pycache__",
+        ".idea",
+        ".next",
+        ".nuxt",
     ];
 
     pub fn collect_files(config: &AppConfig) -> anyhow::Result<Vec<PathBuf>> {
@@ -598,7 +630,9 @@ mod files {
         f.read_to_end(&mut buf)?;
         let mut out = Vec::new();
         for chunk in buf.split(|b| *b == 0) {
-            if chunk.is_empty() { continue; }
+            if chunk.is_empty() {
+                continue;
+            }
             let s = String::from_utf8_lossy(chunk);
             let trimmed = s.trim();
             if !trimmed.is_empty() {
@@ -612,24 +646,31 @@ mod files {
         let mut files = Vec::new();
         for root in &config.paths {
             let output = std::process::Command::new("git")
-                .arg("ls-files").arg("-z")
-                .arg("--cached").arg("--others")
+                .arg("ls-files")
+                .arg("-z")
+                .arg("--cached")
+                .arg("--others")
                 .arg("--exclude-standard")
                 .arg("--")
                 .arg(".")
                 .current_dir(root)
                 .output()?;
 
-            if !output.status.success() { anyhow::bail!("git ls-files failed"); }
+            if !output.status.success() {
+                anyhow::bail!("git ls-files failed");
+            }
 
             for chunk in output.stdout.split(|b| *b == 0) {
-                if chunk.is_empty() { continue; }
+                if chunk.is_empty() {
+                    continue;
+                }
                 let s = String::from_utf8_lossy(chunk).trim().to_string();
-                if s.is_empty() { continue; }
+                if s.is_empty() {
+                    continue;
+                }
                 files.push(root.join(s));
             }
         }
-        // 重複除去（複数 root 指定などで同一ファイルが入るのを避ける）
         files.sort();
         files.dedup();
         Ok(files)
@@ -772,9 +813,10 @@ mod files {
     }
 }
 
+// -------------------------------------------------------------------------------------
+// Compute
+// -------------------------------------------------------------------------------------
 mod compute {
-    //! 計測（行/文字/単語）、並列化、ソート
-
     use rayon::prelude::*;
 
     use crate::cli::SortKey;
@@ -785,7 +827,9 @@ mod compute {
 
     pub fn process_files(config: &AppConfig) -> anyhow::Result<Vec<FileStats>> {
         let files = crate::files::collect_files(config)?;
-        let pool = rayon::ThreadPoolBuilder::new().num_threads(config.jobs).build()?;
+        let pool = rayon::ThreadPoolBuilder::new()
+            .num_threads(config.jobs)
+            .build()?;
 
         let stats: Vec<FileStats> = pool.install(|| {
             files
@@ -798,7 +842,6 @@ mod compute {
     }
 
     pub fn sort_stats(stats: &mut [FileStats], config: &AppConfig) {
-        // 一覧を出力しないモードではソート不要
         if config.total_only || config.summary_only {
             return;
         }
@@ -807,15 +850,22 @@ mod compute {
             let ord = match config.sort_key {
                 SortKey::Lines => a.lines.cmp(&b.lines),
                 SortKey::Chars => a.chars.cmp(&b.chars),
-                SortKey::Words => a.words.unwrap_or(0).cmp(&b.words.unwrap_or(0)),
+                SortKey::Words => a
+                    .words
+                    .unwrap_or(0)
+                    .cmp(&b.words.unwrap_or(0)),
                 SortKey::Name => a.path.cmp(&b.path),
-                SortKey::Ext => {
-                    let ext_a = a.path.extension().unwrap_or_default();
-                    let ext_b = b.path.extension().unwrap_or_default();
-                    ext_a.cmp(ext_b)
-                }
+                SortKey::Ext => a
+                    .path
+                    .extension()
+                    .unwrap_or_default()
+                    .cmp(b.path.extension().unwrap_or_default()),
             };
-            if config.sort_desc { ord.reverse() } else { ord }
+            if config.sort_desc {
+                ord.reverse()
+            } else {
+                ord
+            }
         });
     }
 
@@ -917,9 +967,10 @@ mod compute {
     }
 }
 
+// -------------------------------------------------------------------------------------
+// Output
+// -------------------------------------------------------------------------------------
 mod output {
-    //! 出力（Table/CSV/TSV/JSON）と集計（By ext/dir）
-
     use std::collections::HashMap;
     use std::io::{self, Write};
 
@@ -1188,8 +1239,10 @@ mod output {
             entry.1 += stat.chars;
             entry.2 += 1;
         }
-        let mut v: Vec<Group> =
-            by_ext.into_iter().map(|(key, (lines, chars, count))| Group { key, lines, chars, count }).collect();
+        let mut v: Vec<Group> = by_ext
+            .into_iter()
+            .map(|(key, (lines, chars, count))| Group { key, lines, chars, count })
+            .collect();
         v.sort_by(|a, b| b.lines.cmp(&a.lines));
         v
     }
@@ -1203,14 +1256,19 @@ mod output {
             entry.1 += stat.chars;
             entry.2 += 1;
         }
-        let mut v: Vec<Group> =
-            by_dir.into_iter().map(|(key, (lines, chars, count))| Group { key, lines, chars, count }).collect();
+        let mut v: Vec<Group> = by_dir
+            .into_iter()
+            .map(|(key, (lines, chars, count))| Group { key, lines, chars, count })
+            .collect();
         v.sort_by(|a, b| b.lines.cmp(&a.lines));
         v
     }
 }
 
-fn main() -> AnyResult<()> {
+// -------------------------------------------------------------------------------------
+// main
+// -------------------------------------------------------------------------------------
+fn main() -> Result<()> {
     let args = cli::Args::parse();
     let config = config::AppConfig::try_from(args)?;
 
