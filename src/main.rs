@@ -1,35 +1,6 @@
-// Cargo.toml
-/*
-[package]
-name = "count_lines"
-version = "2.2.0"
-edition = "2021"
-description = "ファイル行数/文字数/単語数の集計ツール"
-license = "MIT OR Apache-2.0"
-repository = "https://github.com/yourusername/count_lines"
-readme = "README.md"
-keywords = ["count", "lines", "statistics", "files", "metrics"]
-categories = ["command-line-utilities", "development-tools"]
-
-[dependencies]
-clap = { version = "4.5", features = ["derive"] }
-walkdir = "2.4"
-rayon = "1.8"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-regex = "1.10"
-glob = "0.3"
-chrono = "0.4"
-anyhow = "1.0"
-ignore = "0.4"
-
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-*/
-
 // src/main.rs
+#![allow(clippy::multiple_crate_versions)]
+
 use anyhow::{Context, Result};
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use clap::Parser;
@@ -45,6 +16,7 @@ const VERSION: &str = "2.2.0";
 
 #[derive(Parser, Debug)]
 #[command(name = "count_lines", version = VERSION, about = "ファイル行数/文字数/単語数の集計ツール")]
+#[allow(clippy::struct_excessive_bools)]
 struct Args {
     /// 出力フォーマット
     #[arg(long, value_enum, default_value = "table")]
@@ -383,33 +355,21 @@ fn parse_patterns(patterns: &[String]) -> Result<Vec<glob::Pattern>> {
 
 fn parse_size(s: &str) -> Result<u64> {
     let s = s.trim();
-    let (num_str, multiplier) = if let Some(stripped) = s.strip_suffix("KiB")
-        .or_else(|| s.strip_suffix("KB"))
-        .or_else(|| s.strip_suffix("K"))
-        .or_else(|| s.strip_suffix("k"))
-    {
-        (stripped, 1024u64)
-    } else if let Some(stripped) = s.strip_suffix("MiB")
-        .or_else(|| s.strip_suffix("MB"))
-        .or_else(|| s.strip_suffix("M"))
-        .or_else(|| s.strip_suffix("m"))
-    {
-        (stripped, 1024u64 * 1024)
-    } else if let Some(stripped) = s.strip_suffix("GiB")
-        .or_else(|| s.strip_suffix("GB"))
-        .or_else(|| s.strip_suffix("G"))
-        .or_else(|| s.strip_suffix("g"))
-    {
-        (stripped, 1024u64 * 1024 * 1024)
-    } else if let Some(stripped) = s.strip_suffix("TiB")
-        .or_else(|| s.strip_suffix("TB"))
-        .or_else(|| s.strip_suffix("T"))
-        .or_else(|| s.strip_suffix("t"))
-    {
-        (stripped, 1024u64 * 1024 * 1024 * 1024)
-    } else {
-        (s, 1u64)
+    
+    let parse_with_suffix = |suffixes: &[&str], multiplier: u64| {
+        for suffix in suffixes {
+            if let Some(stripped) = s.strip_suffix(suffix) {
+                return Some((stripped, multiplier));
+            }
+        }
+        None
     };
+    
+    let (num_str, multiplier) = parse_with_suffix(&["KiB", "KB", "K", "k"], 1024)
+        .or_else(|| parse_with_suffix(&["MiB", "MB", "M", "m"], 1024 * 1024))
+        .or_else(|| parse_with_suffix(&["GiB", "GB", "G", "g"], 1024 * 1024 * 1024))
+        .or_else(|| parse_with_suffix(&["TiB", "TB", "T", "t"], 1024 * 1024 * 1024 * 1024))
+        .unwrap_or((s, 1));
 
     let num: u64 = num_str.parse().context("Invalid size number")?;
     Ok(num * multiplier)
@@ -599,6 +559,7 @@ fn matches_filters(path: &Path, config: &Config) -> bool {
     }
 
     // mtime フィルタ
+    #[allow(clippy::collapsible_if)]
     if let Ok(metadata) = std::fs::metadata(path) {
         if let Ok(modified) = metadata.modified() {
             let modified: DateTime<Local> = modified.into();
