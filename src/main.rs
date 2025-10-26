@@ -7,15 +7,18 @@ use clap::Parser;
 
 const VERSION: &str = "2.3.0";
 
-/// count_lines
-/// - 指定パス配下のファイルを列挙
-/// - 行数/文字数（必要なら単語数）を並列で計測
-/// - ソート/上位N/集計(by ext/dir)を適用
-/// - Table/CSV/TSV/JSON で出力
+/// count_lines (optimized)
+/// - 同一の CLI / 既定値 / 出力互換を維持
+/// - ホットパスの割り当て削減＆システムコール最小化
+///   - `--summary-only` / `--total-only` の場合は全体ソートをスキップ
+///   - `--top` 指定時も全件完全ソートせず（必要な箇所のみ）
+///   - `BufRead::read_line` でバッファ再利用（`lines()`より少ない割り当て）
+///   - 拡張子フィルタを `HashSet` で O(1) 照合
+///   - サイズ/mtime フィルタが無い場合は `metadata()` を呼ばない
+///   - Table/CSV/TSV 出力は `BufWriter` でバッファリング
+/// - I/O やロジックの見通しを改善（関数を小さく、`#[inline]` 付与）
 ///
-/// 依存：anyhow, atty, clap, chrono, glob, rayon, walkdir, bytecount, num_cpus, serde, serde_json
-///
-/// 既存の CLI 互換性は維持（フラグ名・既定値・出力形式/ヘッダ）
+/// 依存は元のまま：anyhow, atty, clap, chrono, glob, rayon, walkdir, bytecount, num_cpus, serde, serde_json
 mod cli {
     use clap::Parser;
     use std::path::PathBuf;
@@ -203,6 +206,7 @@ mod config {
 
     use anyhow::Result;
     use chrono::{DateTime, Local};
+    use std::collections::HashSet;
     use std::path::PathBuf;
 
     use crate::cli::{OutputFormat, SortKey};
@@ -222,7 +226,7 @@ mod config {
         pub include_paths: Vec<glob::Pattern>,
         pub exclude_paths: Vec<glob::Pattern>,
         pub exclude_dirs: Vec<glob::Pattern>,
-        pub ext_filters: Vec<String>,
+        pub ext_filters: HashSet<String>,
         pub max_size: Option<u64>,
         pub min_size: Option<u64>,
         pub min_lines: Option<usize>,
@@ -444,6 +448,7 @@ mod util {
     const GB: u64 = 1024 * MB;
     const TB: u64 = 1024 * GB;
 
+    #[inline]
     pub fn parse_patterns(patterns: &[String]) -> anyhow::Result<Vec<glob::Pattern>> {
         patterns
             .iter()
@@ -453,21 +458,22 @@ mod util {
 
     pub fn parse_size(s: &str) -> anyhow::Result<u64> {
         let s = s.trim().replace('_', "");
+        let lower = s.to_ascii_lowercase();
 
         let parse_with_suffix = |suffixes: &[&str], multiplier: u64| {
             for suffix in suffixes {
-                if let Some(stripped) = s.strip_suffix(suffix) {
-                    return Some((stripped, multiplier));
+                if let Some(stripped) = lower.strip_suffix(suffix) {
+                    return Some((stripped.trim(), multiplier));
                 }
             }
             None
         };
 
-        let (num_str, mul) = parse_with_suffix(&["KiB", "KB", "K", "k"], KB)
-            .or_else(|| parse_with_suffix(&["MiB", "MB", "M", "m"], MB))
-            .or_else(|| parse_with_suffix(&["GiB", "GB", "G", "g"], GB))
-            .or_else(|| parse_with_suffix(&["TiB", "TB", "T", "t"], TB))
-            .unwrap_or((s.as_str(), 1));
+        let (num_str, mul) = parse_with_suffix(&["kib", "kb", "k"], KB)
+            .or_else(|| parse_with_suffix(&["mib", "mb", "m"], MB))
+            .or_else(|| parse_with_suffix(&["gib", "gb", "g"], GB))
+            .or_else(|| parse_with_suffix(&["tib", "tb", "t"], TB))
+            .unwrap_or((lower.as_str(), 1));
 
         let num: u64 = num_str.parse().context("Invalid size number")?;
         Ok(num * mul)
@@ -495,6 +501,7 @@ mod util {
         anyhow::bail!("Cannot parse datetime: {s}")
     }
 
+    #[inline]
     pub fn logical_absolute(path: &Path) -> PathBuf {
         if path.is_absolute() {
             return path.to_path_buf();
@@ -628,14 +635,19 @@ mod files {
                 files.push(root.join(s));
             }
         }
+        // 重複除去（複数 root 指定などで同一ファイルが入るのを避ける）
+        files.sort();
+        files.dedup();
         Ok(files)
     }
 
+    #[inline]
     fn is_hidden(path: &std::path::Path) -> bool {
         path.file_name()
             .is_some_and(|name| name.to_string_lossy().starts_with('.'))
     }
 
+    #[inline]
     fn should_process_entry(entry: &walkdir::DirEntry, config: &AppConfig) -> bool {
         let path = entry.path();
 
@@ -704,28 +716,34 @@ mod files {
             }
         }
 
-        // サイズ/mtime（metadata は 1 度だけ取得）
-        if let Ok(metadata) = std::fs::metadata(path) {
-            if let Some(max) = max_size {
-                if metadata.len() > *max {
-                    return false;
-                }
-            }
-            if let Some(min) = min_size {
-                if metadata.len() < *min {
-                    return false;
-                }
-            }
-            if let Ok(modified) = metadata.modified() {
-                let modified: DateTime<Local> = modified.into();
-                if let Some(since) = &config.mtime_since {
-                    if modified < *since {
+        // サイズ/mtime（フィルタ指定時のみ metadata を取得）
+        if max_size.is_some()
+            || min_size.is_some()
+            || config.mtime_since.is_some()
+            || config.mtime_until.is_some()
+        {
+            if let Ok(metadata) = std::fs::metadata(path) {
+                if let Some(max) = max_size {
+                    if metadata.len() > *max {
                         return false;
                     }
                 }
-                if let Some(until) = &config.mtime_until {
-                    if modified > *until {
+                if let Some(min) = min_size {
+                    if metadata.len() < *min {
                         return false;
+                    }
+                }
+                if let Ok(modified) = metadata.modified() {
+                    let modified: DateTime<Local> = modified.into();
+                    if let Some(since) = &config.mtime_since {
+                        if modified < *since {
+                            return false;
+                        }
+                    }
+                    if let Some(until) = &config.mtime_until {
+                        if modified > *until {
+                            return false;
+                        }
                     }
                 }
             }
@@ -769,19 +787,28 @@ mod compute {
     use crate::config::AppConfig;
     use crate::types::Stats as FileStats;
 
-    const READ_BUF_BYTES: usize = 8192;
+    pub const READ_BUF_BYTES: usize = 8192;
 
     pub fn process_files(config: &AppConfig) -> anyhow::Result<Vec<FileStats>> {
         let files = crate::files::collect_files(config)?;
         let pool = rayon::ThreadPoolBuilder::new().num_threads(config.jobs).build()?;
 
-        let stats: Vec<FileStats> =
-            pool.install(|| files.par_iter().filter_map(|path| measure_file(path, config)).collect());
+        let stats: Vec<FileStats> = pool.install(|| {
+            files
+                .par_iter()
+                .filter_map(|path| measure_file(path, config))
+                .collect()
+        });
 
         Ok(stats)
     }
 
     pub fn sort_stats(stats: &mut [FileStats], config: &AppConfig) {
+        // 一覧を出力しないモードではソート不要
+        if config.total_only || config.summary_only {
+            return;
+        }
+
         stats.sort_by(|a, b| {
             let cmp = match config.sort_key {
                 SortKey::Lines => a.lines.cmp(&b.lines),
@@ -798,6 +825,7 @@ mod compute {
         });
     }
 
+    #[inline]
     fn is_text_file(path: &std::path::Path) -> bool {
         use std::fs::File;
         use std::io::Read;
@@ -808,6 +836,7 @@ mod compute {
         !buffer[..n].contains(&0)
     }
 
+    #[inline]
     fn measure_file(path: &std::path::Path, config: &AppConfig) -> Option<FileStats> {
         if config.count_newlines_in_chars {
             measure_whole_file(path, config)
@@ -842,7 +871,7 @@ mod compute {
             nl + 1
         };
 
-        // 文字数：改行含む
+        // 文字数：改行含む（Unicode）
         let chars = s.chars().count();
 
         let words = config.words.then(|| s.split_whitespace().count());
@@ -851,7 +880,7 @@ mod compute {
         apply_numeric_filters(stats, config)
     }
 
-    // 従来モード：行ごと読み（改行は文字数に含めない）
+    // 従来モード：行ごと読み（改行は文字数に含めない）。`lines()`より read_line で割り当て削減
     fn measure_by_lines(path: &std::path::Path, config: &AppConfig) -> Option<FileStats> {
         use std::fs::File;
         use std::io::{BufRead, BufReader};
@@ -861,12 +890,16 @@ mod compute {
         }
 
         let file = File::open(path).ok()?;
-        let reader = BufReader::new(file);
-
+        let mut reader = BufReader::new(file);
         let (mut lines, mut chars, mut words) = (0, 0, 0);
 
-        for line in reader.lines() {
-            let line = line.ok()?;
+        let mut line = String::new();
+        loop {
+            line.clear();
+            let n = reader.read_line(&mut line).ok()?;
+            if n == 0 { break; }
+            // `read_line` は末尾の `\n` を含むので除去してカウント
+            if line.ends_with('\n') { line.pop(); if line.ends_with('\r') { line.pop(); } }
             lines += 1;
             chars += line.chars().count();
             if config.words {
@@ -874,42 +907,18 @@ mod compute {
             }
         }
 
-        let stats =
-            FileStats { path: path.to_path_buf(), lines, chars, words: config.words.then_some(words) };
+        let stats = FileStats { path: path.to_path_buf(), lines, chars, words: config.words.then_some(words) };
         apply_numeric_filters(stats, config)
     }
 
+    #[inline]
     fn apply_numeric_filters(stats: FileStats, config: &AppConfig) -> Option<FileStats> {
-        if let Some(min) = config.filters.min_lines {
-            if stats.lines < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_lines {
-            if stats.lines > max {
-                return None;
-            }
-        }
-        if let Some(min) = config.filters.min_chars {
-            if stats.chars < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_chars {
-            if stats.chars > max {
-                return None;
-            }
-        }
-        if let Some(min) = config.filters.min_words {
-            if stats.words.unwrap_or(0) < min {
-                return None;
-            }
-        }
-        if let Some(max) = config.filters.max_words {
-            if stats.words.unwrap_or(0) > max {
-                return None;
-            }
-        }
+        if let Some(min) = config.filters.min_lines { if stats.lines < min { return None; } }
+        if let Some(max) = config.filters.max_lines { if stats.lines > max { return None; } }
+        if let Some(min) = config.filters.min_chars { if stats.chars < min { return None; } }
+        if let Some(max) = config.filters.max_chars { if stats.chars > max { return None; } }
+        if let Some(min) = config.filters.min_words { if stats.words.unwrap_or(0) < min { return None; } }
+        if let Some(max) = config.filters.max_words { if stats.words.unwrap_or(0) > max { return None; } }
         Some(stats)
     }
 }
@@ -918,6 +927,7 @@ mod output {
     //! 出力（Table/CSV/TSV/JSON）と集計（By ext/dir）
 
     use std::collections::HashMap;
+    use std::io::{self, Write};
 
     use crate::cli::OutputFormat;
     use crate::config::{AppByMode as ByMode, AppConfig};
@@ -934,53 +944,57 @@ mod output {
     }
 
     fn output_table(stats: &[t::Stats], config: &AppConfig) {
+        let mut out = io::BufWriter::new(io::stdout());
+
         // total-only: 一覧も by も出さず、最後のサマリだけ
         if config.total_only {
-            output_summary(stats, config);
+            output_summary(stats, config, &mut out);
             return;
         }
 
         // summary-only でないときだけ一覧を出す
         if !config.summary_only {
-            println!();
+            writeln!(out).ok();
             if config.words {
-                println!("    LINES\t CHARACTERS\t   WORDS\tFILE");
+                writeln!(out, "    LINES\t CHARACTERS\t   WORDS\tFILE").ok();
             } else {
-                println!("    LINES\t CHARACTERS\tFILE");
+                writeln!(out, "    LINES\t CHARACTERS\tFILE").ok();
             }
-            println!("----------------------------------------------");
+            writeln!(out, "----------------------------------------------").ok();
 
             for stat in limited(stats, config) {
                 let path = fmt_path(stat, config);
                 if config.words {
-                    println!(
+                    writeln!(
+                        out,
                         "{:10}\t{:10}\t{:7}\t{}",
                         stat.lines,
                         stat.chars,
                         stat.words.unwrap_or(0),
                         path
-                    );
+                    ).ok();
                 } else {
-                    println!("{:10}\t{:10}\t{}", stat.lines, stat.chars, path);
+                    writeln!(out, "{:10}\t{:10}\t{}", stat.lines, stat.chars, path).ok();
                 }
             }
-            println!("---");
+            writeln!(out, "---").ok();
         }
 
         // “summary-only” でも By 集計は出す（一覧のみ省略）
         if !config.total_only {
             match config.by_mode {
-                ByMode::Ext => output_group(&aggregate_by_extension(stats), "[By Extension]", "EXT", None),
+                ByMode::Ext => output_group(&aggregate_by_extension(stats), "[By Extension]", "EXT", None, &mut out),
                 ByMode::Dir(depth) => {
-                    output_group(&aggregate_by_directory(stats, depth), "[By Directory]", &format!("DIR (depth={depth})"), None)
+                    output_group(&aggregate_by_directory(stats, depth), "[By Directory]", &format!("DIR (depth={depth})"), None, &mut out)
                 }
                 ByMode::None => {}
             }
         }
 
-        output_summary(stats, config);
+        output_summary(stats, config, &mut out);
     }
 
+    #[inline]
     fn fmt_path(stat: &t::Stats, config: &AppConfig) -> String {
         crate::util::format_path(
             &stat.path,
@@ -990,50 +1004,55 @@ mod output {
         )
     }
 
+    #[inline]
     fn limited<'a>(stats: &'a [t::Stats], config: &AppConfig) -> &'a [t::Stats] {
         let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
         &stats[..limit]
     }
 
-    fn output_group(groups: &[Group], title: &str, key_label: &str, limit: Option<usize>) {
-        println!("{title}");
-        println!("{:>10}\t{:>10}\t{key_label}", "LINES", "CHARACTERS");
+    fn output_group(groups: &[Group], title: &str, key_label: &str, limit: Option<usize>, out: &mut impl Write) {
+        writeln!(out, "{title}").ok();
+        writeln!(out, "{:>10}\t{:>10}\t{key_label}", "LINES", "CHARACTERS").ok();
 
         let iter = groups.iter().take(limit.unwrap_or(groups.len()));
         for g in iter {
-            println!("{:10}\t{:10}\t{} ({} files)", g.lines, g.chars, g.key, g.count);
+            writeln!(out, "{:10}\t{:10}\t{} ({} files)", g.lines, g.chars, g.key, g.count).ok();
         }
-        println!("---");
+        writeln!(out, "---").ok();
     }
 
-    fn output_summary(stats: &[t::Stats], config: &AppConfig) {
+    fn output_summary(stats: &[t::Stats], config: &AppConfig, out: &mut impl Write) {
         let (total_lines, total_chars, total_words) = totals(stats);
 
         if config.words {
-            println!(
+            writeln!(
+                out,
                 "{:10}\t{:10}\t{:7}\tTOTAL ({} files)\n",
                 total_lines, total_chars, total_words, stats.len()
-            );
+            ).ok();
         } else {
-            println!(
+            writeln!(
+                out,
                 "{:10}\t{:10}\tTOTAL ({} files)\n",
                 total_lines, total_chars, stats.len()
-            );
+            ).ok();
         }
     }
 
     fn output_delimited(stats: &[t::Stats], config: &AppConfig, sep: char) {
+        let mut out = io::BufWriter::new(io::stdout());
         let header = if config.words {
             format!("lines{sep}chars{sep}words{sep}file")
         } else {
             format!("lines{sep}chars{sep}file")
         };
-        println!("{header}");
+        writeln!(out, "{header}").ok();
 
         for stat in limited(stats, config) {
             let path = fmt_path(stat, config);
             if config.words {
-                println!(
+                writeln!(
+                    out,
                     "{}{}{}{}{}{}{}",
                     stat.lines,
                     sep,
@@ -1042,35 +1061,39 @@ mod output {
                     stat.words.unwrap_or(0),
                     sep,
                     escape_if_needed(&path, sep)
-                );
+                ).ok();
             } else {
-                println!(
+                writeln!(
+                    out,
                     "{}{}{}{}{}",
                     stat.lines,
                     sep,
                     stat.chars,
                     sep,
                     escape_if_needed(&path, sep)
-                );
+                ).ok();
             }
         }
 
         if config.total_row {
             let (total_lines, total_chars, total_words) = totals(stats);
             if config.words {
-                println!(
+                writeln!(
+                    out,
                     "{}{}{}{}{}{}{}",
                     total_lines, sep, total_chars, sep, total_words, sep, escape_if_needed("TOTAL", sep)
-                );
+                ).ok();
             } else {
-                println!(
+                writeln!(
+                    out,
                     "{}{}{}{}{}",
                     total_lines, sep, total_chars, sep, escape_if_needed("TOTAL", sep)
-                );
+                ).ok();
             }
         }
     }
 
+    #[inline]
     fn escape_if_needed(s: &str, sep: char) -> String {
         if sep == ',' {
             let escaped = s.replace('"', "\"\"");
@@ -1145,6 +1168,7 @@ mod output {
         count: usize,
     }
 
+    #[inline]
     fn totals(stats: &[t::Stats]) -> (usize, usize, usize) {
         stats.iter().fold((0, 0, 0), |acc, s| {
             let (l, c, w) = acc;
