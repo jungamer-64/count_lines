@@ -1,29 +1,24 @@
 // src/main.rs
 #![allow(clippy::multiple_crate_versions)]
 
-use anyhow::Result;
+use anyhow::Context;
+use anyhow::Result as AnyResult;
 use atty::Stream;
 use clap::Parser;
 
-const VERSION: &str = "2.3.0";
+const VERSION: &str = "2.3.1";
 
-/// count_lines (optimized)
-/// - 同一の CLI / 既定値 / 出力互換を維持
-/// - ホットパスの割り当て削減＆システムコール最小化
-///   - `--summary-only` / `--total-only` の場合は全体ソートをスキップ
-///   - `--top` 指定時も全件完全ソートせず（必要な箇所のみ）
-///   - `BufRead::read_line` でバッファ再利用（`lines()`より少ない割り当て）
-///   - 拡張子フィルタを `HashSet` で O(1) 照合
-///   - サイズ/mtime フィルタが無い場合は `metadata()` を呼ばない
-///   - Table/CSV/TSV 出力は `BufWriter` でバッファリング
-/// - I/O やロジックの見通しを改善（関数を小さく、`#[inline]` 付与）
-///
-/// 依存は元のまま：anyhow, atty, clap, chrono, glob, rayon, walkdir, bytecount, num_cpus, serde, serde_json
+/// count_lines (refactored / idiomatic)
+/// - 既存フラグ互換・出力互換
+/// - I/O を BufWriter 統一、エラーハンドリングを明示化
+/// - イテレータ指向で読みやすさ向上
+/// - ソート/集計のロジックを分離して見通し改善
+/// - 速度上の肝はそのまま（read_line 再利用、bytecount、並列、メタデータ条件取得）
 mod cli {
-    use clap::Parser;
+    use clap::{Parser, ValueEnum};
     use std::path::PathBuf;
 
-    #[derive(Debug, Clone, Copy, clap::ValueEnum)]
+    #[derive(Debug, Clone, Copy, ValueEnum)]
     pub enum OutputFormat {
         Table,
         Csv,
@@ -31,7 +26,7 @@ mod cli {
         Json,
     }
 
-    #[derive(Debug, Clone, Copy, clap::ValueEnum)]
+    #[derive(Debug, Clone, Copy, ValueEnum)]
     pub enum SortKey {
         Lines,
         Chars,
@@ -364,9 +359,9 @@ mod config {
         }
     }
 
+    pub use ByMode as AppByMode;
     pub use Config as AppConfig;
     pub use Filters as AppFilters;
-    pub use ByMode as AppByMode;
 }
 
 mod types {
@@ -536,7 +531,7 @@ mod util {
         use std::path::Component;
 
         let base = path.parent().unwrap_or(path);
-        let mut parts = Vec::new();
+        let mut parts = Vec::with_capacity(depth);
 
         for comp in base.components() {
             if let Component::Normal(s) = comp {
@@ -554,7 +549,6 @@ mod util {
 mod files {
     //! ファイル列挙：--files-from/--git/通常 walkdir、各種フィルタを適用
 
-    use super::*;
     use chrono::{DateTime, Local};
     use std::path::PathBuf;
     use walkdir::WalkDir;
@@ -810,7 +804,7 @@ mod compute {
         }
 
         stats.sort_by(|a, b| {
-            let cmp = match config.sort_key {
+            let ord = match config.sort_key {
                 SortKey::Lines => a.lines.cmp(&b.lines),
                 SortKey::Chars => a.chars.cmp(&b.chars),
                 SortKey::Words => a.words.unwrap_or(0).cmp(&b.words.unwrap_or(0)),
@@ -821,7 +815,7 @@ mod compute {
                     ext_a.cmp(ext_b)
                 }
             };
-            if config.sort_desc { cmp.reverse() } else { cmp }
+            if config.sort_desc { ord.reverse() } else { ord }
         });
     }
 
@@ -880,7 +874,7 @@ mod compute {
         apply_numeric_filters(stats, config)
     }
 
-    // 従来モード：行ごと読み（改行は文字数に含めない）。`lines()`より read_line で割り当て削減
+    // 従来モード：行ごと読み（改行は文字数に含めない）。`read_line`より再利用で割り当て削減
     fn measure_by_lines(path: &std::path::Path, config: &AppConfig) -> Option<FileStats> {
         use std::fs::File;
         use std::io::{BufRead, BufReader};
@@ -898,7 +892,7 @@ mod compute {
             line.clear();
             let n = reader.read_line(&mut line).ok()?;
             if n == 0 { break; }
-            // `read_line` は末尾の `\n` を含むので除去してカウント
+            // `read_line` は末尾の `\n` を含むので除去してカウント（CRLF も）
             if line.ends_with('\n') { line.pop(); if line.ends_with('\r') { line.pop(); } }
             lines += 1;
             chars += line.chars().count();
@@ -936,31 +930,31 @@ mod output {
     pub fn emit(stats: &[t::Stats], config: &AppConfig) -> anyhow::Result<()> {
         match config.format {
             OutputFormat::Json => output_json(stats, config)?,
-            OutputFormat::Csv => output_delimited(stats, config, ','),
-            OutputFormat::Tsv => output_delimited(stats, config, '\t'),
-            OutputFormat::Table => output_table(stats, config),
+            OutputFormat::Csv => output_delimited(stats, config, ',')?,
+            OutputFormat::Tsv => output_delimited(stats, config, '\t')?,
+            OutputFormat::Table => output_table(stats, config)?,
         }
         Ok(())
     }
 
-    fn output_table(stats: &[t::Stats], config: &AppConfig) {
+    fn output_table(stats: &[t::Stats], config: &AppConfig) -> anyhow::Result<()> {
         let mut out = io::BufWriter::new(io::stdout());
 
         // total-only: 一覧も by も出さず、最後のサマリだけ
         if config.total_only {
-            output_summary(stats, config, &mut out);
-            return;
+            output_summary(stats, config, &mut out)?;
+            return Ok(());
         }
 
         // summary-only でないときだけ一覧を出す
         if !config.summary_only {
-            writeln!(out).ok();
+            writeln!(out)?;
             if config.words {
-                writeln!(out, "    LINES\t CHARACTERS\t   WORDS\tFILE").ok();
+                writeln!(out, "    LINES\t CHARACTERS\t   WORDS\tFILE")?;
             } else {
-                writeln!(out, "    LINES\t CHARACTERS\tFILE").ok();
+                writeln!(out, "    LINES\t CHARACTERS\tFILE")?;
             }
-            writeln!(out, "----------------------------------------------").ok();
+            writeln!(out, "----------------------------------------------")?;
 
             for stat in limited(stats, config) {
                 let path = fmt_path(stat, config);
@@ -972,26 +966,27 @@ mod output {
                         stat.chars,
                         stat.words.unwrap_or(0),
                         path
-                    ).ok();
+                    )?;
                 } else {
-                    writeln!(out, "{:10}\t{:10}\t{}", stat.lines, stat.chars, path).ok();
+                    writeln!(out, "{:10}\t{:10}\t{}", stat.lines, stat.chars, path)?;
                 }
             }
-            writeln!(out, "---").ok();
+            writeln!(out, "---")?;
         }
 
         // “summary-only” でも By 集計は出す（一覧のみ省略）
         if !config.total_only {
             match config.by_mode {
-                ByMode::Ext => output_group(&aggregate_by_extension(stats), "[By Extension]", "EXT", None, &mut out),
+                ByMode::Ext => output_group(&aggregate_by_extension(stats), "[By Extension]", "EXT", None, &mut out)?,
                 ByMode::Dir(depth) => {
-                    output_group(&aggregate_by_directory(stats, depth), "[By Directory]", &format!("DIR (depth={depth})"), None, &mut out)
+                    output_group(&aggregate_by_directory(stats, depth), "[By Directory]", &format!("DIR (depth={depth})"), None, &mut out)?
                 }
                 ByMode::None => {}
             }
         }
 
-        output_summary(stats, config, &mut out);
+        output_summary(stats, config, &mut out)?;
+        Ok(())
     }
 
     #[inline]
@@ -1010,18 +1005,19 @@ mod output {
         &stats[..limit]
     }
 
-    fn output_group(groups: &[Group], title: &str, key_label: &str, limit: Option<usize>, out: &mut impl Write) {
-        writeln!(out, "{title}").ok();
-        writeln!(out, "{:>10}\t{:>10}\t{key_label}", "LINES", "CHARACTERS").ok();
+    fn output_group(groups: &[Group], title: &str, key_label: &str, limit: Option<usize>, out: &mut impl Write) -> io::Result<()> {
+        writeln!(out, "{title}")?;
+        writeln!(out, "{:>10}\t{:>10}\t{key_label}", "LINES", "CHARACTERS")?;
 
         let iter = groups.iter().take(limit.unwrap_or(groups.len()));
         for g in iter {
-            writeln!(out, "{:10}\t{:10}\t{} ({} files)", g.lines, g.chars, g.key, g.count).ok();
+            writeln!(out, "{:10}\t{:10}\t{} ({} files)", g.lines, g.chars, g.key, g.count)?;
         }
-        writeln!(out, "---").ok();
+        writeln!(out, "---")?;
+        Ok(())
     }
 
-    fn output_summary(stats: &[t::Stats], config: &AppConfig, out: &mut impl Write) {
+    fn output_summary(stats: &[t::Stats], config: &AppConfig, out: &mut impl Write) -> io::Result<()> {
         let (total_lines, total_chars, total_words) = totals(stats);
 
         if config.words {
@@ -1029,24 +1025,24 @@ mod output {
                 out,
                 "{:10}\t{:10}\t{:7}\tTOTAL ({} files)\n",
                 total_lines, total_chars, total_words, stats.len()
-            ).ok();
+            )
         } else {
             writeln!(
                 out,
                 "{:10}\t{:10}\tTOTAL ({} files)\n",
                 total_lines, total_chars, stats.len()
-            ).ok();
+            )
         }
     }
 
-    fn output_delimited(stats: &[t::Stats], config: &AppConfig, sep: char) {
+    fn output_delimited(stats: &[t::Stats], config: &AppConfig, sep: char) -> anyhow::Result<()> {
         let mut out = io::BufWriter::new(io::stdout());
         let header = if config.words {
             format!("lines{sep}chars{sep}words{sep}file")
         } else {
             format!("lines{sep}chars{sep}file")
         };
-        writeln!(out, "{header}").ok();
+        writeln!(out, "{header}")?;
 
         for stat in limited(stats, config) {
             let path = fmt_path(stat, config);
@@ -1061,7 +1057,7 @@ mod output {
                     stat.words.unwrap_or(0),
                     sep,
                     escape_if_needed(&path, sep)
-                ).ok();
+                )?;
             } else {
                 writeln!(
                     out,
@@ -1071,7 +1067,7 @@ mod output {
                     stat.chars,
                     sep,
                     escape_if_needed(&path, sep)
-                ).ok();
+                )?;
             }
         }
 
@@ -1082,15 +1078,17 @@ mod output {
                     out,
                     "{}{}{}{}{}{}{}",
                     total_lines, sep, total_chars, sep, total_words, sep, escape_if_needed("TOTAL", sep)
-                ).ok();
+                )?;
             } else {
                 writeln!(
                     out,
                     "{}{}{}{}{}",
                     total_lines, sep, total_chars, sep, escape_if_needed("TOTAL", sep)
-                ).ok();
+                )?;
             }
         }
+
+        Ok(())
     }
 
     #[inline]
@@ -1154,7 +1152,10 @@ mod output {
         };
 
         let output = t::Out { files, summary, by_extension, by_directory };
-        println!("{}", serde_json::to_string_pretty(&output)?);
+
+        let mut out = io::BufWriter::new(io::stdout());
+        serde_json::to_writer_pretty(&mut out, &output)?;
+        writeln!(out)?;
         Ok(())
     }
 
@@ -1170,8 +1171,7 @@ mod output {
 
     #[inline]
     fn totals(stats: &[t::Stats]) -> (usize, usize, usize) {
-        stats.iter().fold((0, 0, 0), |acc, s| {
-            let (l, c, w) = acc;
+        stats.iter().fold((0, 0, 0), |(l, c, w), s| {
             (l + s.lines, c + s.chars, w + s.words.unwrap_or(0))
         })
     }
@@ -1210,7 +1210,7 @@ mod output {
     }
 }
 
-fn main() -> Result<()> {
+fn main() -> AnyResult<()> {
     let args = cli::Args::parse();
     let config = config::AppConfig::try_from(args)?;
 
@@ -1218,10 +1218,10 @@ fn main() -> Result<()> {
         eprintln!("count_lines v{} · parallel={}", VERSION, config.jobs);
     }
 
-    let mut stats = compute::process_files(&config)?;
+    let mut stats = compute::process_files(&config).context("failed to measure files")?;
     compute::sort_stats(&mut stats, &config);
 
-    output::emit(&stats, &config)?;
+    output::emit(&stats, &config).context("failed to emit output")?;
 
     Ok(())
 }
