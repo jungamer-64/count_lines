@@ -1,0 +1,58 @@
+{
+  "version": "2.4.2",
+  "files": [
+    {
+      "file": "./src/main.rs",
+      "lines": 2058,
+      "chars": 63122,
+      "size": 65913,
+      "mtime": "2025-10-27T09:31:18.697275970+09:00",
+      "ext": "rs"
+    },
+    {
+      "file": "./install_count_lines.sh",
+      "lines": 1083,
+      "chars": 27240,
+      "size": 29495,
+      "mtime": "2025-10-27T04:39:51.225436165+09:00",
+      "ext": "sh"
+    },
+    {
+      "file": "./Cargo.lock",
+      "lines": 965,
+      "chars": 24701,
+      "size": 25666,
+      "mtime": "2025-10-27T08:27:40.426398893+09:00",
+      "ext": "lock"
+    },
+    {
+      "file": "./usage.txt",
+      "lines": 213,
+      "chars": 6030,
+      "size": 9410,
+      "mtime": "2025-10-27T08:21:46.188800013+09:00",
+      "ext": "txt"
+    },
+    {
+      "file": "./Cargo.toml",
+      "lines": 35,
+      "chars": 771,
+      "size": 848,
+      "mtime": "2025-10-27T08:27:40.197114453+09:00",
+      "ext": "toml"
+    },
+    {
+      "file": "./snapshot.json",
+      "lines": 0,
+      "chars": 0,
+      "size": 0,
+      "mtime": "2025-10-27T09:38:45.275054367+09:00",
+      "ext": "json"
+    }
+  ],
+  "summary": {
+    "lines": 4354,
+    "chars": 121864,
+    "files": 6
+  }
+}
