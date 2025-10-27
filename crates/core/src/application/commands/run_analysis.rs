@@ -27,10 +27,8 @@ impl<'a> RunAnalysisCommand<'a> {
     }
 
     pub fn execute(&self, config: &Config) -> Result<()> {
-        if config.progress {
-            if let Some(notifier) = self.notifier {
-                notifier.info("[count_lines] scanning & measuring...");
-            }
+        if config.progress && let Some(notifier) = self.notifier {
+            notifier.info("[count_lines] scanning & measuring...");
         }
 
         let entries = self

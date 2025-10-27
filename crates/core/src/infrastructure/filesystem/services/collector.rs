@@ -22,10 +22,8 @@ impl FileEntryCollector {
             let files = read_files_from_lines(from)?;
             return Ok(Self::materialise_entries(files, config));
         }
-        if config.use_git {
-            if let Ok(files) = collect_git_files(config) {
-                return Ok(Self::materialise_entries(files, config));
-            }
+        if config.use_git && let Ok(files) = collect_git_files(config) {
+            return Ok(Self::materialise_entries(files, config));
         }
         Self::collect_walk(config)
     }
