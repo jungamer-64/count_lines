@@ -1,0 +1,25 @@
+[package]
+name = "count_lines_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+description = "Core library powering the count_lines CLI tool"
+
+[dependencies]
+anyhow.workspace = true
+atty.workspace = true
+bytecount.workspace = true
+chrono.workspace = true
+clap.workspace = true
+evalexpr.workspace = true
+glob.workspace = true
+indicatif.workspace = true
+num_cpus.workspace = true
+rayon.workspace = true
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+walkdir.workspace = true
