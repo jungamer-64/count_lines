@@ -1,6 +1,6 @@
+use clap::{ValueEnum, builder::PossibleValue};
+
 use crate::domain::options::OutputFormat;
-use clap::ValueEnum;
-use clap::builder::PossibleValue;
 
 impl ValueEnum for OutputFormat {
     fn value_variants<'a>() -> &'a [Self] {

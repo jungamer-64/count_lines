@@ -27,8 +27,8 @@ echo_warning() {
     echo -e "${YELLOW}[!]${NC} $1"
 }
 
-# Change to script directory's parent
-cd "$(dirname "$0")/.."
+# Change to repository root
+cd "$(dirname "$0")/../.."
 
 echo_info "Starting test suite for count_lines..."
 echo ""

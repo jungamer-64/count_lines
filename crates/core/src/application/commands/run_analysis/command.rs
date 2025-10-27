@@ -1,8 +1,11 @@
-use crate::application::commands::{
-    AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
-};
-use crate::domain::{analytics, config::Config};
 use anyhow::{Context, Result};
+
+use crate::{
+    application::commands::{
+        AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
+    },
+    domain::{analytics, config::Config},
+};
 
 pub struct RunAnalysisCommand<'a> {
     entries: &'a dyn FileEntryProvider,
@@ -18,12 +21,7 @@ impl<'a> RunAnalysisCommand<'a> {
         presenter: &'a dyn FileStatisticsPresenter,
         notifier: Option<&'a dyn AnalysisNotifier>,
     ) -> Self {
-        Self {
-            entries,
-            processor,
-            presenter,
-            notifier,
-        }
+        Self { entries, processor, presenter, notifier }
     }
 
     pub fn execute(&self, config: &Config) -> Result<()> {
@@ -33,10 +31,7 @@ impl<'a> RunAnalysisCommand<'a> {
             notifier.info("[count_lines] scanning & measuring...");
         }
 
-        let entries = self
-            .entries
-            .collect(config)
-            .context("failed to discover input files")?;
+        let entries = self.entries.collect(config).context("failed to discover input files")?;
         let mut stats = match self.processor.measure(entries, config) {
             Ok(stats) => stats,
             Err(err) => {
@@ -51,8 +46,6 @@ impl<'a> RunAnalysisCommand<'a> {
         };
 
         analytics::apply_sort(&mut stats, config);
-        self.presenter
-            .present(&stats, config)
-            .context("failed to emit output")
+        self.presenter.present(&stats, config).context("failed to emit output")
     }
 }

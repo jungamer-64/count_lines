@@ -19,7 +19,7 @@ on_error() {
 trap on_error ERR
 
 # -------- cd to repo root --------
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

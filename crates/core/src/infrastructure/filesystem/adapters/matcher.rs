@@ -1,6 +1,8 @@
-use crate::domain::config::{Config, Filters};
-use chrono::{DateTime, Local};
 use std::path::Path;
+
+use chrono::{DateTime, Local};
+
+use crate::domain::config::{Config, Filters};
 
 /// Default directories pruned unless `no_default_prune` is set.
 const DEFAULT_PRUNE_DIRS: &[&str] = &[
@@ -36,11 +38,7 @@ pub(crate) fn should_process_entry(entry: &walkdir::DirEntry, config: &Config) -
         }
     }
     if entry.file_type().is_dir() {
-        return !config
-            .filters
-            .exclude_dirs
-            .iter()
-            .any(|p| p.matches_path(path));
+        return !config.filters.exclude_dirs.iter().any(|p| p.matches_path(path));
     }
     true
 }
@@ -58,24 +56,19 @@ impl PathMatcher {
 }
 
 fn is_hidden(path: &Path) -> bool {
-    path.file_name()
-        .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+    path.file_name().is_some_and(|name| name.to_string_lossy().starts_with('.'))
 }
 
 fn matches_name(path: &Path, filters: &Filters) -> bool {
     let name = path.file_name().unwrap_or_default().to_string_lossy();
-    if !filters.include_patterns.is_empty()
-        && !filters.include_patterns.iter().any(|p| p.matches(&name))
-    {
+    if !filters.include_patterns.is_empty() && !filters.include_patterns.iter().any(|p| p.matches(&name)) {
         return false;
     }
     !filters.exclude_patterns.iter().any(|p| p.matches(&name))
 }
 
 fn matches_path_patterns(path: &Path, filters: &Filters) -> bool {
-    if !filters.include_paths.is_empty()
-        && !filters.include_paths.iter().any(|p| p.matches_path(path))
-    {
+    if !filters.include_paths.is_empty() && !filters.include_paths.iter().any(|p| p.matches_path(path)) {
         return false;
     }
     !filters.exclude_paths.iter().any(|p| p.matches_path(path))

@@ -101,7 +101,7 @@ JSONL 出力ではファイルごとに `type = "file"` 行が並び、最後に
 - `crates/core/` ライブラリ crate。ユースケース、ドメイン、アダプターなどをレイヤー別に保持します。`src/` 直下は `bootstrap/`・`presentation/`・`application/`・`domain/`・`infrastructure/`・`shared/` に整理され、`version.rs` がトップレベルに残ります。
 - `src/lib.rs` `count_lines_core` を再エクスポートし、従来通り `count_lines::` から利用できるようにします。
 - `src/main.rs` CLI 用の薄いバイナリエントリで、`count_lines::run_from_cli()` を呼び出します。
-- `scripts/install_count_lines.sh` バイナリをローカルに配置するための補助スクリプトです。
+- `scripts/deployment/install.sh` バイナリをローカルに配置するための補助スクリプトです。
 - `tests/` `assert_cmd` を使った CLI スモークテストを配置します。
 
 ## ライブラリとしての利用

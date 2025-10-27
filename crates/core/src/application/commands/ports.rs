@@ -1,7 +1,11 @@
-use crate::domain::config::Config;
-use crate::domain::model::{FileEntry, FileStats};
-use anyhow::Result;
 use std::path::Path;
+
+use anyhow::Result;
+
+use crate::domain::{
+    config::Config,
+    model::{FileEntry, FileStats},
+};
 
 pub trait SnapshotComparator {
     fn compare(&self, old: &Path, new: &Path) -> Result<String>;

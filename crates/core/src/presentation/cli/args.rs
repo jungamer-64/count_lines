@@ -1,9 +1,13 @@
 // crates/core/src/presentation/cli/args.rs
-use super::parsers::{DateTimeArg, SizeArg};
-use crate::domain::grouping::ByMode;
-use crate::domain::options::{OutputFormat, SortSpec};
-use clap::{Parser, ValueHint};
 use std::path::PathBuf;
+
+use clap::{Parser, ValueHint};
+
+use super::parsers::{DateTimeArg, SizeArg};
+use crate::domain::{
+    grouping::ByMode,
+    options::{OutputFormat, SortSpec},
+};
 
 /// Top-level CLI arguments parsed via clap.
 #[derive(Parser, Debug)]

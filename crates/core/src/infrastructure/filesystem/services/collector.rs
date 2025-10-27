@@ -1,13 +1,17 @@
-use crate::domain::config::Config;
-use crate::domain::model::FileEntry;
-use crate::infrastructure::filesystem::adapters::{
-    PathMatcher, collect_git_files, read_files_from_lines, read_files_from_null,
-    should_process_entry,
-};
-use crate::infrastructure::filesystem::services::metadata_loader::FileMetadataLoader;
-use anyhow::Result;
 use std::path::PathBuf;
+
+use anyhow::Result;
 use walkdir::WalkDir;
+
+use crate::{
+    domain::{config::Config, model::FileEntry},
+    infrastructure::filesystem::{
+        adapters::{
+            PathMatcher, collect_git_files, read_files_from_lines, read_files_from_null, should_process_entry,
+        },
+        services::metadata_loader::FileMetadataLoader,
+    },
+};
 
 /// Application service responsible for discovering domain file entries.
 pub struct FileEntryCollector;
@@ -33,9 +37,7 @@ impl FileEntryCollector {
     fn materialise_entries(files: Vec<PathBuf>, config: &Config) -> Vec<FileEntry> {
         files
             .into_iter()
-            .filter_map(|path| {
-                FileMetadataLoader::build(&path, config).map(|meta| FileEntry { path, meta })
-            })
+            .filter_map(|path| FileMetadataLoader::build(&path, config).map(|meta| FileEntry { path, meta }))
             .collect()
     }
 
@@ -56,10 +58,7 @@ impl FileEntryCollector {
                     continue;
                 }
                 if let Some(meta) = FileMetadataLoader::build(path, config) {
-                    entries.push(FileEntry {
-                        path: path.to_path_buf(),
-                        meta,
-                    });
+                    entries.push(FileEntry { path: path.to_path_buf(), meta });
                 }
             }
         }

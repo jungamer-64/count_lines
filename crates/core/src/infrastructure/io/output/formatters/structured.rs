@@ -1,28 +1,25 @@
-use crate::domain::analytics::Aggregator;
-use crate::domain::config::Config;
-use crate::domain::model::{FileStats, Summary};
-use crate::infrastructure::io::output::utils::format_path;
-use crate::infrastructure::serialization::{
-    JsonFile, JsonGroup, JsonGroupRow, JsonOutput, JsonSummary,
-};
 use std::io::Write;
 
-pub fn output_json(
-    stats: &[FileStats],
-    config: &Config,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+use crate::{
+    domain::{
+        analytics::Aggregator,
+        config::Config,
+        model::{FileStats, Summary},
+    },
+    infrastructure::{
+        io::output::utils::format_path,
+        serialization::{JsonFile, JsonGroup, JsonGroupRow, JsonOutput, JsonSummary},
+    },
+};
+
+pub fn output_json(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
     let output = build_json_output(stats, config);
     serde_json::to_writer_pretty(&mut *out, &output)?;
     writeln!(out)?;
     Ok(())
 }
 
-pub fn output_yaml(
-    stats: &[FileStats],
-    config: &Config,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+pub fn output_yaml(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
     let output = build_json_output(stats, config);
     let yaml_str = serde_yaml::to_string(&output)?;
     writeln!(out, "{}", yaml_str)?;
@@ -50,12 +47,7 @@ fn build_json_output(stats: &[FileStats], config: &Config) -> JsonOutput {
         files: summary_data.files,
     };
     let by = build_json_groups(stats, config);
-    JsonOutput {
-        version: crate::VERSION,
-        files,
-        summary,
-        by,
-    }
+    JsonOutput { version: crate::VERSION, files, summary, by }
 }
 
 fn build_json_groups(stats: &[FileStats], config: &Config) -> Option<Vec<JsonGroup>> {
@@ -71,17 +63,9 @@ fn build_json_groups(stats: &[FileStats], config: &Config) -> Option<Vec<JsonGro
             }
             let json_rows = rows
                 .into_iter()
-                .map(|g| JsonGroupRow {
-                    key: g.key,
-                    lines: g.lines,
-                    chars: g.chars,
-                    count: g.count,
-                })
+                .map(|g| JsonGroupRow { key: g.key, lines: g.lines, chars: g.chars, count: g.count })
                 .collect();
-            JsonGroup {
-                label,
-                rows: json_rows,
-            }
+            JsonGroup { label, rows: json_rows }
         })
         .collect();
     Some(json_groups)

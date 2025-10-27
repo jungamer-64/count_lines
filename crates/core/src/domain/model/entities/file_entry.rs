@@ -1,5 +1,6 @@
-use crate::domain::model::value_objects::FileMeta;
 use std::path::PathBuf;
+
+use crate::domain::model::value_objects::FileMeta;
 
 /// A path together with its metadata.
 #[derive(Debug, Clone)]

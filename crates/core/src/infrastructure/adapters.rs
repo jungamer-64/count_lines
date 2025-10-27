@@ -1,11 +1,17 @@
-use crate::application::commands::{
-    AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
-    SnapshotComparator,
-};
-use crate::domain::config::Config;
-use crate::domain::model::{FileEntry, FileStats};
-use anyhow::Result;
 use std::path::Path;
+
+use anyhow::Result;
+
+use crate::{
+    application::commands::{
+        AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
+        SnapshotComparator,
+    },
+    domain::{
+        config::Config,
+        model::{FileEntry, FileStats},
+    },
+};
 
 pub struct FileSystemEntryProvider;
 

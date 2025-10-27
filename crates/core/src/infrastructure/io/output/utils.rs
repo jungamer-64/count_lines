@@ -1,8 +1,10 @@
 // src/infrastructure/io/output/utils.rs
-use crate::domain::config::Config;
-use crate::domain::model::FileStats;
-use crate::shared::path::logical_absolute;
 use std::path::Path;
+
+use crate::{
+    domain::{config::Config, model::FileStats},
+    shared::path::logical_absolute,
+};
 
 pub(crate) fn limited<'a>(stats: &'a [FileStats], config: &Config) -> &'a [FileStats] {
     let limit = config.top_n.unwrap_or(stats.len()).min(stats.len());
@@ -10,20 +12,11 @@ pub(crate) fn limited<'a>(stats: &'a [FileStats], config: &Config) -> &'a [FileS
 }
 
 pub(crate) fn format_ratio(val: usize, total: usize) -> String {
-    if total == 0 {
-        "0.0".into()
-    } else {
-        format!("{:.1}", (val as f64) * 100.0 / (total as f64))
-    }
+    if total == 0 { "0.0".into() } else { format!("{:.1}", (val as f64) * 100.0 / (total as f64)) }
 }
 
 pub(crate) fn format_path(stats: &FileStats, config: &Config) -> String {
-    format_entry_path(
-        &stats.path,
-        config.abs_path,
-        config.abs_canonical,
-        config.trim_root.as_deref(),
-    )
+    format_entry_path(&stats.path, config.abs_path, config.abs_canonical, config.trim_root.as_deref())
 }
 
 pub(crate) fn escape_field(s: &str, sep: char) -> String {
@@ -45,16 +38,10 @@ pub(crate) fn safe_key_label(key: &str) -> String {
     key.replace('|', "\\|")
 }
 
-fn format_entry_path(
-    path: &Path,
-    abs_path: bool,
-    abs_canonical: bool,
-    trim_root: Option<&Path>,
-) -> String {
+fn format_entry_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root: Option<&Path>) -> String {
     let mut path = if abs_path {
         if abs_canonical {
-            path.canonicalize()
-                .unwrap_or_else(|_| logical_absolute(path))
+            path.canonicalize().unwrap_or_else(|_| logical_absolute(path))
         } else {
             logical_absolute(path)
         }

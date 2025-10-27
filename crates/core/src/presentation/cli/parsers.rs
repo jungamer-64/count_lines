@@ -10,9 +10,7 @@ impl std::str::FromStr for SizeArg {
         let s = s.trim().replace('_', "");
         let lower = s.to_ascii_lowercase();
         let (num_str, multiplier) = parse_with_suffix(&lower)?;
-        let num: u64 = num_str
-            .parse()
-            .map_err(|_| format!("Invalid size number: {num_str}"))?;
+        let num: u64 = num_str.parse().map_err(|_| format!("Invalid size number: {num_str}"))?;
         Ok(SizeArg(num * multiplier))
     }
 }
@@ -53,9 +51,7 @@ impl std::str::FromStr for DateTimeArg {
 }
 
 fn try_rfc3339(s: &str) -> Option<DateTimeArg> {
-    chrono::DateTime::parse_from_rfc3339(s)
-        .ok()
-        .map(|dt| DateTimeArg(dt.with_timezone(&Local)))
+    chrono::DateTime::parse_from_rfc3339(s).ok().map(|dt| DateTimeArg(dt.with_timezone(&Local)))
 }
 
 fn try_datetime_format(s: &str) -> Option<DateTimeArg> {

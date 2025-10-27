@@ -28,8 +28,8 @@ echo_result() {
     echo -e "${YELLOW}[RESULT]${NC} $1"
 }
 
-# Change to script directory's parent
-cd "$(dirname "$0")/.."
+# Change to repository root
+cd "$(dirname "$0")/../.."
 
 echo_info "Building optimized release binary..."
 cargo build --release --quiet

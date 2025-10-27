@@ -2,12 +2,9 @@ pub mod formatters;
 mod utils;
 mod writer;
 
-use crate::domain::config::Config;
-use crate::domain::model::FileStats;
-use crate::domain::options::OutputFormat;
-use formatters::{
-    output_delimited, output_json, output_jsonl, output_markdown, output_table, output_yaml,
-};
+use formatters::{output_delimited, output_json, output_jsonl, output_markdown, output_table, output_yaml};
+
+use crate::domain::{config::Config, model::FileStats, options::OutputFormat};
 
 /// Emit results to the configured output format.
 pub fn emit(stats: &[FileStats], config: &Config) -> anyhow::Result<()> {

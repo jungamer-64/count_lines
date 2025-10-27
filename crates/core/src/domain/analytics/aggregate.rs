@@ -1,9 +1,11 @@
-use crate::domain::config::ByKey;
-use crate::domain::grouping::Granularity;
-use crate::domain::model::FileStats;
+use std::{
+    collections::HashMap,
+    path::{Component, Path},
+};
+
 use chrono::{DateTime, Local};
-use std::collections::HashMap;
-use std::path::{Component, Path};
+
+use crate::domain::{config::ByKey, grouping::Granularity, model::FileStats};
 
 /// Aggregation results for a single grouping key.
 #[derive(Debug, Clone)]
@@ -16,12 +18,7 @@ pub struct AggregationGroup {
 
 impl AggregationGroup {
     fn new(key: String, lines: usize, chars: usize, count: usize) -> Self {
-        Self {
-            key,
-            lines,
-            chars,
-            count,
-        }
+        Self { key, lines, chars, count }
     }
 }
 
@@ -29,14 +26,8 @@ impl AggregationGroup {
 pub struct Aggregator;
 
 impl Aggregator {
-    pub fn aggregate(
-        stats: &[FileStats],
-        by_keys: &[ByKey],
-    ) -> Vec<(String, Vec<AggregationGroup>)> {
-        by_keys
-            .iter()
-            .map(|key| Self::aggregate_by_key(stats, key))
-            .collect()
+    pub fn aggregate(stats: &[FileStats], by_keys: &[ByKey]) -> Vec<(String, Vec<AggregationGroup>)> {
+        by_keys.iter().map(|key| Self::aggregate_by_key(stats, key)).collect()
     }
 
     fn aggregate_by_key(stats: &[FileStats], key: &ByKey) -> (String, Vec<AggregationGroup>) {
@@ -49,47 +40,29 @@ impl Aggregator {
 
     fn aggregate_by_ext(stats: &[FileStats]) -> (String, Vec<AggregationGroup>) {
         let map = Self::build_aggregation_map(stats, |s| {
-            if s.ext.is_empty() {
-                "(noext)".to_string()
-            } else {
-                s.ext.clone()
-            }
+            if s.ext.is_empty() { "(noext)".to_string() } else { s.ext.clone() }
         });
         ("By Extension".to_string(), Self::map_to_sorted_groups(map))
     }
 
     fn aggregate_by_dir(stats: &[FileStats], depth: usize) -> (String, Vec<AggregationGroup>) {
         let map = Self::build_aggregation_map(stats, |s| get_dir_key(&s.path, depth));
-        (
-            format!("By Directory (depth={depth})"),
-            Self::map_to_sorted_groups(map),
-        )
+        (format!("By Directory (depth={depth})"), Self::map_to_sorted_groups(map))
     }
 
-    fn aggregate_by_mtime(
-        stats: &[FileStats],
-        gran: Granularity,
-    ) -> (String, Vec<AggregationGroup>) {
+    fn aggregate_by_mtime(stats: &[FileStats], gran: Granularity) -> (String, Vec<AggregationGroup>) {
         let map = Self::build_aggregation_map(stats, |s| {
-            s.mtime
-                .map(|mt| mtime_bucket(mt, gran))
-                .unwrap_or_else(|| "(no mtime)".to_string())
+            s.mtime.map(|mt| mtime_bucket(mt, gran)).unwrap_or_else(|| "(no mtime)".to_string())
         });
         let gran_label = match gran {
             Granularity::Day => "day",
             Granularity::Week => "week",
             Granularity::Month => "month",
         };
-        (
-            format!("By Mtime ({gran_label})"),
-            Self::map_to_sorted_groups(map),
-        )
+        (format!("By Mtime ({gran_label})"), Self::map_to_sorted_groups(map))
     }
 
-    fn build_aggregation_map<F>(
-        stats: &[FileStats],
-        key_fn: F,
-    ) -> HashMap<String, (usize, usize, usize)>
+    fn build_aggregation_map<F>(stats: &[FileStats], key_fn: F) -> HashMap<String, (usize, usize, usize)>
     where
         F: Fn(&FileStats) -> String,
     {
@@ -133,9 +106,5 @@ fn get_dir_key(path: &Path, depth: usize) -> String {
         })
         .take(depth)
         .collect();
-    if parts.is_empty() {
-        ".".to_string()
-    } else {
-        parts.join("/")
-    }
+    if parts.is_empty() { ".".to_string() } else { parts.join("/") }
 }

@@ -60,21 +60,35 @@ count_lines/
 ├── crates/
 │   └── core/                       # コアライブラリクレート
 │       ├── src/
-│       │   ├── application/        # ユースケース (CQRS)
-│       │   ├── bootstrap/          # 構成ルート
-│       │   ├── domain/             # ドメインモデル
-│       │   ├── infrastructure/     # 外部アダプター
-│       │   ├── presentation/       # CLI 等の境界
-│       │   ├── shared/             # 共通値オブジェクト
+│       │   ├── application/        # CQRS ユースケース (commands/queries)
+│       │   ├── application.rs      # アプリケーション層のルートモジュール
+│       │   ├── bootstrap.rs        # 構成ルート
+│       │   ├── domain/             # ドメインモデル (analytics/config/model 等)
+│       │   ├── domain.rs           # ドメイン層のルートモジュール
+│       │   ├── infrastructure/     # 外部アダプター (filesystem/io/measurement…)
+│       │   ├── infrastructure.rs   # インフラ層のルートモジュール
+│       │   ├── presentation/       # CLI などの境界 (cli/)
+│       │   ├── presentation.rs     # プレゼンテーション層ルート
+│       │   ├── shared/             # 共通ユーティリティ
+│       │   ├── shared.rs           # 共有モジュールルート
 │       │   ├── lib.rs              # ライブラリルート
 │       │   └── version.rs          # バージョン情報
 │       └── Cargo.toml
 ├── src/
 │   ├── lib.rs                     # count_lines_core の再エクスポート
 │   └── main.rs                    # CLI バイナリエントリポイント
-├── tests/                         # 統合/CLI テスト
-├── scripts/                       # ビルド・テストスクリプト
-├── docs/                          # ドキュメント
+├── tests/
+│   ├── cli.rs                     # CLI スモークテスト
+│   ├── integration/               # 統合テスト (モジュール別)
+│   └── unit/                      # ユニットテスト (レイヤー別)
+├── scripts/
+│   ├── build/                     # ビルド系スクリプト
+│   ├── ci/                        # CI 用フロー
+│   ├── deployment/                # 配布・インストーラ
+│   ├── development/               # 開発支援ツール
+│   └── performance/               # ベンチ／プロファイル
+├── docs/                          # ドキュメント (user/developer/project)
+├── config/                        # ツール構成 (rustfmt/clippy/CI)
 └── Cargo.toml                     # ワークスペース設定
 ```
 

@@ -1,8 +1,9 @@
-use crate::domain::config::Config;
-use crate::domain::model::{FileMeta, FileStats};
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
+use std::{fs::File, io::Read, path::Path};
+
+use crate::domain::{
+    config::Config,
+    model::{FileMeta, FileStats},
+};
 
 /// Measure a file by reading it into memory and counting bytes/lines/words.
 pub fn measure_entire_file(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
@@ -24,11 +25,5 @@ pub fn measure_entire_file(path: &Path, meta: &FileMeta, config: &Config) -> Opt
     };
     let chars = content.chars().count();
     let words = config.words.then(|| content.split_whitespace().count());
-    Some(FileStats::new(
-        path.to_path_buf(),
-        lines,
-        chars,
-        words,
-        meta,
-    ))
+    Some(FileStats::new(path.to_path_buf(), lines, chars, words, meta))
 }

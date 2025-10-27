@@ -94,14 +94,16 @@ at your option.
 ### 開発者向けスクリプト
 ```bash
 # すべてのチェックを実行
-./scripts/test.sh
+./scripts/development/test.sh
 
 # パフォーマンスベンチマーク
-./scripts/benchmark.sh
+./scripts/performance/benchmark.sh
 
 # リリースビルド
-./scripts/release.sh
+./scripts/build/release.sh
 ```
+
+プロジェクト固有の linter / formatter / CI テンプレートは `config/` ディレクトリに集約しています。
 
 ### リリースプロセス
 タグをプッシュすることで自動リリースが実行されます：

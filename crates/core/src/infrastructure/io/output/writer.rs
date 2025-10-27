@@ -1,6 +1,7 @@
 // src/infrastructure/io/output/writer.rs
-use crate::domain::config::Config;
 use std::io::Write;
+
+use crate::domain::config::Config;
 
 pub(crate) struct OutputWriter(Box<dyn Write>);
 

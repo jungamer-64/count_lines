@@ -1,13 +1,14 @@
-use crate::domain::config::Config;
-use crate::domain::model::{FileStats, Summary};
-use crate::infrastructure::io::output::utils::format_path;
 use std::io::Write;
 
-pub fn output_jsonl(
-    stats: &[FileStats],
-    config: &Config,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+use crate::{
+    domain::{
+        config::Config,
+        model::{FileStats, Summary},
+    },
+    infrastructure::io::output::utils::format_path,
+};
+
+pub fn output_jsonl(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
     for s in stats {
         let item = serde_json::json!({
             "type": "file",

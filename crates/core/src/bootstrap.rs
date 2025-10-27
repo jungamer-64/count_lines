@@ -1,13 +1,15 @@
-use crate::application::commands::{RunAnalysisCommand, SnapshotComparator};
-use crate::domain::config::Config;
-use crate::domain::options::OutputFormat;
-use crate::infrastructure::adapters::{
-    ConsoleNotifier, FileSystemEntryProvider, OutputEmitter, ParallelFileStatisticsProcessor,
-    SnapshotDiffAdapter,
-};
-use crate::presentation::cli;
 use anyhow::{Context, Result};
 use atty::Stream;
+
+use crate::{
+    application::commands::{RunAnalysisCommand, SnapshotComparator},
+    domain::{config::Config, options::OutputFormat},
+    infrastructure::adapters::{
+        ConsoleNotifier, FileSystemEntryProvider, OutputEmitter, ParallelFileStatisticsProcessor,
+        SnapshotDiffAdapter,
+    },
+    presentation::cli,
+};
 
 pub fn run() -> Result<()> {
     let config = cli::load_config()?;

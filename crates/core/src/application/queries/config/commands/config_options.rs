@@ -1,8 +1,12 @@
-use super::FilterOptions;
-use crate::domain::grouping::ByMode;
-use crate::domain::options::{OutputFormat, SortKey};
-use chrono::{DateTime, Local};
 use std::path::PathBuf;
+
+use chrono::{DateTime, Local};
+
+use super::FilterOptions;
+use crate::domain::{
+    grouping::ByMode,
+    options::{OutputFormat, SortKey},
+};
 
 /// Command DTO used to capture configuration input.
 #[derive(Debug)]

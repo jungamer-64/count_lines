@@ -1,7 +1,12 @@
-use crate::domain::config::Config;
-use crate::domain::model::{FileStats, Summary};
-use crate::infrastructure::io::output::utils::{escape_field, format_path, limited};
 use std::io::Write;
+
+use crate::{
+    domain::{
+        config::Config,
+        model::{FileStats, Summary},
+    },
+    infrastructure::io::output::utils::{escape_field, format_path, limited},
+};
 
 pub fn output_delimited(
     stats: &[FileStats],
@@ -35,14 +40,7 @@ fn write_delimited_rows(
     for s in limited(stats, config) {
         let path = escape_field(&format_path(s, config), sep);
         if config.words {
-            writeln!(
-                out,
-                "{}{sep}{}{sep}{}{sep}{}",
-                s.lines,
-                s.chars,
-                s.words.unwrap_or(0),
-                path
-            )?;
+            writeln!(out, "{}{sep}{}{sep}{}{sep}{}", s.lines, s.chars, s.words.unwrap_or(0), path)?;
         } else {
             writeln!(out, "{}{sep}{}{sep}{}", s.lines, s.chars, path)?;
         }
@@ -59,17 +57,9 @@ fn write_delimited_total(
     let summary = Summary::from_stats(stats);
     let total_label = escape_field("TOTAL", sep);
     if config.words {
-        writeln!(
-            out,
-            "{}{sep}{}{sep}{}{sep}{}",
-            summary.lines, summary.chars, summary.words, total_label
-        )?;
+        writeln!(out, "{}{sep}{}{sep}{}{sep}{}", summary.lines, summary.chars, summary.words, total_label)?;
     } else {
-        writeln!(
-            out,
-            "{}{sep}{}{sep}{}",
-            summary.lines, summary.chars, total_label
-        )?;
+        writeln!(out, "{}{sep}{}{sep}{}", summary.lines, summary.chars, total_label)?;
     }
     Ok(())
 }

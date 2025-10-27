@@ -1,7 +1,6 @@
-use crate::domain::config::Config;
-use crate::domain::model::FileStats;
-use crate::domain::options::SortKey;
 use std::cmp::Ordering;
+
+use crate::domain::{config::Config, model::FileStats, options::SortKey};
 
 /// Apply sorting to file statistics in-place based on configuration.
 pub fn apply_sort(stats: &mut [FileStats], config: &Config) {

@@ -1,7 +1,11 @@
-use crate::domain::config::value_objects::{ByKey, Filters};
-use crate::domain::options::{OutputFormat, SortKey};
-use chrono::{DateTime, Local};
 use std::path::PathBuf;
+
+use chrono::{DateTime, Local};
+
+use crate::domain::{
+    config::value_objects::{ByKey, Filters},
+    options::{OutputFormat, SortKey},
+};
 
 /// Read model representing a fully materialised configuration.
 #[derive(Debug)]

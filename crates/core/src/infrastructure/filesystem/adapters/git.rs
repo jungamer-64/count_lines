@@ -1,20 +1,14 @@
-use crate::domain::config::Config;
-use anyhow::Result;
 use std::path::PathBuf;
+
+use anyhow::Result;
+
+use crate::domain::config::Config;
 
 pub(crate) fn collect_git_files(config: &Config) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for root in &config.paths {
         let output = std::process::Command::new("git")
-            .args([
-                "ls-files",
-                "-z",
-                "--cached",
-                "--others",
-                "--exclude-standard",
-                "--",
-                ".",
-            ])
+            .args(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "."])
             .current_dir(root)
             .output()?;
         if !output.status.success() {

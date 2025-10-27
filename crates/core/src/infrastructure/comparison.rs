@@ -1,10 +1,10 @@
 // src/domain/compare.rs
 mod snapshot;
 
+use std::{collections::HashMap, path::Path};
+
 use anyhow::Result;
 use snapshot::{FileItem, Snapshot};
-use std::collections::HashMap;
-use std::path::Path;
 
 /// Compare two JSON snapshot files and return a formatted diff. The
 /// snapshots must be compatible with the output of `count_lines --format json`.
@@ -65,12 +65,7 @@ impl SnapshotComparison {
             self.calculate_diff(self.new.summary.files, self.old.summary.files)
         ));
         if let (Some(ow), Some(nw)) = (self.old.summary.words, self.new.summary.words) {
-            output.push_str(&format!(
-                "Words: {} -> {} (Δ {})\n",
-                ow,
-                nw,
-                self.calculate_diff(nw, ow)
-            ));
+            output.push_str(&format!("Words: {} -> {} (Δ {})\n", ow, nw, self.calculate_diff(nw, ow)));
         }
         output
     }
@@ -80,12 +75,7 @@ impl SnapshotComparison {
     /// Added files are indicated explicitly.
     fn format_file_diffs(&self) -> String {
         // Build a lookup table from file name to its entry in the old snapshot
-        let old_map: HashMap<&str, &FileItem> = self
-            .old
-            .files
-            .iter()
-            .map(|f| (f.file.as_str(), f))
-            .collect();
+        let old_map: HashMap<&str, &FileItem> = self.old.files.iter().map(|f| (f.file.as_str(), f)).collect();
         let mut output = String::new();
         for new_file in &self.new.files {
             if let Some(old_file) = old_map.get(new_file.file.as_str()) {

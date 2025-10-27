@@ -1,6 +1,8 @@
-use crate::domain::model::value_objects::FileMeta;
-use chrono::{DateTime, Local};
 use std::path::PathBuf;
+
+use chrono::{DateTime, Local};
+
+use crate::domain::model::value_objects::FileMeta;
 
 /// Computed statistics for a file.
 #[derive(Debug, Clone)]
@@ -16,13 +18,7 @@ pub struct FileStats {
 }
 
 impl FileStats {
-    pub fn new(
-        path: PathBuf,
-        lines: usize,
-        chars: usize,
-        words: Option<usize>,
-        meta: &FileMeta,
-    ) -> Self {
+    pub fn new(path: PathBuf, lines: usize, chars: usize, words: Option<usize>, meta: &FileMeta) -> Self {
         Self {
             path,
             lines,

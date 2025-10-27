@@ -1,8 +1,13 @@
-use crate::domain::config::Config;
-use crate::domain::model::{FileMeta, FileStats};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-use std::path::Path;
+use std::{
+    fs::File,
+    io::{BufRead, BufReader},
+    path::Path,
+};
+
+use crate::domain::{
+    config::Config,
+    model::{FileMeta, FileStats},
+};
 
 /// Measure a file incrementally by iterating over its lines.
 pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
@@ -28,11 +33,5 @@ pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option
             words += line.split_whitespace().count();
         }
     }
-    Some(FileStats::new(
-        path.to_path_buf(),
-        lines,
-        chars,
-        config.words.then_some(words),
-        meta,
-    ))
+    Some(FileStats::new(path.to_path_buf(), lines, chars, config.words.then_some(words), meta))
 }

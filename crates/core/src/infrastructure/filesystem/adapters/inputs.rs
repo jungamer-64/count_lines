@@ -1,7 +1,10 @@
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, Read},
+    path::{Path, PathBuf},
+};
+
 use anyhow::Result;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
-use std::path::{Path, PathBuf};
 
 pub(crate) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
     let file = File::open(path)?;

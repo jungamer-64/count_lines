@@ -1,12 +1,17 @@
-use super::super::commands::{ConfigOptions, FilterOptions};
-use crate::domain::config::{ByKey, Config, Filters, Range, SizeRange};
-use crate::domain::grouping::ByMode;
-use crate::domain::options::SortKey;
-use crate::shared::{path::logical_absolute, patterns::parse_patterns};
+use std::{collections::HashSet, path::PathBuf};
+
 use anyhow::{Result, anyhow};
 use evalexpr::Node;
-use std::collections::HashSet;
-use std::path::PathBuf;
+
+use super::super::commands::{ConfigOptions, FilterOptions};
+use crate::{
+    domain::{
+        config::{ByKey, Config, Filters, Range, SizeRange},
+        grouping::ByMode,
+        options::SortKey,
+    },
+    shared::{path::logical_absolute, patterns::parse_patterns},
+};
 
 /// Query service responsible for materialising configuration read models.
 pub struct ConfigQueryService;
@@ -95,11 +100,7 @@ impl ConfigQueryService {
 }
 
 fn normalise_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
-    if paths.is_empty() {
-        vec![PathBuf::from(".")]
-    } else {
-        paths
-    }
+    if paths.is_empty() { vec![PathBuf::from(".")] } else { paths }
 }
 
 fn build_filters(options: &FilterOptions) -> Result<Filters> {
@@ -125,40 +126,25 @@ fn build_filters(options: &FilterOptions) -> Result<Filters> {
 }
 
 fn parse_extensions(ext_arg: Option<&str>) -> HashSet<String> {
-    ext_arg
-        .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
-        .unwrap_or_default()
+    ext_arg.map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect()).unwrap_or_default()
 }
 
-fn compute_words_flag(
-    explicit_words: bool,
-    sort_specs: &[(SortKey, bool)],
-    filters: &Filters,
-) -> bool {
-    let filter_depends_on_words = filters
-        .filter_ast
-        .as_ref()
-        .is_some_and(filter_expr_requires_words);
+fn compute_words_flag(explicit_words: bool, sort_specs: &[(SortKey, bool)], filters: &Filters) -> bool {
+    let filter_depends_on_words = filters.filter_ast.as_ref().is_some_and(filter_expr_requires_words);
 
     explicit_words
         || filters.words_range.min.is_some()
         || filters.words_range.max.is_some()
         || filter_depends_on_words
-        || sort_specs
-            .iter()
-            .any(|(key, _)| matches!(key, SortKey::Words))
+        || sort_specs.iter().any(|(key, _)| matches!(key, SortKey::Words))
 }
 
 fn filter_expr_requires_words(ast: &Node) -> bool {
-    ast.iter_variable_identifiers()
-        .any(|ident| ident == "words")
+    ast.iter_variable_identifiers().any(|ident| ident == "words")
 }
 
 fn convert_by_modes(by: Vec<ByMode>) -> Vec<ByKey> {
-    by.into_iter()
-        .filter(|b| !matches!(b, ByMode::None))
-        .map(convert_by_mode)
-        .collect()
+    by.into_iter().filter(|b| !matches!(b, ByMode::None)).map(convert_by_mode).collect()
 }
 
 fn convert_by_mode(mode: ByMode) -> ByKey {
