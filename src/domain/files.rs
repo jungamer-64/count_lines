@@ -27,10 +27,7 @@ pub fn collect_entries(config: &Config) -> anyhow::Result<Vec<FileEntry>> {
 fn to_entries(files: Vec<PathBuf>, config: &Config) -> Vec<FileEntry> {
     files
         .into_iter()
-        .filter_map(|p| {
-            FileMeta::from_path(&p, config)
-                .map(|meta| FileEntry { path: p, meta })
-        })
+        .filter_map(|p| FileMeta::from_path(&p, config).map(|meta| FileEntry { path: p, meta }))
         .collect()
 }
 

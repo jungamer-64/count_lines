@@ -69,25 +69,16 @@ fn matches_name(path: &Path, filters: &Filters) -> bool {
     {
         return false;
     }
-    !filters
-        .exclude_patterns
-        .iter()
-        .any(|p| p.matches(&name))
+    !filters.exclude_patterns.iter().any(|p| p.matches(&name))
 }
 
 fn matches_path_patterns(path: &Path, filters: &Filters) -> bool {
     if !filters.include_paths.is_empty()
-        && !filters
-            .include_paths
-            .iter()
-            .any(|p| p.matches_path(path))
+        && !filters.include_paths.iter().any(|p| p.matches_path(path))
     {
         return false;
     }
-    !filters
-        .exclude_paths
-        .iter()
-        .any(|p| p.matches_path(path))
+    !filters.exclude_paths.iter().any(|p| p.matches_path(path))
 }
 
 fn matches_extension(path: &Path, filters: &Filters) -> bool {

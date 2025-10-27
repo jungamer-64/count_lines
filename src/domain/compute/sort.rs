@@ -11,11 +11,7 @@ pub fn apply_sort(stats: &mut [FileStats], config: &Config) {
     for (key, desc) in config.sort_specs.iter().rev() {
         stats.sort_by(|a, b| {
             let ord = Sorter::compare(a, b, *key);
-            if *desc {
-                ord.reverse()
-            } else {
-                ord
-            }
+            if *desc { ord.reverse() } else { ord }
         });
     }
 }

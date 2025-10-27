@@ -79,8 +79,12 @@ impl SnapshotComparison {
     /// Added files are indicated explicitly.
     fn format_file_diffs(&self) -> String {
         // Build a lookup table from file name to its entry in the old snapshot
-        let old_map: HashMap<&str, &FileItem> =
-            self.old.files.iter().map(|f| (f.file.as_str(), f)).collect();
+        let old_map: HashMap<&str, &FileItem> = self
+            .old
+            .files
+            .iter()
+            .map(|f| (f.file.as_str(), f))
+            .collect();
         let mut output = String::new();
         for new_file in &self.new.files {
             if let Some(old_file) = old_map.get(new_file.file.as_str()) {
@@ -94,17 +98,12 @@ impl SnapshotComparison {
                     if let Some(wd) = words_diff {
                         output.push_str(&format!(
                             "{:>10} L  {:>10} C  {:>10} W  {}\n",
-                            lines_diff,
-                            chars_diff,
-                            wd,
-                            new_file.file
+                            lines_diff, chars_diff, wd, new_file.file
                         ));
                     } else {
                         output.push_str(&format!(
                             "{:>10} L  {:>10} C  {}\n",
-                            lines_diff,
-                            chars_diff,
-                            new_file.file
+                            lines_diff, chars_diff, new_file.file
                         ));
                     }
                 }
@@ -112,9 +111,7 @@ impl SnapshotComparison {
                 // New file, show absolute values with added marker
                 output.push_str(&format!(
                     "{:>10} L  {:>10} C  {} (added)\n",
-                    new_file.lines as isize,
-                    new_file.chars as isize,
-                    new_file.file
+                    new_file.lines as isize, new_file.chars as isize, new_file.file
                 ));
             }
         }

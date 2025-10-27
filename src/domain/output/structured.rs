@@ -1,8 +1,9 @@
 use super::utils::format_path;
 use crate::domain::compute::Aggregator;
 use crate::domain::config::Config;
-use crate::foundation::types::{
-    FileStats, JsonFile, JsonGroup, JsonGroupRow, JsonOutput, JsonSummary, Summary,
+use crate::foundation::{
+    serde::{JsonFile, JsonGroup, JsonGroupRow, JsonOutput, JsonSummary},
+    types::{FileStats, Summary},
 };
 use std::io::Write;
 
@@ -57,10 +58,7 @@ fn build_json_output(stats: &[FileStats], config: &Config) -> JsonOutput {
     }
 }
 
-fn build_json_groups(
-    stats: &[FileStats],
-    config: &Config,
-) -> Option<Vec<JsonGroup>> {
+fn build_json_groups(stats: &[FileStats], config: &Config) -> Option<Vec<JsonGroup>> {
     let groups = Aggregator::aggregate(stats, &config.by_modes);
     if groups.is_empty() {
         return None;

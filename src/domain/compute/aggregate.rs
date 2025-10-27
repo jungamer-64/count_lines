@@ -29,7 +29,10 @@ impl AggregationGroup {
 pub struct Aggregator;
 
 impl Aggregator {
-    pub fn aggregate(stats: &[FileStats], by_keys: &[ByKey]) -> Vec<(String, Vec<AggregationGroup>)> {
+    pub fn aggregate(
+        stats: &[FileStats],
+        by_keys: &[ByKey],
+    ) -> Vec<(String, Vec<AggregationGroup>)> {
         by_keys
             .iter()
             .map(|key| Self::aggregate_by_key(stats, key))
@@ -101,9 +104,7 @@ impl Aggregator {
         map
     }
 
-    fn map_to_sorted_groups(
-        map: HashMap<String, (usize, usize, usize)>,
-    ) -> Vec<AggregationGroup> {
+    fn map_to_sorted_groups(map: HashMap<String, (usize, usize, usize)>) -> Vec<AggregationGroup> {
         let mut groups: Vec<AggregationGroup> = map
             .into_iter()
             .map(|(key, (lines, chars, count))| AggregationGroup::new(key, lines, chars, count))

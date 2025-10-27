@@ -17,11 +17,7 @@ pub(super) fn output_delimited(
     Ok(())
 }
 
-fn write_delimited_header(
-    config: &Config,
-    sep: char,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+fn write_delimited_header(config: &Config, sep: char, out: &mut impl Write) -> anyhow::Result<()> {
     if config.words {
         writeln!(out, "lines{sep}chars{sep}words{sep}file")?;
     } else {

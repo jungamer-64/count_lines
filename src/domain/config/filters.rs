@@ -1,5 +1,5 @@
 use crate::foundation::util;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use evalexpr::Node;
 use std::collections::HashSet;
 
@@ -101,10 +101,6 @@ impl Filters {
 
 fn parse_extensions(ext_arg: Option<&str>) -> HashSet<String> {
     ext_arg
-        .map(|s| {
-            s.split(',')
-                .map(|e| e.trim().to_lowercase())
-                .collect()
-        })
+        .map(|s| s.split(',').map(|e| e.trim().to_lowercase()).collect())
         .unwrap_or_default()
 }

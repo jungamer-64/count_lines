@@ -15,10 +15,7 @@ pub(super) fn output_markdown(
     Ok(())
 }
 
-fn write_markdown_header(
-    config: &Config,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+fn write_markdown_header(config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
     if config.words {
         if config.ratio {
             writeln!(
@@ -66,7 +63,10 @@ fn write_markdown_rows(
                 writeln!(
                     out,
                     "| {} | {} | {} | {} |",
-                    s.lines, s.chars, s.words.unwrap_or(0), path
+                    s.lines,
+                    s.chars,
+                    s.words.unwrap_or(0),
+                    path
                 )?;
             }
         } else if config.ratio {
@@ -94,7 +94,10 @@ fn write_markdown_aggregations(
     let groups = Aggregator::aggregate(stats, &config.by_modes);
     for (label, mut rows) in groups {
         writeln!(out, "\n### {label}\n")?;
-        writeln!(out, "| LINES | CHARS | KEY | COUNT |\n|---:|---:|:---|---:|")?;
+        writeln!(
+            out,
+            "| LINES | CHARS | KEY | COUNT |\n|---:|---:|:---|---:|"
+        )?;
         truncate_rows(&mut rows, config.by_limit);
         for g in rows {
             let key = safe_key_label(&g.key);

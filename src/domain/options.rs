@@ -45,11 +45,9 @@ impl FromStr for SortSpec {
 }
 
 fn parse_single_spec(part: &str) -> Result<(SortKey, bool), String> {
-    let (key_str, desc) = part
-        .split_once(':')
-        .map_or((part, false), |(k, d)| {
-            (k.trim(), matches!(d.trim(), "desc" | "DESC"))
-        });
+    let (key_str, desc) = part.split_once(':').map_or((part, false), |(k, d)| {
+        (k.trim(), matches!(d.trim(), "desc" | "DESC"))
+    });
 
     let key = parse_sort_key(key_str)?;
     Ok((key, desc))

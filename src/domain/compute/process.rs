@@ -124,11 +124,8 @@ impl FileMeasurer {
             .ok()?;
         ctx.set_value("chars".into(), Value::Int(stats.chars as i64))
             .ok()?;
-        ctx.set_value(
-            "words".into(),
-            Value::Int(stats.words.unwrap_or(0) as i64),
-        )
-        .ok()?;
+        ctx.set_value("words".into(), Value::Int(stats.words.unwrap_or(0) as i64))
+            .ok()?;
         ctx.set_value("size".into(), Value::Int(stats.size as i64))
             .ok()?;
         ctx.set_value("ext".into(), Value::String(stats.ext.clone()))
