@@ -11,7 +11,7 @@ use std::path::PathBuf;
     name = "count_lines",
     version = crate::VERSION,
     about = "ファイル行数/文字数/単語数の集計ツール",
-    long_about = Some(include_str!("../../../../../usage.txt")),
+    long_about = Some(include_str!("../../usage.txt")),
     // ファイル入力ソースは排他的（paths / files_from / files_from0）
     group(
         clap::ArgGroup::new("input_source")
