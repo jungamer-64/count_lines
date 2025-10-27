@@ -24,7 +24,7 @@ const DEFAULT_PRUNE_DIRS: &[&str] = &[
     ".nuxt",
 ];
 
-pub(super) fn should_process_entry(entry: &walkdir::DirEntry, config: &Config) -> bool {
+pub(crate) fn should_process_entry(entry: &walkdir::DirEntry, config: &Config) -> bool {
     let path = entry.path();
     if !config.hidden && is_hidden(path) {
         return false;
@@ -45,10 +45,10 @@ pub(super) fn should_process_entry(entry: &walkdir::DirEntry, config: &Config) -
     true
 }
 
-pub(super) struct PathMatcher;
+pub(crate) struct PathMatcher;
 
 impl PathMatcher {
-    pub(super) fn matches(path: &Path, config: &Config) -> bool {
+    pub(crate) fn matches(path: &Path, config: &Config) -> bool {
         let filters = &config.filters;
         matches_name(path, filters)
             && matches_path_patterns(path, filters)

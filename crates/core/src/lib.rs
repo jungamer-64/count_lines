@@ -2,16 +2,18 @@
 
 //! Library crate for the `count_lines` application.
 //!
-//! Exposes the layered module structure (`app` → `interface` → `domain`
-//! → `foundation`) along with convenience re-exports for callers.
+//! Exposes the layered module structure (`app` → `application` → `interface`
+//! → `domain` → `foundation`) along with convenience re-exports for callers.
 
 pub mod app;
+pub mod application;
 pub mod domain;
 pub mod foundation;
 pub mod interface;
 pub mod version;
 
 pub use app::{run, run_with_config};
+pub use application::config::{ConfigOptions, ConfigQueryService, FilterOptions};
 pub use domain::config::Config;
 pub use interface::cli::{self, Args};
 pub use version::VERSION;

@@ -1,9 +1,8 @@
-// src/domain/files/git.rs
 use crate::domain::config::Config;
 use anyhow::Result;
 use std::path::PathBuf;
 
-pub(super) fn collect_git_files(config: &Config) -> Result<Vec<PathBuf>> {
+pub(crate) fn collect_git_files(config: &Config) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for root in &config.paths {
         let output = std::process::Command::new("git")

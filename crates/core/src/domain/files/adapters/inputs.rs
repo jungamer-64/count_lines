@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 
-pub(super) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
+pub(crate) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     Ok(reader
@@ -15,7 +15,7 @@ pub(super) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
         .collect())
 }
 
-pub(super) fn read_files_from_null(path: &Path) -> Result<Vec<PathBuf>> {
+pub(crate) fn read_files_from_null(path: &Path) -> Result<Vec<PathBuf>> {
     let mut file = File::open(path)?;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)?;
