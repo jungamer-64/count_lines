@@ -1,10 +1,9 @@
-// src/infrastructure/io/output/delimited.rs
-use super::utils::{escape_field, format_path, limited};
 use crate::domain::config::Config;
 use crate::domain::model::{FileStats, Summary};
+use crate::infrastructure::io::output::utils::{escape_field, format_path, limited};
 use std::io::Write;
 
-pub(super) fn output_delimited(
+pub fn output_delimited(
     stats: &[FileStats],
     config: &Config,
     sep: char,

@@ -1,22 +1,6 @@
+use crate::domain::model::value_objects::FileMeta;
 use chrono::{DateTime, Local};
 use std::path::PathBuf;
-
-/// Metadata associated with a file entry.
-#[derive(Debug, Clone)]
-pub struct FileMeta {
-    pub size: u64,
-    pub mtime: Option<DateTime<Local>>,
-    pub is_text: bool,
-    pub ext: String,
-    pub name: String,
-}
-
-/// A path together with its metadata.
-#[derive(Debug, Clone)]
-pub struct FileEntry {
-    pub path: PathBuf,
-    pub meta: FileMeta,
-}
 
 /// Computed statistics for a file.
 #[derive(Debug, Clone)]

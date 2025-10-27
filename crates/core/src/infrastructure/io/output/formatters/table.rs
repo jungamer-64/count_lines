@@ -1,11 +1,10 @@
-// src/infrastructure/io/output/table.rs
-use super::utils::{format_path, format_ratio, limited, truncate_rows};
 use crate::domain::analytics::Aggregator;
 use crate::domain::config::Config;
 use crate::domain::model::{FileStats, Summary};
+use crate::infrastructure::io::output::utils::{format_path, format_ratio, limited, truncate_rows};
 use std::io::Write;
 
-pub(super) fn output_table(
+pub fn output_table(
     stats: &[FileStats],
     config: &Config,
     out: &mut impl Write,

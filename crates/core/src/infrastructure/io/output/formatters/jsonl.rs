@@ -1,10 +1,9 @@
-// src/infrastructure/io/output/jsonl.rs
-use super::utils::format_path;
 use crate::domain::config::Config;
 use crate::domain::model::{FileStats, Summary};
+use crate::infrastructure::io::output::utils::format_path;
 use std::io::Write;
 
-pub(super) fn output_jsonl(
+pub fn output_jsonl(
     stats: &[FileStats],
     config: &Config,
     out: &mut impl Write,

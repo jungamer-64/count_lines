@@ -1,4 +1,4 @@
-use super::FileStats;
+use crate::domain::model::FileStats;
 
 /// Summary statistics over all processed files.
 #[derive(Debug, Clone)]

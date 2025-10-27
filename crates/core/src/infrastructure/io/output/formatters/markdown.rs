@@ -1,11 +1,12 @@
-// src/infrastructure/io/output/markdown.rs
-use super::utils::{format_path, format_ratio, limited, safe_key_label, truncate_rows};
 use crate::domain::analytics::Aggregator;
 use crate::domain::config::Config;
 use crate::domain::model::{FileStats, Summary};
+use crate::infrastructure::io::output::utils::{
+    format_path, format_ratio, limited, safe_key_label, truncate_rows,
+};
 use std::io::Write;
 
-pub(super) fn output_markdown(
+pub fn output_markdown(
     stats: &[FileStats],
     config: &Config,
     out: &mut impl Write,

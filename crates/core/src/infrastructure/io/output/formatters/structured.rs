@@ -1,14 +1,13 @@
-// src/infrastructure/io/output/structured.rs
-use super::utils::format_path;
 use crate::domain::analytics::Aggregator;
 use crate::domain::config::Config;
 use crate::domain::model::{FileStats, Summary};
+use crate::infrastructure::io::output::utils::format_path;
 use crate::infrastructure::serialization::{
     JsonFile, JsonGroup, JsonGroupRow, JsonOutput, JsonSummary,
 };
 use std::io::Write;
 
-pub(super) fn output_json(
+pub fn output_json(
     stats: &[FileStats],
     config: &Config,
     out: &mut impl Write,
@@ -19,7 +18,7 @@ pub(super) fn output_json(
     Ok(())
 }
 
-pub(super) fn output_yaml(
+pub fn output_yaml(
     stats: &[FileStats],
     config: &Config,
     out: &mut impl Write,

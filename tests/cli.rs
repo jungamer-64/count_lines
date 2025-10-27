@@ -2,4 +2,5 @@
 //!
 //! This test suite verifies the CLI interface behavior using assert_cmd.
 
-mod cli;
+#[path = "cli/smoke_tests.rs"]
+mod smoke_tests;

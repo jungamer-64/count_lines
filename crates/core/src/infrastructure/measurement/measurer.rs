@@ -1,10 +1,8 @@
 use crate::domain::config::Config;
-use crate::domain::model::{FileEntry, FileMeta, FileStats};
+use crate::domain::model::{FileEntry, FileStats};
+use crate::infrastructure::measurement::strategies::{measure_by_lines, measure_entire_file};
 use evalexpr::{ContextWithMutableVariables, Value};
 use rayon::prelude::*;
-use std::fs::File;
-use std::io::{BufRead, BufReader, Read};
-use std::path::Path;
 
 /// Process all discovered file entries and return their computed statistics.
 pub fn measure_entries(entries: Vec<FileEntry>, config: &Config) -> anyhow::Result<Vec<FileStats>> {
@@ -28,71 +26,11 @@ impl FileMeasurer {
             return None;
         }
         let stats = if config.count_newlines_in_chars {
-            Self::measure_whole(&entry.path, &entry.meta, config)?
+            measure_entire_file(&entry.path, &entry.meta, config)?
         } else {
-            Self::measure_by_lines(&entry.path, &entry.meta, config)?
+            measure_by_lines(&entry.path, &entry.meta, config)?
         };
         Self::apply_filters(stats, config)
-    }
-
-    fn measure_whole(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
-        let mut file = File::open(path).ok()?;
-        let mut buf = Vec::new();
-        file.read_to_end(&mut buf).ok()?;
-        if config.text_only && buf.contains(&0) {
-            return None;
-        }
-        let content = String::from_utf8_lossy(&buf);
-        let bytes = content.as_bytes();
-        let newline_count = bytecount::count(bytes, b'\n');
-        let lines = if bytes.is_empty() {
-            0
-        } else if bytes.last() == Some(&b'\n') {
-            newline_count
-        } else {
-            newline_count + 1
-        };
-        let chars = content.chars().count();
-        let words = config.words.then(|| content.split_whitespace().count());
-        Some(FileStats::new(
-            path.to_path_buf(),
-            lines,
-            chars,
-            words,
-            meta,
-        ))
-    }
-
-    fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
-        let file = File::open(path).ok()?;
-        let mut reader = BufReader::new(file);
-        let (mut lines, mut chars, mut words) = (0, 0, 0);
-        let mut line = String::new();
-        loop {
-            line.clear();
-            let n = reader.read_line(&mut line).ok()?;
-            if n == 0 {
-                break;
-            }
-            if line.ends_with('\n') {
-                line.pop();
-                if line.ends_with('\r') {
-                    line.pop();
-                }
-            }
-            lines += 1;
-            chars += line.chars().count();
-            if config.words {
-                words += line.split_whitespace().count();
-            }
-        }
-        Some(FileStats::new(
-            path.to_path_buf(),
-            lines,
-            chars,
-            config.words.then_some(words),
-            meta,
-        ))
     }
 
     fn apply_filters(stats: FileStats, config: &Config) -> Option<FileStats> {

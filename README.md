@@ -13,11 +13,11 @@ Rayon による並列処理で大規模リポジトリでもスピーディー�
 
 ## 📚 ドキュメント
 
-- **[📖 詳細な README](docs/README.md)** - プロジェクトの詳細情報・機能一覧
-- **[🚀 使用方法](docs/USAGE.md)** - CLI オプションの完全リファレンス
-- **[🤝 コントリビューション](docs/CONTRIBUTING.md)** - 開発に参加する方法
-- **[🏗️ アーキテクチャ](docs/ARCHITECTURE.md)** - プロジェクト構造とデザイン
-- **[📝 CHANGELOG](docs/CHANGELOG.md)** - 変更履歴
+- **[📖 詳細な README](docs/user/README.md)** - プロジェクトの詳細情報・機能一覧
+- **[🚀 使用方法](docs/user/USAGE.md)** - CLI オプションの完全リファレンス
+- **[🤝 コントリビューション](docs/developer/CONTRIBUTING.md)** - 開発に参加する方法
+- **[🏗️ アーキテクチャ](docs/developer/ARCHITECTURE.md)** - プロジェクト構造とデザイン
+- **[📝 CHANGELOG](docs/project/CHANGELOG.md)** - 変更履歴
 
 ## ⚡ クイックスタート
 
@@ -70,7 +70,7 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-詳細は [docs/README.md](docs/README.md) を参照してください。
+詳細は [docs/user/README.md](docs/user/README.md) を参照してください。
 
 ## 📄 License
 
@@ -112,4 +112,4 @@ git push origin v0.5.1
 
 ## 🙏 Contributing
 
-Contributions are welcome! Please see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for details.
+Contributions are welcome! Please see [docs/developer/CONTRIBUTING.md](docs/developer/CONTRIBUTING.md) for details.
