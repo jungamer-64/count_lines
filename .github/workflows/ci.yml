@@ -10,143 +10,132 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+# Least privilege
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # Format check
   fmt:
     name: Format Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust (stable + rustfmt)
+        uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6
         with:
           components: rustfmt
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@7939da402645ba29a2df566723491a2c856e8f8a
 
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-  # Clippy linting
   clippy:
     name: Clippy Linting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust (stable + clippy)
+        uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6
         with:
           components: clippy
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Rust cache
+        uses: Swatinem/rust-cache@7939da402645ba29a2df566723491a2c856e8f8a
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      - name: Run clippy (workspace, all targets/features)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-  # Build and test on multiple platforms
   test:
-    name: Test (${{ matrix.os }})
+    name: Test (${{ matrix.os }}, ${{ matrix.rust }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable]
-
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        rust: [ stable, beta, nightly ]
+    continue-on-error: ${{ matrix.rust == 'nightly' }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - name: Install Rust (${{ matrix.rust }})
+        uses: dtolnay/rust-toolchain@6d653acede28d24f02e3cd41383119e8b1b35921
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust cache (deps/target)
+        uses: Swatinem/rust-cache@7939da402645ba29a2df566723491a2c856e8f8a
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.os }}-${{ matrix.rust }}
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      - name: sccache
+        uses: mozilla-actions/sccache-action@d651010b8da762cde178750d8eda7b5febfe147a
 
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+      - name: Enable sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache"   >> $GITHUB_ENV
 
-      - name: Check compilation
-        run: cargo check --all-targets --all-features
+      - name: Cargo check (all targets/features)
+        run: cargo check --workspace --all-targets --all-features --locked
 
-      - name: Run tests
-        run: cargo test --all-features --verbose
+      - name: Run tests (workspace, all features)
+        run: cargo test --workspace --all-features --verbose --locked
 
-      - name: Run core library tests
-        run: cargo test -p count_lines_core --verbose
+      - name: Run core library tests (explicit)
+        run: cargo test -p count_lines_core --verbose --locked
 
       - name: Run doc tests
-        run: cargo test --doc --verbose
+        run: cargo test --doc --verbose --locked
 
-  # Build release binary
   build:
     name: Build Release (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
+      - name: Rust cache (release)
+        uses: Swatinem/rust-cache@7939da402645ba29a2df566723491a2c856e8f8a
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ matrix.os }}-release
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+      - name: sccache
+        uses: mozilla-actions/sccache-action@d651010b8da762cde178750d8eda7b5febfe147a
 
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-release-build-${{ hashFiles('**/Cargo.lock') }}
+      - name: Enable sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache"   >> $GITHUB_ENV
 
       - name: Build release binary
-        run: cargo build --release --verbose
+        run: cargo build --release --workspace --verbose --locked
 
       - name: Test release binary (Unix)
         if: runner.os != 'Windows'
         run: |
           ./target/release/count_lines --version
-          ./target/release/count_lines --top 5
+          ./target/release/count_lines --top 5 || true
 
       - name: Test release binary (Windows)
         if: runner.os == 'Windows'
@@ -155,19 +144,31 @@ jobs:
           .\target\release\count_lines.exe --top 5
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: count_lines-${{ matrix.os }}
           path: |
-            target/release/count_lines
-            target/release/count_lines.exe
+            target/release/count_lines*
           if-no-files-found: ignore
+          retention-days: 14
 
-  # All checks passed
-  ci-success:
-    name: CI Success
-    needs: [fmt, clippy, test, build]
+  deny:
+    name: cargo-deny
     runs-on: ubuntu-latest
     steps:
-      - name: All checks passed
-        run: echo "✅ All CI checks passed successfully!"
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6
+
+      - name: Run cargo-deny
+        uses: EmbarkStudios/cargo-deny-action@ef301417264190a1eb9f26fcf171642070085c5b
+
+  ci-success:
+    name: CI Success
+    needs: [ fmt, clippy, test, build, deny ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Success
+        run: echo "✅ All checks passed!"

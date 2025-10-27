@@ -44,6 +44,7 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
   * `SPEC` はカンマ区切りの複数キー。各キーは `:desc` 指定可。
   * 例: `--sort lines:desc,chars:desc,name`
   * キー: `lines`, `chars`, `words`, `name`, `ext`
+  * `words` を含めると単語数計測が自動的に有効になります。
   * **安定ソート**を「**最後に書いたキーから**」適用します。
 
 ### 件数制限
@@ -79,7 +80,7 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
 * `--max_size <SIZE>` / `--min_size <SIZE>`（例: `10K`, `5MiB`）
 * `--min_lines <N>` / `--max_lines <N>`
 * `--min_chars <N>` / `--max_chars <N>`
-* `--words` を付けた時のみ: `--min_words <N>` / `--max_words <N>`
+* `--words` を付けた時のみ: `--min-words <N>` / `--max-words <N>`（指定すると自動で単語数計測が有効化）
 * mtime 範囲: `--mtime_since <DATE|DATETIME>` / `--mtime_until <DATE|DATETIME>`
   *受理形式*: RFC3339 / `YYYY-MM-DD HH:MM:SS` / `YYYY-MM-DD`
 
@@ -91,6 +92,7 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
   * 例:
     `--filter "lines > 100 && ext == 'rs'"`
     `--filter "(mtime >= 1700000000) && (chars < 2000)"`
+  * `words` を参照すると単語数計測が自動的に有効になります。
 
 ### テキスト判定
 
@@ -119,8 +121,7 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
 
 * `--ratio`                 … 一覧/集計に % 列を追加（table/md）
 * `--output <PATH>`         … 出力先ファイル（既定は標準出力）
-* `--abs_path` / `--abs_canonical` … パスの絶対化（論理/実体解決）
-  **注**：`--abs_canonical` は **`--abs_path` と併用した場合のみ有効**
+* `--abs_path` / `--abs_canonical` … パスの絶対化（論理/実体解決）。`--abs_canonical` を単独指定しても絶対パス出力になります。
 * `--trim_root <PATH>`      … 表示パスの先頭から `<PATH>` を取り除く
 * `--total_row`             … CSV/TSV の末尾に `TOTAL` 行を追加
 * `--words`                 … 単語数を測定（一覧/集計/JSON 系に反映）

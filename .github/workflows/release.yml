@@ -1,3 +1,9 @@
+# .github/workflows/release.yml
+# count_lines: multi-platform release + crates.io publish
+# - Creates assets for Linux/macOS/Windows (x86_64 + aarch64)
+# - Calculates checksums, uploads to GitHub Release
+# - Publishes to crates.io for non-prerelease tags
+
 name: Release
 
 on:
@@ -15,82 +21,129 @@ env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
+# Least-privilege by default
+permissions:
+  contents: read
+
+# Avoid duplicate runs for same ref
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  # Create release
+  # ----------------------------------------------------------------------------------
+  # Resolve version/tag and validate it against Cargo.toml
+  # ----------------------------------------------------------------------------------
   create-release:
-    name: Create Release
+    name: Create Release Inputs
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # uploading assets later will require this in matrix jobs
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
       version: ${{ steps.get_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Get version
         id: get_version
+        shell: bash
         run: |
+          set -euo pipefail
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "version=${{ github.event.inputs.tag }}" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
           else
-            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "version=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          release_name: Release ${{ steps.get_version.outputs.version }}
-          body: |
-            ## Changes
+      - name: Verify tag matches Cargo.toml version
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.get_version.outputs.version }}"
+          TOML_VERSION="v$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          if [[ -z "$TOML_VERSION" ]]; then
+            echo "Could not extract version from Cargo.toml" >&2
+            exit 1
+          fi
+          if [[ "$TAG" != "$TOML_VERSION" ]]; then
+            echo "Tag $TAG does not match Cargo.toml version $TOML_VERSION" >&2
+            exit 1
+          fi
 
-            See [CHANGELOG.md](https://github.com/jungamer-64/count_lines/blob/main/docs/CHANGELOG.md) for details.
-
-            ## Downloads
-
-            Download the appropriate binary for your platform below.
-
-            ## Installation
-
-            1. Download the binary for your platform
-            2. Extract the archive
-            3. Copy the binary to a directory in your PATH
-            4. Run `count_lines --version` to verify installation
-
-            For detailed instructions, see the `INSTALL.txt` file in each archive.
-          draft: false
-          prerelease: ${{ contains(steps.get_version.outputs.version, 'alpha') || contains(steps.get_version.outputs.version, 'beta') || contains(steps.get_version.outputs.version, 'rc') }}
-
-  # Build release binaries for multiple platforms
-  build-release:
-    name: Build Release (${{ matrix.name }})
+  # ----------------------------------------------------------------------------------
+  # Workspace verification before building artifacts
+  # ----------------------------------------------------------------------------------
+  verify-workspace:
+    name: Verify Workspace
     needs: create-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Enable sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+
+      - name: Cargo tests (workspace)
+        run: cargo test --workspace --all-features --verbose --locked
+
+      - name: Cargo package (workspace dry-run)
+        run: cargo package --workspace --locked
+
+  # ----------------------------------------------------------------------------------
+  # Build and upload release assets per target
+  # ----------------------------------------------------------------------------------
+  build-release:
+    name: Build (${{ matrix.name }})
+    needs: [create-release, verify-workspace]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    permissions:
+      contents: write   # to upload assets to the release
     strategy:
+      fail-fast: false
       matrix:
         include:
+          # Linux (glibc)
           - name: linux-x86_64
             os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            asset_name: count_lines-${{ needs.create-release.outputs.version }}-linux-x86_64
+            archive: tar.gz
           - name: linux-aarch64
             os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
-            asset_name: count_lines-${{ needs.create-release.outputs.version }}-linux-aarch64
+            archive: tar.gz
+
+          # macOS (separate runners for arch)
           - name: macos-x86_64
-            os: macos-latest
+            os: macos-13
             target: x86_64-apple-darwin
-            asset_name: count_lines-${{ needs.create-release.outputs.version }}-macos-x86_64
+            archive: tar.gz
           - name: macos-aarch64
-            os: macos-latest
+            os: macos-14
             target: aarch64-apple-darwin
-            asset_name: count_lines-${{ needs.create-release.outputs.version }}-macos-aarch64
+            archive: tar.gz
+
+          # Windows
           - name: windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
-            asset_name: count_lines-${{ needs.create-release.outputs.version }}-windows-x86_64
+            archive: zip
+
+    env:
+      VERSION: ${{ needs.create-release.outputs.version }}
+      BIN_NAME: count_lines
 
     steps:
       - uses: actions/checkout@v4
@@ -100,172 +153,183 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install cross-compilation tools (Linux)
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: release-${{ matrix.target }}
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Enable sccache (non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+
+      - name: Install cross tools (Linux aarch64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-${{ matrix.target }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build release binary
-        run: cargo build --release --target ${{ matrix.target }}
-        env:
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-
-      - name: Create release directory
-        run: mkdir -p release/${{ matrix.asset_name }}
-
-      - name: Copy binary (Unix)
-        if: runner.os != 'Windows'
+      - name: Build (release)
+        shell: bash
         run: |
-          cp target/${{ matrix.target }}/release/count_lines release/${{ matrix.asset_name }}/
-          chmod +x release/${{ matrix.asset_name }}/count_lines
+          set -eux
+          if [[ "${{ matrix.target }}" == "aarch64-unknown-linux-gnu" ]]; then
+            export CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+          fi
+          cargo fetch --locked
+          cargo build --release --target "${{ matrix.target }}" --locked
+          # Best-effort strip to reduce binary size
+          case "${{ runner.os }}" in
+            Linux)  command -v strip >/dev/null && strip -s "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}" || true ;;
+            macOS)  strip -x "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}" || true ;;
+          esac
 
-      - name: Copy binary (Windows)
-        if: runner.os == 'Windows'
+      - name: Prepare release dir
+        shell: bash
         run: |
-          copy target\${{ matrix.target }}\release\count_lines.exe release\${{ matrix.asset_name }}\
+          set -eux
+          ASSET_NAME="${{ env.BIN_NAME }}-${{ env.VERSION }}-${{ matrix.name }}"
+          mkdir -p "release/$ASSET_NAME"
+          # Binary
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            cp "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}.exe" "release/$ASSET_NAME/"
+          else
+            cp "target/${{ matrix.target }}/release/${{ env.BIN_NAME }}" "release/$ASSET_NAME/"
+            chmod +x "release/$ASSET_NAME/${{ env.BIN_NAME }}"
+          fi
+          # Docs (optional)
+          cp -r README.md LICENSE* docs "release/$ASSET_NAME/" || true
 
-      - name: Copy documentation
-        run: |
-          cp README.md release/${{ matrix.asset_name }}/ || true
-          cp LICENSE-MIT release/${{ matrix.asset_name }}/ || true
-          cp LICENSE-APACHE release/${{ matrix.asset_name }}/ || true
-          cp -r docs release/${{ matrix.asset_name }}/ || true
-
-      - name: Create installation instructions
-        run: |
-          cat > release/${{ matrix.asset_name }}/INSTALL.txt << 'EOF'
-          count_lines ${{ needs.create-release.outputs.version }}
+          # INSTALL.txt
+          cat > "release/$ASSET_NAME/INSTALL.txt" << 'EOF'
           Installation Instructions
 
-          1. Copy the binary to a directory in your PATH:
+          1) Copy the binary to a directory in your PATH.
 
              Linux/macOS:
-             sudo cp count_lines /usr/local/bin/
-
-             Or for user installation:
-             mkdir -p ~/.local/bin
-             cp count_lines ~/.local/bin/
-             export PATH="$HOME/.local/bin:$PATH"
+               sudo cp count_lines /usr/local/bin/
+               # or user-local:
+               mkdir -p ~/.local/bin
+               cp count_lines ~/.local/bin/
+               export PATH="$HOME/.local/bin:$PATH"
 
              Windows:
-             Copy count_lines.exe to a directory in your PATH
-             or add the directory containing count_lines.exe to your PATH
+               Copy count_lines.exe to a directory in your PATH
+               or add that directory to PATH.
 
-          2. Verify installation:
-
+          2) Verify:
              count_lines --version
 
-          3. View help:
-
+          3) Help:
              count_lines --help
 
-          For more information, see README.md or visit:
-          https://github.com/jungamer-64/count_lines
+          Project:
+            https://github.com/jungamer-64/count_lines
           EOF
 
-      - name: Create archive (Unix)
+      - name: Archive & checksum (Unix)
         if: runner.os != 'Windows'
+        shell: bash
         run: |
-          cd release
-          tar czf ${{ matrix.asset_name }}.tar.gz ${{ matrix.asset_name }}
-          sha256sum ${{ matrix.asset_name }}.tar.gz > ${{ matrix.asset_name }}.tar.gz.sha256
+          set -eux
+          ASSET_NAME="${{ env.BIN_NAME }}-${{ env.VERSION }}-${{ matrix.name }}"
+          (cd release && tar czf "${ASSET_NAME}.tar.gz" "${ASSET_NAME}")
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd release && sha256sum "${ASSET_NAME}.tar.gz" > "${ASSET_NAME}.tar.gz.sha256")
+          else
+            (cd release && shasum -a 256 "${ASSET_NAME}.tar.gz" | awk '{print $1"  "$2}' > "${ASSET_NAME}.tar.gz.sha256")
+          fi
 
-      - name: Create archive (Windows)
+      - name: Archive & checksum (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          cd release
-          Compress-Archive -Path ${{ matrix.asset_name }} -DestinationPath ${{ matrix.asset_name }}.zip
-          Get-FileHash -Algorithm SHA256 ${{ matrix.asset_name }}.zip | Format-List | Out-String | Set-Content ${{ matrix.asset_name }}.zip.sha256
+          $assetName = "${{ env.BIN_NAME }}-${{ env.VERSION }}-${{ matrix.name }}"
+          Compress-Archive -Path "release\$assetName" -DestinationPath "release\$assetName.zip"
+          $hash = (Get-FileHash -Algorithm SHA256 "release\$assetName.zip").Hash
+          "$hash  $assetName.zip" | Out-File -FilePath "release\$assetName.zip.sha256" -Encoding ASCII
 
-      - name: Upload release asset (Unix)
-        if: runner.os != 'Windows'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./release/${{ matrix.asset_name }}.tar.gz
-          asset_name: ${{ matrix.asset_name }}.tar.gz
-          asset_content_type: application/gzip
+          tag_name: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
+          draft: false
+          generate_release_notes: true
+          prerelease: ${{ contains(env.VERSION, 'alpha') || contains(env.VERSION, 'beta') || contains(env.VERSION, 'rc') }}
+          files: |
+            release/*.${{ matrix.archive }}
+            release/*.${{ matrix.archive }}.sha256
+          body: |
+            ## Changes
+            See [CHANGELOG.md](https://github.com/jungamer-64/count_lines/blob/main/docs/CHANGELOG.md).
 
-      - name: Upload release asset (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./release/${{ matrix.asset_name }}.zip
-          asset_name: ${{ matrix.asset_name }}.zip
-          asset_content_type: application/zip
+            ## Downloads
+            Binaries for Linux, macOS, and Windows are attached below.
 
-      - name: Upload checksum (Unix)
-        if: runner.os != 'Windows'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./release/${{ matrix.asset_name }}.tar.gz.sha256
-          asset_name: ${{ matrix.asset_name }}.tar.gz.sha256
-          asset_content_type: text/plain
-
-      - name: Upload checksum (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./release/${{ matrix.asset_name }}.zip.sha256
-          asset_name: ${{ matrix.asset_name }}.zip.sha256
-          asset_content_type: text/plain
-
-  # Publish to crates.io (optional)
+  # ----------------------------------------------------------------------------------
+  # crates.io publish (only for stable tags)
+  # ----------------------------------------------------------------------------------
   publish-crates:
     name: Publish to crates.io
-    needs: [create-release, build-release]
+    needs: [create-release, verify-workspace, build-release]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Ensure crates.io token is available
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.CRATES_IO_TOKEN }}" ]; then
+            echo "CRATES_IO_TOKEN secret is not configured." >&2
+            exit 1
+          fi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
-      - name: Login to crates.io
-        run: cargo login ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Enable sccache
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+
+      - name: Dry-run publish (core library)
+        shell: bash
+        run: cargo publish -p count_lines_core --dry-run --locked
+
+      - name: Dry-run publish (main crate)
+        shell: bash
+        run: cargo publish --dry-run --locked
+
+      - name: Cargo login
+        shell: bash
+        run: cargo login "${{ secrets.CRATES_IO_TOKEN }}"
 
       - name: Publish core library
+        shell: bash
         run: cargo publish -p count_lines_core --no-verify
 
-      - name: Wait for core library to be available
-        run: sleep 60
+      - name: Wait for core availability
+        shell: bash
+        run: |
+          for i in {1..10}; do
+            sleep 10
+            cargo update -p count_lines_core && break || true
+          done
 
       - name: Publish main crate
+        shell: bash
         run: cargo publish --no-verify

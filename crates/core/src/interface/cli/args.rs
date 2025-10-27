@@ -31,7 +31,7 @@ pub struct Args {
     #[arg(long, value_enum, default_value = "table", help_heading = "出力")]
     pub format: OutputFormat,
 
-    /// ソートキー（複数可, 例: lines:desc,chars:desc,name）
+    /// ソートキー（複数可, 例: lines:desc,chars:desc,name）。`words` を含む場合は単語数計測が自動有効化されます。
     #[arg(long, default_value = "lines:desc", help_heading = "出力")]
     pub sort: SortSpec,
 
@@ -107,11 +107,11 @@ pub struct Args {
     #[arg(long, help_heading = "フィルタ")]
     pub words: bool,
 
-    /// 最小単語数（指定時は --words を暗黙に有効化する実装推奨）
+    /// 最小単語数（指定すると --words が暗黙に有効化されます。CLI では --min-words）
     #[arg(long, help_heading = "フィルタ")]
     pub min_words: Option<usize>,
 
-    /// 最大単語数（指定時は --words を暗黙に有効化する実装推奨）
+    /// 最大単語数（指定すると --words が暗黙に有効化されます。CLI では --max-words）
     #[arg(long, help_heading = "フィルタ")]
     pub max_words: Option<usize>,
 
@@ -155,7 +155,7 @@ pub struct Args {
     #[arg(long, help_heading = "パス出力")]
     pub abs_path: bool,
 
-    /// 絶対パスを実体解決（canonicalize）で出力
+    /// 絶対パスを実体解決（canonicalize）で出力（単独指定でも絶対化されます）
     #[arg(long, help_heading = "パス出力")]
     pub abs_canonical: bool,
 
@@ -183,7 +183,7 @@ pub struct Args {
     #[arg(long, help_heading = "出力")]
     pub progress: bool,
 
-    /// フィルタ式（例: "lines > 100 && ext == 'rs'")
+    /// フィルタ式（例: "lines > 100 && ext == 'rs'"）。`words` を参照すると単語数計測が自動有効化されます。
     #[arg(long, help_heading = "フィルタ")]
     pub filter: Option<String>,
 

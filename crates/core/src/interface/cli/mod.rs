@@ -141,3 +141,41 @@ pub fn build_config(args: Args) -> anyhow::Result<Config> {
 
     Config::from_options(options)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn min_words_enables_word_counting() {
+        let args = Args::parse_from(["count_lines", "--min-words", "5"]);
+        let config = build_config(args).expect("config builds");
+        assert!(config.words, "min-words should trigger word counting");
+    }
+
+    #[test]
+    fn sort_by_words_enables_word_counting() {
+        let args = Args::parse_from(["count_lines", "--sort", "words:desc"]);
+        let config = build_config(args).expect("config builds");
+        assert!(config.words, "sorting by words should trigger word counting");
+    }
+
+    #[test]
+    fn filter_expression_mentioning_words_enables_word_counting() {
+        let args = Args::parse_from(["count_lines", "--filter", "words > 10"]);
+        let config = build_config(args).expect("config builds");
+        assert!(config.words, "filter expressions referencing words should trigger word counting");
+    }
+
+    #[test]
+    fn abs_canonical_implies_abs_path() {
+        let args = Args::parse_from(["count_lines", "--abs-canonical"]);
+        let config = build_config(args).expect("config builds");
+        assert!(config.abs_canonical);
+        assert!(
+            config.abs_path,
+            "--abs-canonical should imply absolute path formatting"
+        );
+    }
+}

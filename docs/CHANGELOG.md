@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved documentation to `docs/` directory
 - Restructured tests into `cli/`, `integration/`, and `fixtures/` subdirectories
 - Updated `.gitignore` to exclude log files and build artifacts
+- `--min-words`/`--max-words`, ソートキー `words`, `--filter` 内の `words` 参照で自動的に単語数計測を有効化
+- `--abs-canonical` を単独指定しても絶対パス出力になるように調整
 
 ### Added
 - `ARCHITECTURE.md` documenting the project's design and structure

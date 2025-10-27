@@ -103,12 +103,26 @@ impl Config {
         } else {
             options.paths
         };
+        let filter_depends_on_words = filters
+            .filter_ast
+            .as_ref()
+            .map_or(false, filter_expr_requires_words);
+        let words = options.words
+            || filters.words_range.min.is_some()
+            || filters.words_range.max.is_some()
+            || filter_depends_on_words
+            || options
+                .sort_specs
+                .iter()
+                .any(|(key, _)| matches!(key, SortKey::Words));
         let by_modes = options
             .by
             .into_iter()
             .filter(|b| !matches!(b, ByMode::None))
             .map(convert_by_mode)
             .collect();
+        let abs_canonical = options.abs_canonical;
+        let abs_path = options.abs_path || abs_canonical;
 
         Ok(Self {
             format: options.format,
@@ -124,10 +138,10 @@ impl Config {
             use_git: options.use_git,
             jobs,
             no_default_prune: options.no_default_prune,
-            abs_path: options.abs_path,
-            abs_canonical: options.abs_canonical,
+            abs_path,
+            abs_canonical,
             trim_root: options.trim_root.map(|p| logical_absolute(&p)),
-            words: options.words,
+            words,
             count_newlines_in_chars: options.count_newlines_in_chars,
             text_only: options.text_only,
             fast_text_detect: options.fast_text_detect,
@@ -153,4 +167,8 @@ fn convert_by_mode(mode: ByMode) -> ByKey {
         ByMode::Mtime(g) => ByKey::Mtime(g),
         ByMode::None => unreachable!(),
     }
+}
+
+fn filter_expr_requires_words(ast: &evalexpr::Node) -> bool {
+    ast.iter_variable_identifiers().any(|ident| ident == "words")
 }
