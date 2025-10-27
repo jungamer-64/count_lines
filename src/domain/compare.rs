@@ -1,37 +1,9 @@
-// src/compare.rs
+mod snapshot;
+
 use anyhow::Result;
-use serde::Deserialize;
+use snapshot::{FileItem, Snapshot};
 use std::collections::HashMap;
 use std::path::Path;
-
-/// A summary of lines, characters, words and file count from a JSON snapshot.
-///
-/// This mirrors the structure emitted by the JSON output format in
-/// `output.rs`. Only the fields relevant for comparison are included.
-#[derive(Debug, Deserialize)]
-struct FileSummary {
-    lines: usize,
-    chars: usize,
-    words: Option<usize>,
-    files: usize,
-}
-
-/// Information about a single file from a JSON snapshot.
-#[derive(Debug, Deserialize)]
-struct FileItem {
-    file: String,
-    lines: usize,
-    chars: usize,
-    words: Option<usize>,
-}
-
-/// Top‑level structure of a JSON snapshot. This corresponds to the
-/// output produced by the JSON format of the CLI.
-#[derive(Debug, Deserialize)]
-struct Snapshot {
-    files: Vec<FileItem>,
-    summary: FileSummary,
-}
 
 /// Compare two JSON snapshot files and return a formatted diff. The
 /// snapshots must be compatible with the output of `count_lines --format json`.
@@ -45,7 +17,7 @@ pub fn run(old_path: &Path, new_path: &Path) -> Result<String> {
 }
 
 /// A helper type that holds two snapshots and provides methods to
-/// generate a human‑readable comparison.
+/// generate a human-readable comparison.
 struct SnapshotComparison {
     old: Snapshot,
     new: Snapshot,
@@ -57,7 +29,7 @@ impl SnapshotComparison {
     }
 
     /// Render the full comparison as a string. The output mimics the
-    /// style of the original tool, showing summary deltas and per‑file
+    /// style of the original tool, showing summary deltas and per-file
     /// differences.
     fn format(&self) -> String {
         let mut output = String::new();
@@ -102,7 +74,7 @@ impl SnapshotComparison {
         output
     }
 
-    /// Format per‑file differences. For each file present in the new
+    /// Format per-file differences. For each file present in the new
     /// snapshot, this reports the delta relative to the old snapshot.
     /// Added files are indicated explicitly.
     fn format_file_diffs(&self) -> String {

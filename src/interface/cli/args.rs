@@ -1,119 +1,8 @@
-// src/cli.rs
-use crate::util::{DateTimeArg, SizeArg};
-use clap::{Parser, ValueEnum};
+use crate::domain::grouping::ByMode;
+use crate::domain::options::{OutputFormat, SortSpec};
+use crate::foundation::util::{DateTimeArg, SizeArg};
+use clap::Parser;
 use std::path::PathBuf;
-
-/// Output format options for the tool.
-#[derive(Debug, Clone, Copy, ValueEnum)]
-pub enum OutputFormat {
-    Table,
-    Csv,
-    Tsv,
-    Json,
-    Yaml,
-    Md,
-    Jsonl,
-}
-
-/// Sorting keys available for ordering results.
-#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
-pub enum SortKey {
-    Lines,
-    Chars,
-    Words,
-    Name,
-    Ext,
-}
-
-/// Summarisation modes when grouping output.
-#[derive(Debug, Clone, Copy)]
-pub enum ByMode {
-    None,
-    Ext,
-    Dir(usize),
-    Mtime(Granularity),
-}
-
-/// Time granularities for modification time grouping.
-#[derive(Debug, Clone, Copy)]
-pub enum Granularity {
-    Day,
-    Week,
-    Month,
-}
-
-impl std::str::FromStr for ByMode {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ext" => Ok(Self::Ext),
-            "none" => Ok(Self::None),
-            _ if s.starts_with("dir") => {
-                let depth = s
-                    .strip_prefix("dir=")
-                    .and_then(|d| d.parse().ok())
-                    .unwrap_or(1);
-                Ok(Self::Dir(depth))
-            }
-            _ if s.starts_with("mtime") => {
-                let gran = s.split(':').nth(1).unwrap_or("day");
-                let g = match gran {
-                    "day" => Granularity::Day,
-                    "week" => Granularity::Week,
-                    "month" => Granularity::Month,
-                    _ => return Err(format!("Unknown mtime granularity: {gran}")),
-                };
-                Ok(Self::Mtime(g))
-            }
-            other => Err(format!("Unknown --by mode: {other}")),
-        }
-    }
-}
-
-/// Sort specification. Example: `lines:desc,chars:desc,name`.
-#[derive(Debug, Clone)]
-pub struct SortSpec(pub Vec<(SortKey, bool)>);
-
-impl std::str::FromStr for SortSpec {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let specs = s
-            .split(',')
-            .map(str::trim)
-            .filter(|p| !p.is_empty())
-            .map(Self::parse_single_spec)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        if specs.is_empty() {
-            return Err("empty sort spec".into());
-        }
-        Ok(SortSpec(specs))
-    }
-}
-
-impl SortSpec {
-    fn parse_single_spec(part: &str) -> Result<(SortKey, bool), String> {
-        let (key_str, desc) = part
-            .split_once(':')
-            .map_or((part, false), |(k, d)| {
-                (k.trim(), matches!(d.trim(), "desc" | "DESC"))
-            });
-
-        let key = Self::parse_sort_key(key_str)?;
-        Ok((key, desc))
-    }
-
-    fn parse_sort_key(key_str: &str) -> Result<SortKey, String> {
-        match key_str.to_ascii_lowercase().as_str() {
-            "lines" => Ok(SortKey::Lines),
-            "chars" => Ok(SortKey::Chars),
-            "words" => Ok(SortKey::Words),
-            "name" => Ok(SortKey::Name),
-            "ext" => Ok(SortKey::Ext),
-            other => Err(format!("Unknown sort key: {other}")),
-        }
-    }
-}
 
 /// Top-level CLI arguments parsed via clap.
 #[derive(Parser, Debug)]
@@ -121,7 +10,7 @@ impl SortSpec {
     name = "count_lines",
     version = crate::VERSION,
     about = "ファイル行数/文字数/単語数の集計ツール",
-    long_about = Some(include_str!("../usage.txt"))
+    long_about = Some(include_str!("../../../usage.txt"))
 )]
 #[allow(clippy::struct_excessive_bools)]
 pub struct Args {
@@ -299,7 +188,7 @@ pub struct Args {
 
     /// 比較: 2つの JSON を比較表示
     #[arg(long, num_args = 2)]
-    pub compare: Option<Vec<PathBuf>>, 
+    pub compare: Option<Vec<PathBuf>>,
 
     /// 対象パス
     pub paths: Vec<PathBuf>,
