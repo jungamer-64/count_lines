@@ -1,0 +1,155 @@
+// src/util.rs
+use anyhow::Context as _;
+use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
+use std::path::{Path, PathBuf};
+
+const KB: u64 = 1024;
+const MB: u64 = KB * 1024;
+const GB: u64 = MB * 1024;
+const TB: u64 = GB * 1024;
+
+/// Parse a list of glob patterns, returning a vector of compiled patterns or an error.
+pub fn parse_patterns(patterns: &[String]) -> anyhow::Result<Vec<glob::Pattern>> {
+    patterns
+        .iter()
+        .map(|p| glob::Pattern::new(p).with_context(|| format!("Invalid pattern: {p}")))
+        .collect()
+}
+
+/// Wrapper type to parse sizes with optional suffixes (e.g. 10K, 5MiB).
+#[derive(Debug, Clone, Copy)]
+pub struct SizeArg(pub u64);
+
+impl std::str::FromStr for SizeArg {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let s = s.trim().replace('_', "");
+        let lower = s.to_ascii_lowercase();
+        let (num_str, multiplier) = Self::parse_with_suffix(&lower)?;
+        let num: u64 = num_str
+            .parse()
+            .map_err(|_| format!("Invalid size number: {num_str}"))?;
+        Ok(SizeArg(num * multiplier))
+    }
+}
+
+impl SizeArg {
+    fn parse_with_suffix(s: &str) -> Result<(&str, u64), String> {
+        const SUFFIXES: &[(&[&str], u64)] = &[
+            (&["tib", "tb", "t"], TB),
+            (&["gib", "gb", "g"], GB),
+            (&["mib", "mb", "m"], MB),
+            (&["kib", "kb", "k"], KB),
+        ];
+        for (suffixes, multiplier) in SUFFIXES {
+            for suffix in *suffixes {
+                if let Some(stripped) = s.strip_suffix(suffix) {
+                    return Ok((stripped.trim(), *multiplier));
+                }
+            }
+        }
+        Ok((s, 1))
+    }
+}
+
+/// Wrapper type to parse date/time arguments in multiple formats.
+#[derive(Debug, Clone, Copy)]
+pub struct DateTimeArg(pub DateTime<Local>);
+
+impl std::str::FromStr for DateTimeArg {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::try_rfc3339(s)
+            .or_else(|| Self::try_datetime_format(s))
+            .or_else(|| Self::try_date_format(s))
+            .ok_or_else(|| format!("Cannot parse datetime: {s}"))
+    }
+}
+
+impl DateTimeArg {
+    fn try_rfc3339(s: &str) -> Option<Self> {
+        chrono::DateTime::parse_from_rfc3339(s)
+            .ok()
+            .map(|dt| DateTimeArg(dt.with_timezone(&Local)))
+    }
+    fn try_datetime_format(s: &str) -> Option<Self> {
+        NaiveDateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S")
+            .ok()
+            .and_then(|ndt| Local.from_local_datetime(&ndt).single())
+            .map(DateTimeArg)
+    }
+    fn try_date_format(s: &str) -> Option<Self> {
+        NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .ok()
+            .and_then(|nd| nd.and_hms_opt(0, 0, 0))
+            .and_then(|ndt| Local.from_local_datetime(&ndt).single())
+            .map(DateTimeArg)
+    }
+}
+
+/// Convert a potentially relative path into an absolute one without resolving symlinks.
+pub fn logical_absolute(path: &Path) -> PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map(|cwd| cwd.join(path))
+            .unwrap_or_else(|_| path.to_path_buf())
+    }
+}
+
+/// Format a path according to absolute/canonical flags and optional root trimming.
+pub fn format_path(
+    path: &Path,
+    abs_path: bool,
+    abs_canonical: bool,
+    trim_root: Option<&Path>,
+) -> String {
+    let mut path = if abs_path {
+        if abs_canonical {
+            path.canonicalize()
+                .unwrap_or_else(|_| logical_absolute(path))
+        } else {
+            logical_absolute(path)
+        }
+    } else {
+        path.to_path_buf()
+    };
+    if let Some(root) = trim_root {
+        if let Ok(stripped) = path.strip_prefix(root) {
+            path = stripped.to_path_buf();
+        }
+    }
+    path.display().to_string()
+}
+
+/// Compute a directory grouping key up to a given depth.
+pub fn get_dir_key(path: &Path, depth: usize) -> String {
+    use std::path::Component;
+    let base = path.parent().unwrap_or(Path::new("."));
+    let parts: Vec<String> = base
+        .components()
+        .filter_map(|c| match c {
+            Component::Normal(s) => Some(s.to_string_lossy().into_owned()),
+            _ => None,
+        })
+        .take(depth)
+        .collect();
+    if parts.is_empty() {
+        ".".to_string()
+    } else {
+        parts.join("/")
+    }
+}
+
+/// Bucket a modification time into a string according to granularity.
+pub fn mtime_bucket(dt: DateTime<Local>, g: crate::cli::Granularity) -> String {
+    use chrono::Datelike;
+    match g {
+        crate::cli::Granularity::Day => dt.format("%Y-%m-%d").to_string(),
+        crate::cli::Granularity::Week => {
+            format!("{:04}-W{:02}", dt.iso_week().year(), dt.iso_week().week())
+        }
+        crate::cli::Granularity::Month => dt.format("%Y-%m").to_string(),
+    }
+}
