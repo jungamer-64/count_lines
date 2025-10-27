@@ -32,7 +32,7 @@ cargo test -p count_lines_core
 - Prefer clear, maintainable code with concise comments for complex logic.
 - Use module naming conventions already established in the project (parent-file modules with subfolders).
 - Keep CLI help output (see `usage.txt`) in sync when altering options or behaviour.
-- When adding serialization or shared types, respect the layering (`foundation` → `domain` → `interface` → `app`).
+- Respect the clean architecture layering: keep core types in `shared/` and `domain/`, use cases in `application/`, adapters in `infrastructure/`, presentation logic in `presentation/`, and wire everything from `bootstrap/`.
 
 ## Submitting Changes
 

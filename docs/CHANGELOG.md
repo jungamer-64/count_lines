@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.5.0] - 2024-10-27
 
 ### Added
-- Layered architecture (foundation → domain → interface → app)
+- Layered architecture (shared & domain core ← application ← presentation/bootstrap, with infrastructure adapters)
 - Workspace configuration with separate core library (`count_lines_core`)
 - JSON/YAML/JSONL output with version field for snapshot comparison
 - Snapshot comparison feature (`--compare old.json new.json`)

@@ -18,368 +18,171 @@
 
 - **Rust 2024 Edition** による型安全性とパフォーマンス
 - **Rayon** による並列処理で大規模プロジェクトにも対応
-- **レイヤードアーキテクチャ** によるモジュール化と保守性
+- **クリーンアーキテクチャ + DDD + CQRS** による疎結合な設計
 - **ワークスペース構成** によるライブラリとバイナリの分離
 
 ## アーキテクチャパターン
 
-### クリーンアーキテクチャの採用
+### クリーンアーキテクチャ / DDD / CQRS
 
-`count_lines` は、クリーンアーキテクチャの原則に従って設計されています。これにより、以下のメリットが得られます：
+`count_lines` はクリーンアーキテクチャをベースに、ドメイン駆動設計 (DDD) とコマンド／クエリ責務分離 (CQRS) を組み合わせています。これにより以下のメリットが得られます。
 
-1. **関心の分離**: ビジネスロジックと I/O の分離
+1. **関心の分離**: コアドメインと I/O／アダプターの明確な分離
 2. **テスタビリティ**: 各レイヤーを独立してテスト可能
-3. **保守性**: 変更の影響範囲を最小化
-4. **拡張性**: 新機能の追加が容易
+3. **保守性**: 変更の影響範囲を最小化し、SOLID 原則を遵守
+4. **拡張性**: 新しい入出力チャネルやユースケースの追加が容易
 
 ### レイヤー間の依存関係
 
 ```
-┌─────────────────────────────────────┐
-│     Application Layer (app/)        │  ← エントリポイント
-├─────────────────────────────────────┤
-│     Interface Layer (interface/)    │  ← CLI インターフェース
-├─────────────────────────────────────┤
-│     Domain Layer (domain/)          │  ← ビジネスロジック
-├─────────────────────────────────────┤
-│     Foundation Layer (foundation/)  │  ← 共通基盤
-└─────────────────────────────────────┘
+┌──────────────────────────────────────────┐
+│      Bootstrap Layer (bootstrap/)          │ ← 構成ルート / DI
+├──────────────────────────────────────────┤
+│      Presentation Layer (presentation/)    │ ← CLI などの境界
+├──────────────────────────────────────────┤
+│      Application Layer (application/)      │ ← ユースケース / CQRS
+├──────────────────────────────────────────┤
+│      Domain Layer (domain/)                │ ← コアドメイン
+├──────────────────────────────────────────┤
+│      Shared Kernel (shared/)               │ ← 値オブジェクト/共通ロジック
+└──────────────────────────────────────────┘
+           ↑
+           │  Infrastructure Layer (infrastructure/) が外側から
+           │  ポートを実装し依存を内側へ向ける
 ```
 
-依存の方向は常に上から下へ。下位レイヤーは上位レイヤーに依存しません。
+依存は内向きのみ許容されます。外側のレイヤーは内側に依存しますが、逆方向の依存は存在しません。
 
 ## プロジェクト構造
 
 ```
 count_lines/
 ├── crates/
-│   └── core/                    # コアライブラリクレート
+│   └── core/                       # コアライブラリクレート
 │       ├── src/
-│       │   ├── app/            # アプリケーション層
-│       │   ├── interface/      # インターフェース層
-│       │   ├── domain/         # ドメイン層
-│       │   ├── foundation/     # 基盤層
-│       │   ├── lib.rs          # ライブラリルート
-│       │   └── version.rs      # バージョン情報
+│       │   ├── application/        # ユースケース (CQRS)
+│       │   ├── bootstrap/          # 構成ルート
+│       │   ├── domain/             # ドメインモデル
+│       │   ├── infrastructure/     # 外部アダプター
+│       │   ├── presentation/       # CLI 等の境界
+│       │   ├── shared/             # 共通値オブジェクト
+│       │   ├── lib.rs              # ライブラリルート
+│       │   └── version.rs          # バージョン情報
 │       └── Cargo.toml
 ├── src/
-│   ├── lib.rs                  # count_lines_core の再エクスポート
-│   └── main.rs                 # CLI バイナリエントリポイント
-├── tests/
-│   ├── cli/                    # CLI テスト
-│   ├── integration/            # 統合テスト
-│   └── fixtures/               # テストデータ
-├── scripts/                    # ビルド・テストスクリプト
-├── docs/                       # ドキュメント
-└── Cargo.toml                  # ワークスペース設定
+│   ├── lib.rs                     # count_lines_core の再エクスポート
+│   └── main.rs                    # CLI バイナリエントリポイント
+├── tests/                         # 統合/CLI テスト
+├── scripts/                       # ビルド・テストスクリプト
+├── docs/                          # ドキュメント
+└── Cargo.toml                     # ワークスペース設定
 ```
 
 ### ワークスペース構成
 
-プロジェクトは Cargo ワークスペースとして構成されています：
-
 - **メインクレート** (`count_lines`): CLI バイナリを提供
-- **コアライブラリ** (`count_lines_core`): すべてのビジネスロジックを含む
-
-この構成により、ライブラリとして再利用可能な設計になっています。
+- **コアライブラリ** (`count_lines_core`): ドメイン、ユースケース、アダプターを集約
 
 ## レイヤー構成
 
-### 1. Foundation Layer (`foundation/`)
+### Shared Kernel (`shared/`)
 
-**責務**: プロジェクト全体で使用される基盤的な型・ユーティリティ
+- ドメイン全体で共有されるパス操作やパターン解析などのユーティリティ
+- ドメイン値オブジェクトが依存する最小限の機能のみを配置
 
-**モジュール構成**:
-```
-foundation/
-├── types/              # 共通型定義
-│   ├── file.rs        # FileInfo 構造体
-│   ├── summary.rs     # Summary 構造体
-│   └── mod.rs
-├── serde/             # シリアライゼーション
-│   ├── json.rs        # JSON ハンドリング
-│   └── mod.rs
-├── util/              # ユーティリティ関数
-│   └── mod.rs
-└── mod.rs
-```
+### Domain Layer (`domain/`)
 
-**主要な型**:
-- `FileInfo`: 個別ファイルの統計情報
-- `Summary`: 集計結果のサマリ
-- `GroupedSummary`: グルーピングされた集計結果
+- DDD のエンティティ、値オブジェクト、ドメインサービスを保持
+- `model/` に `FileEntry` や `FileStats` などの値オブジェクトを集約
+- `analytics/` で集計・ソートといった純粋なドメインロジックを提供
+- `config/` で設定関連のドメインモデルを管理
 
-### 2. Domain Layer (`domain/`)
+### Application Layer (`application/`)
 
-**責務**: ビジネスロジック・ドメイン知識の実装
+- コマンド／クエリをユースケースとして実装
+- `commands/` 内でポート (インターフェース) を定義し、`RunAnalysisCommand` などを提供
+- `queries/` 内で `ConfigQueryService` などの読み取りユースケースを実装
+- ドメインに依存するが、インフラ詳細には依存しない
 
-**モジュール構成**:
-```
-domain/
-├── files/             # ファイル操作
-│   ├── git.rs        # Git 統合（.gitignore サポート）
-│   ├── inputs.rs     # ファイル入力
-│   ├── matcher.rs    # ファイルマッチング（glob など）
-│   ├── metadata.rs   # メタデータ収集
-│   └── mod.rs
-├── compute/           # 計算ロジック
-│   ├── process.rs    # ファイル処理（並列化）
-│   ├── aggregate.rs  # 集計ロジック
-│   ├── sort.rs       # ソート処理
-│   └── mod.rs
-├── output/            # 出力フォーマット
-│   ├── table.rs      # テーブル形式
-│   ├── delimited.rs  # CSV/TSV
-│   ├── json.rs       # JSON
-│   ├── yaml.rs       # YAML
-│   ├── jsonl.rs      # JSONL
-│   ├── markdown.rs   # Markdown
-│   ├── writer.rs     # 出力ライター
-│   └── mod.rs
-├── compare/           # スナップショット比較
-│   ├── snapshot.rs   # 比較ロジック
-│   └── mod.rs
-├── config/            # 設定管理
-│   ├── filters.rs    # フィルタ設定
-│   └── mod.rs
-├── grouping.rs        # グルーピングロジック
-├── options.rs         # オプション定義
-└── mod.rs
-```
+### Presentation Layer (`presentation/`)
 
-**主要な責務**:
-- **files/**: ファイルシステムとの対話、Git 統合
-- **compute/**: 並列処理、集計、ソート
-- **output/**: 各種フォーマットへの出力変換
-- **compare/**: スナップショット間の差分計算
-- **config/**: 実行時設定の管理
+- CLI や今後追加される可能性のある UI を担当
+- `cli/` モジュールで `clap` を用いた引数パースを実装し、アプリケーション層へ DTO を渡す
 
-### 3. Interface Layer (`interface/`)
+### Infrastructure Layer (`infrastructure/`)
 
-**責務**: 外部との境界、CLI インターフェース
+- ファイルシステム、出力、シリアライゼーションなどの外部依存を実装
+- アプリケーション層のポート (`FileEntryProvider`, `FileStatisticsProcessor`, `FileStatisticsPresenter`, `SnapshotComparator` など) を実装したアダプターを `adapters/` に配置
+- `filesystem/` や `measurement/`, `io/output/`, `comparison/`, `serialization/` などで詳細な I/O ロジックを提供
 
-**モジュール構成**:
-```
-interface/
-├── cli/
-│   ├── args.rs         # CLI 引数定義（clap）
-│   ├── value_enum.rs   # 列挙型の定義
-│   └── mod.rs
-└── mod.rs
-```
+### Bootstrap Layer (`bootstrap/`)
 
-**主要な責務**:
-- CLI 引数のパース（`clap` を使用）
-- ユーザー入力の検証
-- Domain 層の `Config` への変換
-
-### 4. Application Layer (`app/`)
-
-**責務**: アプリケーション全体の調整・オーケストレーション
-
-**モジュール構成**:
-```
-app/
-└── mod.rs              # メイン実行ロジック
-```
-
-**主要な関数**:
-- `run()`: メインの実行関数
-- `run_with_config()`: 設定オブジェクトを受け取って実行
-
-このレイヤーは、各レイヤーを組み合わせて一つの機能を実現します。
+- 依存関係の組み立てとエントリポイント
+- CLI から受け取った設定でポート実装を組み合わせ、アプリケーション層のコマンドを実行
+- TTY 判定など環境依存の処理もここで完結させる
 
 ## データフロー
 
 ### 典型的な実行フロー
 
 ```
-1. CLI 引数パース (interface/cli)
+1. CLI 入力 (presentation/cli)
    ↓
-2. Config オブジェクト構築 (domain/config)
+2. Config クエリサービスでドメイン設定構築 (application/queries)
    ↓
-3. ファイル収集 (domain/files)
-   ├─ Git モード判定
-   ├─ glob マッチング
-   └─ フィルタリング
+3. エントリポイントでユースケース実行 (bootstrap)
    ↓
-4. 並列処理 (domain/compute/process)
-   ├─ Rayon による並列化
-   ├─ ファイル読み込み
-   └─ 行数・文字数・単語数カウント
+4. ファイル列挙 (infrastructure/filesystem via FileEntryProvider ポート)
    ↓
-5. 集計・ソート (domain/compute)
-   ├─ グルーピング（拡張子別など）
-   ├─ ソート処理
-   └─ サマリ計算
+5. 計測・統計値算出 (infrastructure/measurement via FileStatisticsProcessor)
    ↓
-6. 出力 (domain/output)
-   ├─ フォーマット選択
-   └─ ファイル/標準出力へ書き込み
+6. ドメインサービスでソート・集計 (domain/analytics)
+   ↓
+7. 出力アダプターでフォーマット & 出力 (infrastructure/io/output via FileStatisticsPresenter)
 ```
 
-### スナップショット比較モードのフロー
-
-```
-1. 2つの JSON ファイルを読み込み (domain/compare)
-   ↓
-2. バージョン検証
-   ↓
-3. ファイルごとの差分計算
-   ↓
-4. 変更サマリ作成
-   ↓
-5. 結果出力 (domain/output)
-```
+スナップショット比較などのクエリ系ユースケースは、CQRS の考え方に基づき `SnapshotComparator` ポートを経由して処理されます。
 
 ## 主要コンポーネント
 
-### 並列処理エンジン
+### ユースケース (`application/commands`)
 
-**場所**: `domain/compute/process.rs`
+- `RunAnalysisCommand`: ファイル収集→統計計算→出力までをオーケストレーション
+- ポート経由で副作用を注入することで、テストではモックを差し替え可能
 
-**技術**: Rayon による並列イテレータ
+### クエリ (`application/queries`)
 
-```rust
-files.par_iter()  // 並列イテレータ
-    .map(|path| process_file(path))
-    .collect()
-```
+- `ConfigQueryService`: CLI DTO (`ConfigOptions`) からドメイン `Config` を構築
+- フィルタ／ソート指定の検証と正規化を担当
 
-**特徴**:
-- CPU コア数に応じた自動並列化
-- 大規模ディレクトリでの高速処理
-- エラーハンドリングと進捗表示の統合
+### ドメインサービス (`domain/analytics` など)
 
-### フィルタリングシステム
+- `Aggregator`: 拡張子やディレクトリごとの集計
+- `apply_sort`: 複数ソートキーに基づいた安定ソート
 
-**場所**: `domain/config/filters.rs`, `domain/files/matcher.rs`
+### インフラアダプター (`infrastructure/`)
 
-**サポートするフィルタ**:
-- **Glob パターン**: `--include`, `--exclude`
-- **拡張子**: `--ext rs,toml`
-- **サイズ**: `--min-size`, `--max-size`
-- **行数/文字数/単語数**: `--min-lines`, `--max-chars` など
-- **更新時刻**: `--mtime-after`, `--mtime-before`
-- **式評価**: `--filter "lines > 100 && ext == 'rs'"`
+- `filesystem::collect_entries`: Git 連携を含むファイル列挙
+- `measurement::measure_entries`: Rayon を用いた並列計測
+- `io::output::emit`: 表形式、CSV/TSV、JSON/JSONL、Markdown など多様な出力
+- `comparison::run`: JSON スナップショットの差分計算
+- `adapters::*`: アプリケーション層ポートの具象実装
 
-### 出力フォーマッター
+### プレゼンテーション (`presentation/cli`)
 
-**場所**: `domain/output/`
+- `Args`: `clap` による CLI 引数定義
+- `build_config`: DTO からユースケース入力を生成
 
-**サポートフォーマット**:
-- Table: 整形されたテーブル表示
-- CSV/TSV: スプレッドシート互換
-- JSON/YAML: 構造化データ（バージョン情報付き）
-- JSONL: ストリーミング向けライン区切り JSON
-- Markdown: ドキュメント埋め込み用
+### ブートストラップ (`bootstrap`)
 
-各フォーマッターは統一された `Writer` trait を実装し、ポリモーフィズムを活用しています。
-
-### Git 統合
-
-**場所**: `domain/files/git.rs`
-
-**機能**:
-- `.gitignore` の自動検出とパース
-- Git 管理下でないファイルの除外
-- サブモジュール対応
+- CLI ユースケースの起動 (`run`, `run_with_config`)
+- 依存関係グラフの構築とヘッダー表示／進捗通知の制御
 
 ## 設計原則
 
-### 1. 型安全性
+- **SOLID 原則** を遵守: 特に単一責務・依存逆転を強調
+- **DDD**: ドメインモデルとユースケースの明確な境界を定義
+- **CQRS**: コマンドとクエリを別モジュールに分離し、新しいユースケースの追加を容易に
+- **Clean Architecture**: 内向き依存を徹底し、テスト容易性と拡張性を担保
 
-Rust の型システムを最大限活用し、コンパイル時に多くのエラーを検出します。
-
-```rust
-// 例: 列挙型で出力フォーマットを表現
-pub enum OutputFormat {
-    Table,
-    Csv,
-    Tsv,
-    Json,
-    Yaml,
-    Markdown,
-    Jsonl,
-}
-```
-
-### 2. エラーハンドリング
-
-`anyhow::Result` を使用し、エラーコンテキストを保持します。
-
-```rust
-use anyhow::{Context, Result};
-
-fn read_file(path: &Path) -> Result<String> {
-    std::fs::read_to_string(path)
-        .context(format!("Failed to read file: {}", path.display()))
-}
-```
-
-### 3. テスタビリティ
-
-各レイヤーを独立してテスト可能にするため、依存性の注入を活用します。
-
-```
-tests/
-├── cli/           # CLI レベルのテスト
-├── integration/   # 統合テスト
-└── fixtures/      # テストデータ
-```
-
-### 4. パフォーマンス
-
-- **並列処理**: Rayon による CPU 効率の最大化
-- **ゼロコピー**: 可能な限り `&str` や `&[u8]` を使用
-- **遅延評価**: イテレータの活用
-- **LTO**: リリースビルドで Link Time Optimization を有効化
-
-### 5. 拡張性
-
-新しい出力フォーマットやフィルタの追加が容易な設計：
-
-```rust
-// 新しいフォーマッターの追加例
-impl Writer for NewFormatter {
-    fn write_header(&mut self) -> Result<()> { /* ... */ }
-    fn write_file(&mut self, file: &FileInfo) -> Result<()> { /* ... */ }
-    fn write_summary(&mut self, summary: &Summary) -> Result<()> { /* ... */ }
-}
-```
-
-## バージョニング
-
-JSON/YAML 出力には `version` フィールドを含めることで、将来的な互換性問題に対応しています。
-
-```json
-{
-  "version": "0.5.0",
-  "files": [ /* ... */ ],
-  "summary": { /* ... */ }
-}
-```
-
-スナップショット比較時にバージョンの不一致を検出し、警告を表示します。
-
-## 今後の拡張性
-
-現在のアーキテクチャは、以下の拡張に対応可能です：
-
-1. **新しい言語サポート**: 言語別のコメント除去などの特殊処理
-2. **プラグインシステム**: カスタムフィルタや出力フォーマット
-3. **Web API**: REST API としての公開
-4. **GUI フロントエンド**: コアライブラリの再利用
-5. **データベース統合**: 履歴データの保存・分析
-
-## 参考リソース
-
-- [Rust API Guidelines](https://rust-lang.github.io/api-guidelines/)
-- [Clean Architecture (Robert C. Martin)](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html)
-- [Rayon Documentation](https://docs.rs/rayon/)
-- [clap Documentation](https://docs.rs/clap/)
-
----
-
-**最終更新**: 2024-10-28  
-**対応バージョン**: 0.5.0
+この構造により、CLI 以外のフロントエンド追加や新しい出力形式の導入、あるいは別ストレージへの対応なども最小限の変更で実現可能です。

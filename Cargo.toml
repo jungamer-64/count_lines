@@ -13,14 +13,14 @@ categories = ["command-line-utilities", "development-tools"]
 members = ["crates/core"]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jungamer-64/count_lines"
 
 [dependencies]
 anyhow.workspace = true
-count_lines_core = { version = "0.5.0", path = "crates/core" }
+count_lines_core = { version = "0.6.0", path = "crates/core" }
 
 [dev-dependencies]
 assert_cmd.workspace = true

@@ -1,4 +1,4 @@
-pub mod config;
+pub mod commands;
+pub mod queries;
 
-pub use config::commands::{ConfigOptions, FilterOptions};
-pub use config::queries::ConfigQueryService;
+pub use queries::{ConfigOptions, ConfigQueryService, FilterOptions};

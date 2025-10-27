@@ -1,7 +1,5 @@
-pub mod compare;
-pub mod compute;
+pub mod analytics;
 pub mod config;
-pub mod files;
 pub mod grouping;
+pub mod model;
 pub mod options;
-pub mod output;
