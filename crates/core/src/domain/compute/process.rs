@@ -110,10 +110,10 @@ impl FileMeasurer {
         {
             return None;
         }
-        if let Some(ast) = &config.filters.filter_ast {
-            if !Self::eval_filter(&stats, ast)? {
-                return None;
-            }
+        if let Some(ast) = &config.filters.filter_ast
+            && !Self::eval_filter(&stats, ast)?
+        {
+            return None;
         }
         Some(stats)
     }

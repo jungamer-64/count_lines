@@ -17,10 +17,10 @@ pub fn collect_entries(config: &Config) -> anyhow::Result<Vec<FileEntry>> {
     if let Some(ref from) = config.files_from {
         return inputs::read_files_from_lines(from).map(|files| to_entries(files, config));
     }
-    if config.use_git {
-        if let Ok(files) = git::collect_git_files(config) {
-            return Ok(to_entries(files, config));
-        }
+    if config.use_git
+        && let Ok(files) = git::collect_git_files(config)
+    {
+        return Ok(to_entries(files, config));
     }
     collect_walk_entries(config)
 }

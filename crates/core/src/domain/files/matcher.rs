@@ -59,7 +59,7 @@ impl PathMatcher {
 
 fn is_hidden(path: &Path) -> bool {
     path.file_name()
-        .map_or(false, |name| name.to_string_lossy().starts_with('.'))
+        .is_some_and(|name| name.to_string_lossy().starts_with('.'))
 }
 
 fn matches_name(path: &Path, filters: &Filters) -> bool {
@@ -86,8 +86,8 @@ fn matches_extension(path: &Path, filters: &Filters) -> bool {
         return true;
     }
     path.extension()
-        .and_then(|e| Some(e.to_string_lossy().to_lowercase()))
-        .map_or(false, |ext| filters.ext_filters.contains(&ext))
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .is_some_and(|ext| filters.ext_filters.contains(&ext))
 }
 
 fn matches_metadata(path: &Path, config: &Config) -> bool {
@@ -107,15 +107,15 @@ fn matches_mtime(metadata: &std::fs::Metadata, config: &Config) -> bool {
         return true;
     };
     let modified: DateTime<Local> = modified_sys.into();
-    if let Some(since) = config.mtime_since {
-        if modified < since {
-            return false;
-        }
+    if let Some(since) = config.mtime_since
+        && modified < since
+    {
+        return false;
     }
-    if let Some(until) = config.mtime_until {
-        if modified > until {
-            return false;
-        }
+    if let Some(until) = config.mtime_until
+        && modified > until
+    {
+        return false;
     }
     true
 }

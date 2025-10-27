@@ -59,7 +59,7 @@ impl Range {
     }
 
     pub fn contains(&self, v: usize) -> bool {
-        self.min.map_or(true, |m| v >= m) && self.max.map_or(true, |x| v <= x)
+        self.min.is_none_or(|m| v >= m) && self.max.is_none_or(|x| v <= x)
     }
 }
 
@@ -69,7 +69,7 @@ impl SizeRange {
     }
 
     pub fn contains(&self, v: u64) -> bool {
-        self.min.map_or(true, |m| v >= m) && self.max.map_or(true, |x| v <= x)
+        self.min.is_none_or(|m| v >= m) && self.max.is_none_or(|x| v <= x)
     }
 }
 

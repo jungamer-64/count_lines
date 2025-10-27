@@ -1,9 +1,40 @@
-
-
-#Ignore vscode AI rules
+# VSCode AI rules
 .github/instructions/codacy.instructions.md
 
-
-# Added by cargo
-
+# Rust build artifacts
 /target
+Cargo.lock
+
+# Log files
+/logs/*.log
+/logs/**/*.log
+/.codacy/logs/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
+.Spotlight-V100
+.Trashes
+
+# Temporary files
+*.tmp
+*.temp
+.serena/
+
+# Test output
+/test_output/
+*.profraw
+*.profdata
+
+# Coverage reports
+/coverage/
+*.gcda
+*.gcno

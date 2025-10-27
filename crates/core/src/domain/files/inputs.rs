@@ -8,7 +8,7 @@ pub(super) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
     let reader = BufReader::new(file);
     Ok(reader
         .lines()
-        .filter_map(Result::ok)
+        .map_while(Result::ok)
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .map(PathBuf::from)

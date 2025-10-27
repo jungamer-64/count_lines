@@ -62,6 +62,23 @@ pub fn build_config(args: Args) -> anyhow::Result<Config> {
         paths,
     } = args;
 
+    // Validate numeric arguments
+    if let Some(t) = top
+        && t == 0
+    {
+        anyhow::bail!("--top must be at least 1");
+    }
+    if let Some(bl) = by_limit
+        && bl == 0
+    {
+        anyhow::bail!("--by-limit must be at least 1");
+    }
+    if let Some(j) = jobs
+        && (j == 0 || j > 512)
+    {
+        anyhow::bail!("--jobs must be between 1 and 512");
+    }
+
     let filter_options = FilterOptions {
         include,
         exclude,

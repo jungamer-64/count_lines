@@ -112,10 +112,10 @@ pub fn format_path(
     } else {
         path.to_path_buf()
     };
-    if let Some(root) = trim_root {
-        if let Ok(stripped) = path.strip_prefix(root) {
-            path = stripped.to_path_buf();
-        }
+    if let Some(root) = trim_root
+        && let Ok(stripped) = path.strip_prefix(root)
+    {
+        path = stripped.to_path_buf();
     }
     path.display().to_string()
 }
