@@ -1,6 +1,35 @@
-use anyhow::Context as _;
+use crate::domain::error::DomainError;
+use anyhow::Result;
+use glob::Pattern;
 
-/// Parse a list of glob patterns, returning a vector of compiled patterns or an error.
-pub fn parse_patterns(patterns: &[String]) -> anyhow::Result<Vec<glob::Pattern>> {
-    patterns.iter().map(|p| glob::Pattern::new(p).with_context(|| format!("Invalid pattern: {p}"))).collect()
+/// glob パターンのコレクションをパースする
+pub fn parse_patterns(patterns: &[String]) -> Result<Vec<Pattern>> {
+    patterns
+        .iter()
+        .map(|pattern| {
+            Pattern::new(pattern).map_err(|error| {
+                DomainError::InvalidPattern(format!("{pattern}: {error}"))
+            })
+        })
+        .collect::<std::result::Result<Vec<_>, DomainError>>()
+        .map_err(Into::into)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_valid_patterns() {
+        let patterns = vec!["*.rs".to_string(), "src/**".to_string()];
+        let result = parse_patterns(&patterns);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn rejects_invalid_patterns() {
+        let patterns = vec!["[[".to_string()];
+        assert!(parse_patterns(&patterns).is_err());
+    }
 }

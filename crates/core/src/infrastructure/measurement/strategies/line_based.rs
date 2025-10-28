@@ -1,4 +1,3 @@
-use std::{io::BufRead, path::Path};
 
 use crate::{
     domain::{
@@ -7,29 +6,27 @@ use crate::{
     },
     infrastructure::persistence::FileReader,
 };
+use std::{io::BufRead, path::Path};
 
-/// Measure a file incrementally by iterating over its lines.
+/// 行単位でファイルを計測
 pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
-    let mut reader = FileReader::open_buffered(path).ok()?;
-    let (mut lines, mut chars, mut words) = (0, 0, 0);
-    let mut line = String::new();
-    loop {
-        line.clear();
-        let n = reader.read_line(&mut line).ok()?;
-        if n == 0 {
-            break;
-        }
-        if line.ends_with('\n') {
-            line.pop();
-            if line.ends_with('\r') {
-                line.pop();
-            }
-        }
-        lines += 1;
-        chars += line.chars().count();
+    let reader = FileReader::open_buffered(path).ok()?;
+
+    let mut line_count = 0;
+    let mut char_count = 0;
+    let mut word_count = 0;
+
+    for line_result in reader.lines() {
+        let line = line_result.ok()?;
+        
+        line_count += 1;
+        char_count += line.chars().count();
+        
         if config.words {
-            words += line.split_whitespace().count();
+            word_count += line.split_whitespace().count();
         }
     }
-    Some(FileStats::new(path.to_path_buf(), lines, chars, config.words.then_some(words), meta))
+
+    let words = config.words.then_some(word_count);
+    Some(FileStats::new(path.to_path_buf(), line_count, char_count, words, meta))
 }
