@@ -162,7 +162,8 @@ count_lines/
 
 ### ユースケース (`application/commands`)
 
-- `RunAnalysisCommand`: ファイル収集→統計計算→出力までをオーケストレーション
+- `RunAnalysisCommand`: 実行要求を表すシンプルなコマンド DTO（ドメイン `Config` への参照のみ保持）
+- `RunAnalysisHandler`: 上記コマンドを処理し、ファイル収集→統計計算→出力までをオーケストレーション
 - ポート経由で副作用を注入することで、テストではモックを差し替え可能
 
 ### クエリ (`application/queries`)
@@ -191,6 +192,7 @@ count_lines/
 ### ブートストラップ (`bootstrap`)
 
 - CLI ユースケースの起動 (`run`, `run_with_config`)
+- ポート実装を束ねて `RunAnalysisHandler` を生成し、`RunAnalysisCommand` を発行
 - 依存関係グラフの構築とヘッダー表示／進捗通知の制御
 
 ## 設計原則
