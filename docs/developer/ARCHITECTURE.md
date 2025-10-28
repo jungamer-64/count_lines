@@ -65,7 +65,7 @@ count_lines/
 │       │   ├── bootstrap.rs        # 構成ルート
 │       │   ├── domain/             # ドメインモデル (analytics/config/model 等)
 │       │   ├── domain.rs           # ドメイン層のルートモジュール
-│       │   ├── infrastructure/     # 外部アダプター (filesystem/io/measurement…)
+│       │   ├── infrastructure/     # 外部アダプター (filesystem/io/measurement/persistence…)
 │       │   ├── infrastructure.rs   # インフラ層のルートモジュール
 │       │   ├── presentation/       # CLI などの境界 (cli/)
 │       │   ├── presentation.rs     # プレゼンテーション層ルート
@@ -128,6 +128,7 @@ count_lines/
 - ファイルシステム、出力、シリアライゼーションなどの外部依存を実装
 - アプリケーション層のポート (`FileEntryProvider`, `FileStatisticsProcessor`, `FileStatisticsPresenter`, `SnapshotComparator` など) を実装したアダプターを `adapters/` に配置
 - `filesystem/` や `measurement/`, `io/output/`, `comparison/`, `serialization/` などで詳細な I/O ロジックを提供
+- `persistence/` に共通のファイル読み書きヘルパー (`FileReader`, `FileWriter`) を集約し、他モジュールの重複処理を排除
 
 ### Bootstrap Layer (`bootstrap/`)
 

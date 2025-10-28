@@ -1,14 +1,14 @@
 use std::{
-    fs::File,
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, Read},
     path::{Path, PathBuf},
 };
 
 use anyhow::Result;
 
+use crate::infrastructure::persistence::FileReader;
+
 pub(crate) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
+    let reader = FileReader::open_buffered(path)?;
     Ok(reader
         .lines()
         .map_while(Result::ok)
@@ -19,7 +19,7 @@ pub(crate) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
 }
 
 pub(crate) fn read_files_from_null(path: &Path) -> Result<Vec<PathBuf>> {
-    let mut file = File::open(path)?;
+    let mut file = FileReader::open(path)?;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)?;
     Ok(buf

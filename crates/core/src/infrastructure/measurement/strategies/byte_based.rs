@@ -1,15 +1,16 @@
-use std::{fs::File, io::Read, path::Path};
+use std::path::Path;
 
-use crate::domain::{
-    config::Config,
-    model::{FileMeta, FileStats},
+use crate::{
+    domain::{
+        config::Config,
+        model::{FileMeta, FileStats},
+    },
+    infrastructure::persistence::FileReader,
 };
 
 /// Measure a file by reading it into memory and counting bytes/lines/words.
 pub fn measure_entire_file(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
-    let mut file = File::open(path).ok()?;
-    let mut buf = Vec::new();
-    file.read_to_end(&mut buf).ok()?;
+    let buf = FileReader::read_to_end(path).ok()?;
     if config.text_only && buf.contains(&0) {
         return None;
     }

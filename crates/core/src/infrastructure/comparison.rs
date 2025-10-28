@@ -6,11 +6,13 @@ use std::{collections::HashMap, path::Path};
 use anyhow::Result;
 use snapshot::{FileItem, Snapshot};
 
+use crate::infrastructure::persistence::FileReader;
+
 /// Compare two JSON snapshot files and return a formatted diff. The
 /// snapshots must be compatible with the output of `count_lines --format json`.
 pub fn run(old_path: &Path, new_path: &Path) -> Result<String> {
-    let old_file = std::fs::File::open(old_path)?;
-    let new_file = std::fs::File::open(new_path)?;
+    let old_file = FileReader::open(old_path)?;
+    let new_file = FileReader::open(new_path)?;
     let old: Snapshot = serde_json::from_reader(old_file)?;
     let new: Snapshot = serde_json::from_reader(new_file)?;
     let comparison = SnapshotComparison::new(old, new);

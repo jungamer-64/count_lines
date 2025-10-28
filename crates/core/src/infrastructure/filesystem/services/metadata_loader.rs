@@ -1,6 +1,9 @@
-use std::{fs::File, io::Read, path::Path};
+use std::{io::Read, path::Path};
 
-use crate::domain::{config::Config, model::FileMeta};
+use crate::{
+    domain::{config::Config, model::FileMeta},
+    infrastructure::persistence::FileReader,
+};
 
 /// Domain service responsible for translating filesystem data into metadata value objects.
 pub struct FileMetadataLoader;
@@ -22,7 +25,7 @@ impl FileMetadataLoader {
     }
 
     fn quick_text_check(path: &Path) -> bool {
-        let Ok(mut file) = File::open(path) else {
+        let Ok(mut file) = FileReader::open(path) else {
             return false;
         };
         let mut buf = [0u8; 1024];
@@ -34,7 +37,7 @@ impl FileMetadataLoader {
     }
 
     fn strict_text_check(path: &Path) -> bool {
-        let Ok(mut file) = File::open(path) else {
+        let Ok(mut file) = FileReader::open(path) else {
             return false;
         };
         let mut buf = Vec::new();

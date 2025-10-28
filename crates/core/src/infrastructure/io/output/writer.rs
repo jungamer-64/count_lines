@@ -1,14 +1,14 @@
 // src/infrastructure/io/output/writer.rs
 use std::io::Write;
 
-use crate::domain::config::Config;
+use crate::{domain::config::Config, infrastructure::persistence::FileWriter};
 
 pub(crate) struct OutputWriter(Box<dyn Write>);
 
 impl OutputWriter {
     pub(crate) fn create(config: &Config) -> anyhow::Result<Self> {
         let writer: Box<dyn Write> = if let Some(path) = &config.output {
-            Box::new(std::io::BufWriter::new(std::fs::File::create(path)?))
+            Box::new(FileWriter::create(path)?)
         } else {
             Box::new(std::io::BufWriter::new(std::io::stdout()))
         };

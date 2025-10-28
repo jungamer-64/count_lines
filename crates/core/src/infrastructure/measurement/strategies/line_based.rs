@@ -1,18 +1,16 @@
-use std::{
-    fs::File,
-    io::{BufRead, BufReader},
-    path::Path,
-};
+use std::{io::BufRead, path::Path};
 
-use crate::domain::{
-    config::Config,
-    model::{FileMeta, FileStats},
+use crate::{
+    domain::{
+        config::Config,
+        model::{FileMeta, FileStats},
+    },
+    infrastructure::persistence::FileReader,
 };
 
 /// Measure a file incrementally by iterating over its lines.
 pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
-    let file = File::open(path).ok()?;
-    let mut reader = BufReader::new(file);
+    let mut reader = FileReader::open_buffered(path).ok()?;
     let (mut lines, mut chars, mut words) = (0, 0, 0);
     let mut line = String::new();
     loop {
