@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use atty::Stream;
 
 use crate::{
-    application::commands::{RunAnalysisCommand, SnapshotComparator},
+    application::commands::{RunAnalysisCommand, RunAnalysisHandler, SnapshotComparator},
     domain::{config::Config, options::OutputFormat},
     infrastructure::adapters::{
         ConsoleNotifier, FileSystemEntryProvider, OutputEmitter, ParallelFileStatisticsProcessor,
@@ -32,7 +32,8 @@ pub fn run_with_config(config: Config) -> Result<()> {
     let processor = ParallelFileStatisticsProcessor;
     let presenter = OutputEmitter;
     let notifier = ConsoleNotifier;
-    let command = RunAnalysisCommand::new(&entry_provider, &processor, &presenter, Some(&notifier));
+    let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
+    let command = RunAnalysisCommand::new(&config);
 
-    command.execute(&config)
+    handler.handle(&command)
 }
