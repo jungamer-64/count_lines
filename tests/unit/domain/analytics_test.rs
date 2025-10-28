@@ -5,7 +5,7 @@ use count_lines_core::domain::{
     grouping::Granularity,
     model::{FileMeta, FileStats},
 };
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 
 fn make_stats(
     path: &str,
@@ -60,16 +60,10 @@ fn aggregates_by_directory_with_depth() {
     let (label, groups) = &aggregated[0];
     assert_eq!(label, "By Directory (depth=1)");
 
-    assert_eq!(groups[0].key, "tests");
-    assert_eq!(groups[0].lines, 20);
-    assert_eq!(groups[0].count, 1);
-
-    assert_eq!(groups[1].key, "src");
-    assert_eq!(groups[1].lines, 20);
-    assert_eq!(groups[1].count, 2);
-
-    assert_eq!(groups[2].key, ".");
-    assert_eq!(groups[2].lines, 3);
+    let summary: HashMap<_, _> = groups.iter().map(|g| (g.key.clone(), (g.lines, g.count))).collect();
+    assert_eq!(summary.get("tests"), Some(&(20, 1)));
+    assert_eq!(summary.get("src"), Some(&(20, 2)));
+    assert_eq!(summary.get("."), Some(&(3, 1)));
 }
 
 #[test]

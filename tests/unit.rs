@@ -6,3 +6,5 @@ mod application;
 mod domain;
 #[path = "unit/infrastructure.rs"]
 mod infrastructure;
+#[path = "unit/shared.rs"]
+mod shared;
