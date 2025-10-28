@@ -3,7 +3,7 @@ use count_lines_core::{
         config::{ByKey, Config, Filters},
         options::OutputFormat,
     },
-    infrastructure::filesystem::services::collect_walk_entries,
+    infrastructure::filesystem::services::{collect_entries, collect_walk_entries},
 };
 use std::{
     collections::HashSet,
@@ -117,4 +117,44 @@ fn collect_walk_respects_extension_filters() {
     let entries = collect_walk_entries(&config).expect("walk succeeds");
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].path, rs_file);
+}
+
+#[test]
+fn collect_entries_reads_paths_from_files_from_list() {
+    let temp = TempDir::new("filesystem_files_from");
+    let file_a = temp.path.join("alpha.txt");
+    let file_b = temp.path.join("beta.txt");
+    fs::write(&file_a, b"first").unwrap();
+    fs::write(&file_b, b"second").unwrap();
+
+    let list_path = temp.path.join("files.list");
+    let list_contents = format!("{}\n{}\n", file_a.display(), file_b.display());
+    fs::write(&list_path, list_contents).unwrap();
+
+    let mut config = base_config(&temp.path);
+    config.files_from = Some(list_path);
+
+    let entries = collect_entries(&config).expect("collect succeeds");
+    let paths: Vec<_> = entries.into_iter().map(|entry| entry.path).collect();
+    assert_eq!(paths, vec![file_a, file_b]);
+}
+
+#[test]
+fn collect_entries_reads_paths_from_null_terminated_list() {
+    let temp = TempDir::new("filesystem_files_from0");
+    let file_a = temp.path.join("gamma.txt");
+    let file_b = temp.path.join("delta.txt");
+    fs::write(&file_a, b"third").unwrap();
+    fs::write(&file_b, b"fourth").unwrap();
+
+    let list_path = temp.path.join("files0.list");
+    let list_contents = format!("{}\0{}\0", file_a.display(), file_b.display());
+    fs::write(&list_path, list_contents).unwrap();
+
+    let mut config = base_config(&temp.path);
+    config.files_from0 = Some(list_path);
+
+    let entries = collect_entries(&config).expect("collect succeeds");
+    let paths: Vec<_> = entries.into_iter().map(|entry| entry.path).collect();
+    assert_eq!(paths, vec![file_a, file_b]);
 }
