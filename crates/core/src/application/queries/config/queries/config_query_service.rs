@@ -8,7 +8,6 @@ use crate::{
     shared::{path::logical_absolute, patterns::parse_patterns},
 };
 use anyhow::Result;
-use evalexpr::Node;
 use std::collections::HashSet;
 
 /// 設定クエリサービス

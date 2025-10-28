@@ -1,24 +1,43 @@
-// ============================================================================
-// crates/core/src/domain/error.rs (新規追加)
-// ============================================================================
-use std::fmt;
+// crates/core/src/domain/error.rs
+use glob::PatternError;
+use thiserror::Error;
 
-/// ドメイン固有のエラー型
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum DomainError {
+    #[error("Invalid configuration: {0}")]
     InvalidConfiguration(String),
+    
+    #[error("Invalid filter expression: {0}")]
     InvalidFilterExpression(String),
-    InvalidPattern(String),
+    
+    #[error("Invalid pattern '{pattern}': {source}")]
+    InvalidPattern {
+        pattern: String,
+        #[source]
+        source: PatternError,
+    },
 }
 
-impl fmt::Display for DomainError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidConfiguration(msg) => write!(f, "Invalid configuration: {msg}"),
-            Self::InvalidFilterExpression(msg) => write!(f, "Invalid filter expression: {msg}"),
-            Self::InvalidPattern(msg) => write!(f, "Invalid pattern: {msg}"),
-        }
-    }
+// infrastructureレイヤーのエラー
+#[derive(Debug, Error)]
+pub enum InfrastructureError {
+    #[error("Failed to read file '{path}': {source}")]
+    FileRead {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    
+    #[error("Failed to parse {format} output: {source}")]
+    SerializationError {
+        format: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    
+    #[error("Git operation failed: {0}")]
+    GitError(String),
+    
+    #[error("Thread pool creation failed: {0}")]
+    ThreadPoolCreation(String),
 }
-
-impl std::error::Error for DomainError {}

@@ -9,7 +9,7 @@ pub(crate) fn collect_git_files(config: &Config) -> Result<Vec<PathBuf>> {
     for root in &config.paths {
         let output = std::process::Command::new("git")
             .args(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "."])
-            .current_dir(root)
+            .current_dir(root.clone())
             .output()?;
         if !output.status.success() {
             anyhow::bail!("git ls-files failed");

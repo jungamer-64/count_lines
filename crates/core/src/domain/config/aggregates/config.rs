@@ -3,13 +3,14 @@ use std::path::PathBuf;
 use chrono::{DateTime, Local};
 
 use crate::domain::{
-    config::value_objects::{ByKey, Filters},
+    config::ByKey,
     options::{OutputFormat, SortKey},
 };
 
-/// Read model representing a fully materialised configuration.
-#[derive(Debug)]
-#[allow(clippy::struct_excessive_bools)]
+use crate::domain::config::Filters;
+
+/// Domain representation of resolved configuration options.
+#[derive(Debug, Clone)]
 pub struct Config {
     pub format: OutputFormat,
     pub sort_specs: Vec<(SortKey, bool)>,

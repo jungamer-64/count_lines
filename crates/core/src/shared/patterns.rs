@@ -7,8 +7,9 @@ pub fn parse_patterns(patterns: &[String]) -> Result<Vec<Pattern>> {
     patterns
         .iter()
         .map(|pattern| {
-            Pattern::new(pattern).map_err(|error| {
-                DomainError::InvalidPattern(format!("{pattern}: {error}"))
+            Pattern::new(pattern).map_err(|source| DomainError::InvalidPattern {
+                pattern: pattern.clone(),
+                source,
             })
         })
         .collect::<std::result::Result<Vec<_>, DomainError>>()

@@ -21,6 +21,8 @@ repository = "https://github.com/jungamer-64/count_lines"
 [dependencies]
 anyhow.workspace = true
 count_lines_core = { version = "0.6.1", path = "crates/core" }
+proptest = "1.9.0"
+thiserror = "2.0.17"
 
 [dev-dependencies]
 assert_cmd.workspace = true
@@ -46,6 +48,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 walkdir = "2.5"
+thiserror = "2.0.17"
 
 [profile.release]
 opt-level = 3

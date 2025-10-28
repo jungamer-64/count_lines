@@ -25,7 +25,7 @@ pub struct ParallelFileStatisticsProcessor;
 
 impl FileStatisticsProcessor for ParallelFileStatisticsProcessor {
     fn measure(&self, entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
-        crate::infrastructure::measurement::measure_entries(entries, config)
+        Ok(crate::infrastructure::measurement::measure_entries(entries, config)?)
     }
 }
 

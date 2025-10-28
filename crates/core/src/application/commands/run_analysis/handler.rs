@@ -48,7 +48,7 @@ impl<'a> RunAnalysisHandler<'a> {
             }
         };
 
-        analytics::apply_sort(&mut stats, config);
+        analytics::apply_sort_with_config(&mut stats, config);
         self.presenter.present(&stats, config).context("failed to emit output")
     }
 }

@@ -6,7 +6,7 @@ use super::{Range, SizeRange};
 use crate::domain::config::value_objects::GlobPattern;
 
 /// Filtering parameters derived from structured options.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Filters {
     pub include_patterns: Vec<GlobPattern>,
     pub exclude_patterns: Vec<GlobPattern>,
