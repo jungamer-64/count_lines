@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
-
-use crate::domain::config::Config;
+use crate::{
+    domain::config::Config,
+    error::{InfrastructureError, Result},
+};
 
 pub(crate) fn collect_git_files(config: &Config) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
@@ -10,9 +11,17 @@ pub(crate) fn collect_git_files(config: &Config) -> Result<Vec<PathBuf>> {
         let output = std::process::Command::new("git")
             .args(["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "."])
             .current_dir(root.clone())
-            .output()?;
+            .output()
+            .map_err(|source| InfrastructureError::FileSystemOperation {
+                operation: "git ls-files".to_string(),
+                path: root.clone(),
+                source,
+            })?;
         if !output.status.success() {
-            anyhow::bail!("git ls-files failed");
+            let details = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(
+                InfrastructureError::GitError { operation: "git ls-files".to_string(), details }.into()
+            );
         }
         for chunk in output.stdout.split(|&b| b == 0) {
             if let Some(path_str) = parse_git_output_chunk(chunk) {

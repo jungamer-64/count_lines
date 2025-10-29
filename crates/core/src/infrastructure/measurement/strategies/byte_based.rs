@@ -3,13 +3,16 @@ use std::path::Path;
 use crate::{
     domain::{
         config::Config,
-        model::{FileMeta, FileStats},
+        model::{FileMeta, FileStatsV2},
+        value_objects::{
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+        },
     },
     infrastructure::persistence::FileReader,
 };
 
 /// Measure a file by reading it into memory and counting bytes/lines/words.
-pub fn measure_entire_file(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStats> {
+pub fn measure_entire_file(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStatsV2> {
     let buf = FileReader::read_to_end(path).ok()?;
     if config.text_only && buf.contains(&0) {
         return None;
@@ -26,5 +29,15 @@ pub fn measure_entire_file(path: &Path, meta: &FileMeta, config: &Config) -> Opt
     };
     let chars = content.chars().count();
     let words = config.words.then(|| content.split_whitespace().count());
-    Some(FileStats::new(path.to_path_buf(), lines, chars, words, meta))
+
+    let builder = FileStatsV2::builder(FilePath::new(path.to_path_buf()))
+        .lines(LineCount::new(lines))
+        .chars(CharCount::new(chars))
+        .words(words.map(WordCount::new))
+        .size(FileSize::new(meta.size))
+        .mtime(meta.mtime.map(ModificationTime::new))
+        .ext(FileExtension::new(meta.ext.clone()))
+        .name(FileName::new(meta.name.clone()));
+
+    Some(builder.build())
 }

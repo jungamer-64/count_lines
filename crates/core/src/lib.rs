@@ -8,6 +8,7 @@
 pub mod application;
 pub mod bootstrap;
 pub mod domain;
+pub mod error;
 pub mod infrastructure;
 pub mod presentation;
 pub mod shared;
@@ -16,17 +17,18 @@ pub mod version;
 pub use application::{ConfigOptions, ConfigQueryService, FilterOptions};
 pub use bootstrap::{run, run_with_config};
 pub use domain::config::Config;
+pub use error::{CountLinesError, Result};
 pub use presentation::cli::{self, Args};
 pub use version::VERSION;
 
 /// Execute the application by parsing CLI arguments from the process environment.
 pub fn run_from_cli() -> anyhow::Result<()> {
-    let config = presentation::cli::load_config()?;
+    let config = presentation::cli::load_config().map_err(anyhow::Error::from)?;
     run_with_config(config)
 }
 
 /// Execute the application using pre-parsed CLI arguments.
 pub fn run_from_args(args: Args) -> anyhow::Result<()> {
-    let config = presentation::cli::build_config(args)?;
+    let config = presentation::cli::build_config(args).map_err(anyhow::Error::from)?;
     run_with_config(config)
 }

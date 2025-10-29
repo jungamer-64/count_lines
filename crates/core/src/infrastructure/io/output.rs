@@ -4,10 +4,13 @@ mod writer;
 
 use formatters::{output_delimited, output_json, output_jsonl, output_markdown, output_table, output_yaml};
 
-use crate::domain::{config::Config, model::FileStats, options::OutputFormat};
+use crate::{
+    domain::{config::Config, model::FileStats, options::OutputFormat},
+    error::Result,
+};
 
 /// Emit results to the configured output format.
-pub fn emit(stats: &[FileStats], config: &Config) -> anyhow::Result<()> {
+pub fn emit(stats: &[FileStats], config: &Config) -> Result<()> {
     let mut writer = writer::OutputWriter::create(config)?;
     match config.format {
         OutputFormat::Json => output_json(stats, config, &mut writer),

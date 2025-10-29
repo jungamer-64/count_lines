@@ -1,10 +1,10 @@
 use std::path::PathBuf;
 
-use anyhow::Result;
 use walkdir::WalkDir;
 
 use crate::{
     domain::{config::Config, model::FileEntry},
+    error::Result,
     infrastructure::filesystem::{
         adapters::{
             PathMatcher, collect_git_files, read_files_from_lines, read_files_from_null, should_process_entry,
@@ -26,9 +26,8 @@ impl FileEntryCollector {
             let files = read_files_from_lines(from)?;
             return Ok(Self::materialise_entries(files, config));
         }
-        if config.use_git
-            && let Ok(files) = collect_git_files(config)
-        {
+        if config.use_git {
+            let files = collect_git_files(config)?;
             return Ok(Self::materialise_entries(files, config));
         }
         Self::collect_walk(config)

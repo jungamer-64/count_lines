@@ -1,16 +1,23 @@
 // src/infrastructure/io/output/writer.rs
-use std::io::Write;
+use std::io::{BufWriter, Write};
 
-use crate::{domain::config::Config, infrastructure::persistence::FileWriter};
+use crate::{
+    domain::config::Config,
+    error::{InfrastructureError, Result},
+    infrastructure::persistence::FileWriter,
+};
 
 pub(crate) struct OutputWriter(Box<dyn Write>);
 
 impl OutputWriter {
-    pub(crate) fn create(config: &Config) -> anyhow::Result<Self> {
+    pub(crate) fn create(config: &Config) -> Result<Self> {
         let writer: Box<dyn Write> = if let Some(path) = &config.output {
-            Box::new(FileWriter::create(path)?)
+            Box::new(
+                FileWriter::create(path)
+                    .map_err(|source| InfrastructureError::FileWrite { path: path.clone(), source })?,
+            )
         } else {
-            Box::new(std::io::BufWriter::new(std::io::stdout()))
+            Box::new(BufWriter::new(std::io::stdout()))
         };
         Ok(Self(writer))
     }

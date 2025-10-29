@@ -7,19 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Reorganized project structure for better maintainability
-- Moved documentation to `docs/` directory
-- Restructured tests into `cli/`, `integration/`, and `fixtures/` subdirectories
-- Updated `.gitignore` to exclude log files and build artifacts
-- `--min-words`/`--max-words`, ソートキー `words`, `--filter` 内の `words` 参照で自動的に単語数計測を有効化
-- `--abs-canonical` を単独指定しても絶対パス出力になるように調整
+_No notable changes yet._
+
+## [0.7.0] - 2025-10-29
 
 ### Added
-- `ARCHITECTURE.md` documenting the project's design and structure
-- Helper scripts: `test.sh`, `benchmark.sh`, and `release.sh`
-- Test fixtures directory with README
-- Comprehensive `.gitignore` rules
+- Domain value objects (`LineCount`, `WordCount`, `FilePath` など) と `FileStatsBuilder` を導入し、統計値の構築を型安全にできるようにしました
+- `ARCHITECTURE.md` を追加し、プロジェクトの設計とレイヤ構造をドキュメント化
+- 開発支援スクリプト (`test.sh`, `benchmark.sh`, `release.sh`) や共通テストフィクスチャ群を追加
+- `.gitignore` を拡充し、ログやビルド成果物を標準で除外
+
+### Changed
+- プロジェクト構成を再編し、ドキュメントを `docs/` 配下へ移動、テストを `cli/`・`integration/`・`fixtures/` へ整理
+- 計測パイプラインを再実装し、小規模入力時の逐次処理と並列処理の切り替え、進捗通知、厳格モードでの失敗伝播を改善
+- ソート処理を新しい `SortStrategy` に刷新し、複数キーやワード数ソートを値オブジェクトベースで安定処理
+- CLI 構成ローダーを更新し、`--min-words` / `--max-words` / `--sort words` / `--filter` 内の `words` 参照時に単語数計測を自動有効化
+- `--abs-canonical` を単独指定しても絶対パスを出力するように挙動を調整
+- `.gitignore` や構成ファイルの整理に合わせてテストユーティリティ (`TempDir`, `TempWorkspace`, アサーションマッチャー) を共通化
+- CLI で `--top` や `--by-limit` に 0 を指定した場合、また `--jobs` の上限外指定時に即座にエラーを返すようバリデーションを強化
+
+### Fixed
+- 厳格モード (`--strict`) で読み取り不能ファイルが存在する場合に確実にエラーとするよう修正し、非厳格モードでは警告を出して継続
+- フィルタ式のパースエラーをユーザーに明示的に報告し、無音でレコードが欠落しないように修正
+- 行数・文字数・単語数レンジフィルタが値オブジェクト経由でも正しく適用されるよう整備
 
 ## [0.5.0] - 2024-10-27
 
@@ -90,5 +100,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Security**: Security improvements
 - **Performance**: Performance improvements
 
-[Unreleased]: https://github.com/jungamer-64/count_lines/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/jungamer-64/count_lines/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/jungamer-64/count_lines/compare/v0.5.0...v0.7.0
 [0.5.0]: https://github.com/jungamer-64/count_lines/releases/tag/v0.5.0

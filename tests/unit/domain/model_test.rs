@@ -1,6 +1,7 @@
+use std::path::PathBuf;
+
 use chrono::Local;
 use count_lines_core::domain::model::{FileMeta, FileStats, Summary};
-use std::path::PathBuf;
 
 fn make_stats(path: &str, lines: usize, chars: usize, words: Option<usize>) -> FileStats {
     let meta = FileMeta {

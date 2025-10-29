@@ -6,20 +6,21 @@ use crate::{
         config::Config,
         model::{FileStats, Summary},
     },
+    error::Result,
     infrastructure::{
         io::output::utils::format_path,
         serialization::{JsonFile, JsonGroup, JsonGroupRow, JsonOutput, JsonSummary},
     },
 };
 
-pub fn output_json(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+pub fn output_json(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let output = build_json_output(stats, config);
     serde_json::to_writer_pretty(&mut *out, &output)?;
     writeln!(out)?;
     Ok(())
 }
 
-pub fn output_yaml(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+pub fn output_yaml(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let output = build_json_output(stats, config);
     let yaml_str = serde_yaml::to_string(&output)?;
     writeln!(out, "{}", yaml_str)?;

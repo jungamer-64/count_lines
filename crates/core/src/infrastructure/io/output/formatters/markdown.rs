@@ -6,17 +6,18 @@ use crate::{
         config::Config,
         model::{FileStats, Summary},
     },
+    error::Result,
     infrastructure::io::output::utils::{format_path, format_ratio, limited, safe_key_label, truncate_rows},
 };
 
-pub fn output_markdown(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+pub fn output_markdown(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     write_markdown_header(config, out)?;
     write_markdown_rows(stats, config, out)?;
     write_markdown_aggregations(stats, config, out)?;
     Ok(())
 }
 
-fn write_markdown_header(config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+fn write_markdown_header(config: &Config, out: &mut impl Write) -> Result<()> {
     if config.words {
         if config.ratio {
             writeln!(
@@ -34,7 +35,7 @@ fn write_markdown_header(config: &Config, out: &mut impl Write) -> anyhow::Resul
     Ok(())
 }
 
-fn write_markdown_rows(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+fn write_markdown_rows(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let summary = Summary::from_stats(stats);
     for s in limited(stats, config) {
         let path = format_path(s, config).replace('|', "\\|");
@@ -70,11 +71,7 @@ fn write_markdown_rows(stats: &[FileStats], config: &Config, out: &mut impl Writ
     Ok(())
 }
 
-fn write_markdown_aggregations(
-    stats: &[FileStats],
-    config: &Config,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+fn write_markdown_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let groups = Aggregator::aggregate(stats, &config.by_modes);
     for (label, mut rows) in groups {
         writeln!(out, "\n### {label}\n")?;

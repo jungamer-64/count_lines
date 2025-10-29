@@ -3,18 +3,22 @@ mod snapshot;
 
 use std::{collections::HashMap, path::Path};
 
-use anyhow::Result;
 use snapshot::{FileItem, Snapshot};
 
-use crate::infrastructure::persistence::FileReader;
+use crate::{
+    error::{InfrastructureError, Result},
+    infrastructure::persistence::FileReader,
+};
 
 /// Compare two JSON snapshot files and return a formatted diff. The
 /// snapshots must be compatible with the output of `count_lines --format json`.
 pub fn run(old_path: &Path, new_path: &Path) -> Result<String> {
-    let old_file = FileReader::open(old_path)?;
-    let new_file = FileReader::open(new_path)?;
-    let old: Snapshot = serde_json::from_reader(old_file)?;
-    let new: Snapshot = serde_json::from_reader(new_file)?;
+    let old_file = FileReader::open(old_path)
+        .map_err(|source| InfrastructureError::FileRead { path: old_path.to_path_buf(), source })?;
+    let new_file = FileReader::open(new_path)
+        .map_err(|source| InfrastructureError::FileRead { path: new_path.to_path_buf(), source })?;
+    let old: Snapshot = serde_json::from_reader(old_file).map_err(InfrastructureError::from)?;
+    let new: Snapshot = serde_json::from_reader(new_file).map_err(InfrastructureError::from)?;
     let comparison = SnapshotComparison::new(old, new);
     Ok(comparison.format())
 }

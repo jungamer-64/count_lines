@@ -1,3 +1,9 @@
+use std::{
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
+
 use count_lines_core::{
     domain::{
         config::{ByKey, Config, Filters},
@@ -5,11 +11,6 @@ use count_lines_core::{
         options::OutputFormat,
     },
     infrastructure::measurement::strategies::{measure_by_lines, measure_entire_file},
-};
-use std::{
-    fs,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 struct TempFile {
@@ -20,11 +21,7 @@ impl TempFile {
     fn new(prefix: &str, contents: &[u8]) -> Self {
         let base = std::env::temp_dir().join("count_lines_tests");
         fs::create_dir_all(&base).unwrap();
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-            .to_string();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string();
         let path = base.join(format!("{prefix}_{unique}.tmp"));
         fs::write(&path, contents).unwrap();
         Self { path }
@@ -91,9 +88,9 @@ fn line_based_measurement_counts_crlf_and_words() {
     config.words = true;
 
     let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
-    assert_eq!(stats.lines, 3);
-    assert_eq!(stats.chars, 14);
-    assert_eq!(stats.words, Some(3));
+    assert_eq!(stats.lines().value(), 3);
+    assert_eq!(stats.chars().value(), 14);
+    assert_eq!(stats.words().map(|w| w.value()), Some(3));
 }
 
 #[test]
@@ -105,9 +102,9 @@ fn byte_based_measurement_counts_newlines() {
 
     let stats =
         measure_entire_file(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
-    assert_eq!(stats.lines, 2);
-    assert_eq!(stats.chars, 7);
-    assert_eq!(stats.words, Some(2));
+    assert_eq!(stats.lines().value(), 2);
+    assert_eq!(stats.chars().value(), 7);
+    assert_eq!(stats.words().map(|w| w.value()), Some(2));
 }
 
 #[test]

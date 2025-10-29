@@ -3,11 +3,9 @@ use std::path::PathBuf;
 use chrono::{DateTime, Local};
 
 use crate::domain::{
-    config::ByKey,
+    config::{ByKey, Filters},
     options::{OutputFormat, SortKey},
 };
-
-use crate::domain::config::Filters;
 
 /// Domain representation of resolved configuration options.
 #[derive(Debug, Clone)]

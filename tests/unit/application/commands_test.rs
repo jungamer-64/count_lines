@@ -1,18 +1,20 @@
-use anyhow::{anyhow, Result};
+use std::{
+    error::Error,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+
 use count_lines_core::{
     application::commands::{
-        AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor, RunAnalysisCommand,
-        RunAnalysisHandler,
+        AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
+        RunAnalysisCommand, RunAnalysisHandler,
     },
     domain::{
         config::{ByKey, Config, Filters},
         model::{FileEntry, FileMeta, FileStats},
         options::{OutputFormat, SortKey},
     },
-};
-use std::{
-    path::PathBuf,
-    sync::{Arc, Mutex},
+    error::{ApplicationError, Result},
 };
 
 fn base_config() -> Config {
@@ -102,7 +104,9 @@ impl FileStatisticsProcessor for StubProcessor {
     fn measure(&self, _entries: Vec<FileEntry>, _config: &Config) -> Result<Vec<FileStats>> {
         match &self.outcome {
             ProcessorOutcome::Success(stats) => Ok(stats.clone()),
-            ProcessorOutcome::Failure(message) => Err(anyhow!(message.clone())),
+            ProcessorOutcome::Failure(message) => {
+                Err(ApplicationError::MeasurementFailed(message.clone()).into())
+            }
         }
     }
 }
@@ -137,11 +141,7 @@ impl RecordingNotifier {
     fn new() -> (Self, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<String>>>) {
         let infos = Arc::new(Mutex::new(Vec::new()));
         let warns = Arc::new(Mutex::new(Vec::new()));
-        (
-            Self { infos: Arc::clone(&infos), warns: Arc::clone(&warns) },
-            infos,
-            warns,
-        )
+        (Self { infos: Arc::clone(&infos), warns: Arc::clone(&warns) }, infos, warns)
     }
 }
 
@@ -181,7 +181,7 @@ fn handler_sorts_results_and_notifies_progress() {
     assert_eq!(first_call, &vec![("a.rs".into(), 12), ("b.rs".into(), 4)]);
 
     let info_messages = infos.lock().unwrap();
-    assert!(info_messages.iter().any(|msg| msg.contains("scanning & measuring")));
+    assert!(info_messages.iter().any(|msg| msg.contains("Starting analysis")));
 }
 
 #[test]
@@ -195,8 +195,17 @@ fn handler_propagates_errors_when_strict() {
 
     let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, None);
     let err = handler.handle(&RunAnalysisCommand::new(&config)).expect_err("strict mode should fail");
-    assert!(err.to_string().contains("failed to measure entries"));
-    assert!(err.chain().any(|cause| cause.to_string().contains("boom")));
+    assert!(err.to_string().contains("Failed to measure file statistics"));
+    let mut current: Option<&dyn std::error::Error> = err.source();
+    let mut found = false;
+    while let Some(cause) = current {
+        if cause.to_string().contains("boom") {
+            found = true;
+            break;
+        }
+        current = cause.source();
+    }
+    assert!(found, "expected error chain to contain source with 'boom'");
     assert!(calls.lock().unwrap().is_empty());
 }
 

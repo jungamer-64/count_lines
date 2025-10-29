@@ -3,25 +3,34 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::Result;
-
-use crate::infrastructure::persistence::FileReader;
+use crate::{
+    error::{InfrastructureError, Result},
+    infrastructure::persistence::FileReader,
+};
 
 pub(crate) fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
-    let reader = FileReader::open_buffered(path)?;
-    Ok(reader
-        .lines()
-        .map_while(Result::ok)
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .map(PathBuf::from)
-        .collect())
+    let reader = FileReader::open_buffered(path)
+        .map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
+
+    let mut files = Vec::new();
+    for line in reader.lines() {
+        let line =
+            line.map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
+        let trimmed = line.trim();
+        if !trimmed.is_empty() {
+            files.push(PathBuf::from(trimmed));
+        }
+    }
+
+    Ok(files)
 }
 
 pub(crate) fn read_files_from_null(path: &Path) -> Result<Vec<PathBuf>> {
-    let mut file = FileReader::open(path)?;
+    let mut file = FileReader::open(path)
+        .map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
     let mut buf = Vec::new();
-    file.read_to_end(&mut buf)?;
+    file.read_to_end(&mut buf)
+        .map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
     Ok(buf
         .split(|&b| b == 0)
         .filter_map(|chunk| {

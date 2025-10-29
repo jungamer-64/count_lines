@@ -1,10 +1,11 @@
-use count_lines_core::infrastructure::comparison;
-use serde_json::json;
 use std::{
     fs,
     path::PathBuf,
     time::{SystemTime, UNIX_EPOCH},
 };
+
+use count_lines_core::infrastructure::comparison;
+use serde_json::json;
 
 struct TempFile {
     path: PathBuf,
@@ -14,11 +15,7 @@ impl TempFile {
     fn new(prefix: &str, contents: &str) -> Self {
         let base = std::env::temp_dir().join("count_lines_snapshot");
         fs::create_dir_all(&base).unwrap();
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-            .to_string();
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string();
         let path = base.join(format!("{prefix}_{unique}.json"));
         fs::write(&path, contents).unwrap();
         Self { path }

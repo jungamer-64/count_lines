@@ -1,10 +1,11 @@
 use std::path::Path;
 
-use anyhow::Result;
-
-use crate::domain::{
-    config::Config,
-    model::{FileEntry, FileStats},
+use crate::{
+    domain::{
+        config::Config,
+        model::{FileEntry, FileStats},
+    },
+    error::Result,
 };
 
 pub trait SnapshotComparator {

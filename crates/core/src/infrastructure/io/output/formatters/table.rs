@@ -6,10 +6,11 @@ use crate::{
         config::Config,
         model::{FileStats, Summary},
     },
+    error::Result,
     infrastructure::io::output::utils::{format_path, format_ratio, limited, truncate_rows},
 };
 
-pub fn output_table(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+pub fn output_table(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     if config.total_only {
         return output_summary(stats, config, out);
     }
@@ -23,7 +24,7 @@ pub fn output_table(stats: &[FileStats], config: &Config, out: &mut impl Write) 
     output_summary(stats, config, out)
 }
 
-fn write_table_header(config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+fn write_table_header(config: &Config, out: &mut impl Write) -> Result<()> {
     writeln!(out)?;
     if config.words {
         if config.ratio {
@@ -40,7 +41,7 @@ fn write_table_header(config: &Config, out: &mut impl Write) -> anyhow::Result<(
     Ok(())
 }
 
-fn write_table_rows(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+fn write_table_rows(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let summary = Summary::from_stats(stats);
     for s in limited(stats, config) {
         let path = format_path(s, config);
@@ -77,7 +78,7 @@ fn write_table_rows(stats: &[FileStats], config: &Config, out: &mut impl Write) 
     Ok(())
 }
 
-fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let groups = Aggregator::aggregate(stats, &config.by_modes);
     for (label, mut rows) in groups {
         writeln!(out, "[{label}]")?;
@@ -91,7 +92,7 @@ fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write
     Ok(())
 }
 
-fn output_summary(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+fn output_summary(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let summary = Summary::from_stats(stats);
     if config.words {
         writeln!(

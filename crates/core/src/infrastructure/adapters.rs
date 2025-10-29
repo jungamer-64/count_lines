@@ -1,7 +1,5 @@
 use std::path::Path;
 
-use anyhow::Result;
-
 use crate::{
     application::commands::{
         AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
@@ -11,6 +9,7 @@ use crate::{
         config::Config,
         model::{FileEntry, FileStats},
     },
+    error::{InfrastructureError, Result},
 };
 
 pub struct FileSystemEntryProvider;
@@ -25,7 +24,7 @@ pub struct ParallelFileStatisticsProcessor;
 
 impl FileStatisticsProcessor for ParallelFileStatisticsProcessor {
     fn measure(&self, entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
-        Ok(crate::infrastructure::measurement::measure_entries(entries, config)?)
+        crate::infrastructure::measurement::measure_entries(entries, config)
     }
 }
 
@@ -34,6 +33,7 @@ pub struct OutputEmitter;
 impl FileStatisticsPresenter for OutputEmitter {
     fn present(&self, stats: &[FileStats], config: &Config) -> Result<()> {
         crate::infrastructure::io::output::emit(stats, config)
+            .map_err(|err| InfrastructureError::OutputError(err.to_string()).into())
     }
 }
 

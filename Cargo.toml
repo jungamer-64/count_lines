@@ -1,6 +1,6 @@
 [package]
 name = "count_lines"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 description = "ファイル行数/文字数/単語数の集計ツール (拡張版)"
 license = "MIT OR Apache-2.0"
@@ -13,14 +13,14 @@ categories = ["command-line-utilities", "development-tools"]
 members = ["crates/core"]
 
 [workspace.package]
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jungamer-64/count_lines"
 
 [dependencies]
 anyhow.workspace = true
-count_lines_core = { version = "0.6.1", path = "crates/core" }
+count_lines_core = { version = "0.7.0", path = "crates/core" }
 proptest = "1.9.0"
 thiserror = "2.0.17"
 

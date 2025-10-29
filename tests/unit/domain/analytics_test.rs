@@ -1,3 +1,5 @@
+use std::{collections::HashMap, path::Path};
+
 use chrono::{Local, TimeZone};
 use count_lines_core::domain::{
     analytics::Aggregator,
@@ -5,7 +7,6 @@ use count_lines_core::domain::{
     grouping::Granularity,
     model::{FileMeta, FileStats},
 };
-use std::{collections::HashMap, path::Path};
 
 fn make_stats(
     path: &str,
@@ -14,8 +15,13 @@ fn make_stats(
     ext: &str,
     mtime: Option<chrono::DateTime<Local>>,
 ) -> FileStats {
-    let meta =
-        FileMeta { size: 0, mtime, is_text: true, ext: ext.to_string(), name: Path::new(path).file_name().unwrap().to_string_lossy().into() };
+    let meta = FileMeta {
+        size: 0,
+        mtime,
+        is_text: true,
+        ext: ext.to_string(),
+        name: Path::new(path).file_name().unwrap().to_string_lossy().into(),
+    };
     FileStats::new(path.into(), lines, chars, Some(lines / 2), &meta)
 }
 

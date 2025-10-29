@@ -5,15 +5,11 @@ use crate::{
         config::Config,
         model::{FileStats, Summary},
     },
+    error::Result,
     infrastructure::io::output::utils::{escape_field, format_path, limited},
 };
 
-pub fn output_delimited(
-    stats: &[FileStats],
-    config: &Config,
-    sep: char,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+pub fn output_delimited(stats: &[FileStats], config: &Config, sep: char, out: &mut impl Write) -> Result<()> {
     write_delimited_header(config, sep, out)?;
     write_delimited_rows(stats, config, sep, out)?;
     if config.total_row {
@@ -22,7 +18,7 @@ pub fn output_delimited(
     Ok(())
 }
 
-fn write_delimited_header(config: &Config, sep: char, out: &mut impl Write) -> anyhow::Result<()> {
+fn write_delimited_header(config: &Config, sep: char, out: &mut impl Write) -> Result<()> {
     if config.words {
         writeln!(out, "lines{sep}chars{sep}words{sep}file")?;
     } else {
@@ -31,12 +27,7 @@ fn write_delimited_header(config: &Config, sep: char, out: &mut impl Write) -> a
     Ok(())
 }
 
-fn write_delimited_rows(
-    stats: &[FileStats],
-    config: &Config,
-    sep: char,
-    out: &mut impl Write,
-) -> anyhow::Result<()> {
+fn write_delimited_rows(stats: &[FileStats], config: &Config, sep: char, out: &mut impl Write) -> Result<()> {
     for s in limited(stats, config) {
         let path = escape_field(&format_path(s, config), sep);
         if config.words {
@@ -53,7 +44,7 @@ fn write_delimited_total(
     config: &Config,
     sep: char,
     out: &mut impl Write,
-) -> anyhow::Result<()> {
+) -> Result<()> {
     let summary = Summary::from_stats(stats);
     let total_label = escape_field("TOTAL", sep);
     if config.words {

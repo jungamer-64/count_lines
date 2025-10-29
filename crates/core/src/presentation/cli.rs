@@ -7,27 +7,39 @@ use clap::Parser;
 use crate::{
     application::{ConfigOptions, ConfigQueryService, FilterOptions},
     domain::config::Config,
+    error::{PresentationError, Result},
 };
 
-fn validate_numeric_args(
-    top: Option<usize>,
-    by_limit: Option<usize>,
-    jobs: Option<usize>,
-) -> anyhow::Result<()> {
+fn validate_numeric_args(top: Option<usize>, by_limit: Option<usize>, jobs: Option<usize>) -> Result<()> {
     if let Some(t) = top
         && t == 0
     {
-        anyhow::bail!("--top must be at least 1");
+        return Err(PresentationError::InvalidValue {
+            flag: "--top".to_string(),
+            value: t.to_string(),
+            reason: "must be at least 1".to_string(),
+        }
+        .into());
     }
     if let Some(bl) = by_limit
         && bl == 0
     {
-        anyhow::bail!("--by-limit must be at least 1");
+        return Err(PresentationError::InvalidValue {
+            flag: "--by-limit".to_string(),
+            value: bl.to_string(),
+            reason: "must be at least 1".to_string(),
+        }
+        .into());
     }
     if let Some(j) = jobs
         && (j == 0 || j > 512)
     {
-        anyhow::bail!("--jobs must be between 1 and 512");
+        return Err(PresentationError::InvalidValue {
+            flag: "--jobs".to_string(),
+            value: j.to_string(),
+            reason: "must be between 1 and 512".to_string(),
+        }
+        .into());
     }
     Ok(())
 }
@@ -35,13 +47,13 @@ fn validate_numeric_args(
 pub use args::Args;
 
 /// Parse CLI arguments and materialise a domain [`Config`].
-pub fn load_config() -> anyhow::Result<Config> {
+pub fn load_config() -> Result<Config> {
     let args = Args::parse();
     build_config(args)
 }
 
 /// Convert parsed CLI arguments into a domain configuration.
-pub fn build_config(args: Args) -> anyhow::Result<Config> {
+pub fn build_config(args: Args) -> Result<Config> {
     // Validate numeric arguments
     validate_numeric_args(args.top, args.by_limit, args.jobs)?;
 

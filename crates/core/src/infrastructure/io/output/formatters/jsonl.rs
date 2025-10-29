@@ -5,10 +5,11 @@ use crate::{
         config::Config,
         model::{FileStats, Summary},
     },
+    error::Result,
     infrastructure::io::output::utils::format_path,
 };
 
-pub fn output_jsonl(stats: &[FileStats], config: &Config, out: &mut impl Write) -> anyhow::Result<()> {
+pub fn output_jsonl(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     for s in stats {
         let item = serde_json::json!({
             "type": "file",

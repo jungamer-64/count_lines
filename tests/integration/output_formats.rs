@@ -1,51 +1,20 @@
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
 use count_lines_core::{
-    run_with_config,
-    ConfigOptions,
-    ConfigQueryService,
-    FilterOptions,
+    application::{ConfigOptions, ConfigQueryService, FilterOptions},
     domain::{
         grouping::ByMode,
         options::{OutputFormat, SortKey},
     },
-};
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    run_with_config,
 };
 
-struct TempDir {
-    path: PathBuf,
-}
-
-impl TempDir {
-    fn new(prefix: &str) -> Self {
-        let base = std::env::temp_dir().join("count_lines_output_formats");
-        fs::create_dir_all(&base).unwrap();
-        let unique = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-            .to_string();
-        let path = base.join(format!("{prefix}_{unique}"));
-        fs::create_dir(&path).unwrap();
-        Self { path }
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
-}
-
-fn write_file(root: &Path, name: &str, contents: &str) {
-    let path = root.join(name);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).unwrap();
-    }
-    fs::write(path, contents).unwrap();
-}
+#[path = "../common/mod.rs"]
+mod common;
+use common::TempDir;
 
 fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOptions {
     ConfigOptions {
@@ -84,20 +53,16 @@ fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOp
 }
 
 fn setup_fixture(temp: &TempDir) {
-    write_file(
-        &temp.path,
-        "src/lib.rs",
-        "fn main() {\n    println!(\"hello\");\n}\n",
-    );
-    write_file(&temp.path, "docs/readme.md", "# Intro\nLine\n");
+    temp.write_file("src/lib.rs", "fn main() {\n    println!(\"hello\");\n}\n");
+    temp.write_file("docs/readme.md", "# Intro\nLine\n");
 }
 
 #[test]
 fn csv_output_contains_header_and_total_row() {
-    let temp = TempDir::new("csv");
+    let temp = TempDir::new("csv", "count_lines_output_formats");
     setup_fixture(&temp);
-    let output_path = temp.path.join("report.csv");
-    let options = build_options(&temp.path, output_path.clone(), OutputFormat::Csv);
+    let output_path = temp.path().join("report.csv");
+    let options = build_options(temp.path(), output_path.clone(), OutputFormat::Csv);
     let config = ConfigQueryService::build(options).expect("config builds");
 
     run_with_config(config).expect("run succeeds");
@@ -110,10 +75,10 @@ fn csv_output_contains_header_and_total_row() {
 
 #[test]
 fn markdown_output_renders_table_and_group() {
-    let temp = TempDir::new("markdown");
+    let temp = TempDir::new("markdown", "count_lines_output_formats");
     setup_fixture(&temp);
-    let output_path = temp.path.join("report.md");
-    let options = build_options(&temp.path, output_path.clone(), OutputFormat::Md);
+    let output_path = temp.path().join("report.md");
+    let options = build_options(temp.path(), output_path.clone(), OutputFormat::Md);
     let config = ConfigQueryService::build(options).expect("config builds");
 
     run_with_config(config).expect("run succeeds");

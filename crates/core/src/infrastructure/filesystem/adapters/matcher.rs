@@ -1,6 +1,8 @@
-use crate::domain::config::{Config, Filters};
-use chrono::{DateTime, Local};
 use std::path::Path;
+
+use chrono::{DateTime, Local};
+
+use crate::domain::config::{Config, Filters};
 
 /// デフォルトで除外するディレクトリ
 const DEFAULT_PRUNE_DIRS: &[&str] = &[
@@ -145,8 +147,5 @@ impl PathMatcher {
 
 /// パスが隠しファイルか判定
 fn is_hidden(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .map(|name| name.starts_with('.'))
-        .unwrap_or(false)
+    path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with('.')).unwrap_or(false)
 }

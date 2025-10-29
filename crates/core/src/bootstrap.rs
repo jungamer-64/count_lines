@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub fn run() -> Result<()> {
-    let config = cli::load_config()?;
+    let config = cli::load_config().map_err(anyhow::Error::from)?;
     run_with_config(config)
 }
 
@@ -35,5 +35,6 @@ pub fn run_with_config(config: Config) -> Result<()> {
     let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
     let command = RunAnalysisCommand::new(&config);
 
-    handler.handle(&command)
+    handler.handle(&command)?;
+    Ok(())
 }

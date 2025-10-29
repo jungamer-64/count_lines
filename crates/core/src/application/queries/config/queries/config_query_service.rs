@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 
 use crate::{
     application::queries::config::commands::{ConfigOptions, FilterOptions},
@@ -5,10 +6,9 @@ use crate::{
         config::{ByKey, Config, Filters, Range, SizeRange},
         grouping::ByMode,
     },
+    error::{DomainError, Result},
     shared::{path::logical_absolute, patterns::parse_patterns},
 };
-use anyhow::Result;
-use std::collections::HashSet;
 
 /// 設定クエリサービス
 pub struct ConfigQueryService;
@@ -63,9 +63,13 @@ impl ConfigQueryService {
         let filter_ast = options
             .filter
             .as_ref()
-            .map(|expr| evalexpr::build_operator_tree(expr))
-            .transpose()
-            .map_err(|e| anyhow::anyhow!("Invalid filter expression: {e}"))?;
+            .map(|expr| {
+                evalexpr::build_operator_tree(expr).map_err(|e| DomainError::InvalidFilterExpression {
+                    expression: expr.clone(),
+                    details: e.to_string(),
+                })
+            })
+            .transpose()?;
 
         Ok(Filters {
             include_patterns: parse_patterns(&options.include)?,
@@ -85,11 +89,7 @@ impl ConfigQueryService {
     fn parse_extensions(ext_arg: Option<&str>) -> HashSet<String> {
         ext_arg
             .map(|s| {
-                s.split(',')
-                    .map(str::trim)
-                    .filter(|e| !e.is_empty())
-                    .map(|e| e.to_lowercase())
-                    .collect()
+                s.split(',').map(str::trim).filter(|e| !e.is_empty()).map(|e| e.to_lowercase()).collect()
             })
             .unwrap_or_default()
     }
@@ -111,25 +111,15 @@ impl ConfigQueryService {
     }
 
     fn sort_uses_words(sort_specs: &[(crate::domain::options::SortKey, bool)]) -> bool {
-        sort_specs
-            .iter()
-            .any(|(key, _)| matches!(key, crate::domain::options::SortKey::Words))
+        sort_specs.iter().any(|(key, _)| matches!(key, crate::domain::options::SortKey::Words))
     }
 
     fn normalize_paths(paths: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
-        if paths.is_empty() {
-            vec![std::path::PathBuf::from(".")]
-        } else {
-            paths
-        }
+        if paths.is_empty() { vec![std::path::PathBuf::from(".")] } else { paths }
     }
 
     fn convert_by_modes(modes: Vec<ByMode>) -> Vec<ByKey> {
-        modes
-            .into_iter()
-            .filter(|mode| !matches!(mode, ByMode::None))
-            .map(Self::convert_by_mode)
-            .collect()
+        modes.into_iter().filter(|mode| !matches!(mode, ByMode::None)).map(Self::convert_by_mode).collect()
     }
 
     fn convert_by_mode(mode: ByMode) -> ByKey {
