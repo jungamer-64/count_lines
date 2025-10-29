@@ -4,7 +4,7 @@
 - Introduce a file-statistics cache and change-notification loop to avoid rescanning entire workspaces after small edits.
 - Primary goals: speed up local feedback during development, reduce CI cost for PR diff checks, and leverage existing JSON diff tooling.
 - Scope covers a single execution (`--incremental`) and a long-running watcher (`--watch`); defaults remain backward compatible.
-- Status: incremental cache shipped (`--incremental`, `--cache-dir`); watch mode remains planned.
+- Status: incremental cache + watch mode shipped (`--incremental`, `--cache-dir`, `--watch`, `--watch-interval`, `--watch-output`, `--cache-verify`, `--clear-cache`)。`--watch-output jsonl` は各リフレッシュ結果を JSON Lines で通知し、`changed_files` / `removed_files` を含みます。
 
 ## CLI Additions (Draft)
 - `--incremental` &ndash; reuse cached measurements and recompute only for changed files.

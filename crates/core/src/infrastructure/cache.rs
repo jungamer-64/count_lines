@@ -105,8 +105,12 @@ impl CacheStore {
         self.entries.insert(key, CacheEntry::from_result(entry, stats, hash_hex));
     }
 
-    pub fn prune_except(&mut self, retain: &HashSet<String>) {
-        self.entries.retain(|k, _| retain.contains(k));
+    pub fn prune_except(&mut self, retain: &HashSet<String>) -> Vec<String> {
+        let to_remove: Vec<String> = self.entries.keys().filter(|k| !retain.contains(*k)).cloned().collect();
+        for key in &to_remove {
+            self.entries.remove(key);
+        }
+        to_remove
     }
 
     pub fn save(&self) -> Result<()> {

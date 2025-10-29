@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     domain::{
@@ -17,7 +17,7 @@ pub trait FileEntryProvider {
 }
 
 pub trait FileStatisticsProcessor {
-    fn measure(&self, entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>>;
+    fn measure(&self, entries: Vec<FileEntry>, config: &Config) -> Result<MeasurementOutcome>;
 }
 
 pub trait FileStatisticsPresenter {
@@ -27,4 +27,17 @@ pub trait FileStatisticsPresenter {
 pub trait AnalysisNotifier {
     fn info(&self, message: &str);
     fn warn(&self, message: &str);
+}
+
+#[derive(Debug, Clone)]
+pub struct MeasurementOutcome {
+    pub stats: Vec<FileStats>,
+    pub changed_files: Vec<PathBuf>,
+    pub removed_files: Vec<PathBuf>,
+}
+
+impl MeasurementOutcome {
+    pub fn new(stats: Vec<FileStats>, changed_files: Vec<PathBuf>, removed_files: Vec<PathBuf>) -> Self {
+        Self { stats, changed_files, removed_files }
+    }
 }

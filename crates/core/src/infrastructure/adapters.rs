@@ -3,7 +3,7 @@ use std::path::Path;
 use crate::{
     application::commands::{
         AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
-        SnapshotComparator,
+        MeasurementOutcome, SnapshotComparator,
     },
     domain::{
         config::Config,
@@ -23,7 +23,7 @@ impl FileEntryProvider for FileSystemEntryProvider {
 pub struct ParallelFileStatisticsProcessor;
 
 impl FileStatisticsProcessor for ParallelFileStatisticsProcessor {
-    fn measure(&self, entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
+    fn measure(&self, entries: Vec<FileEntry>, config: &Config) -> Result<MeasurementOutcome> {
         crate::infrastructure::measurement::measure_entries(entries, config)
     }
 }
@@ -34,6 +34,20 @@ impl FileStatisticsPresenter for OutputEmitter {
     fn present(&self, stats: &[FileStats], config: &Config) -> Result<()> {
         crate::infrastructure::io::output::emit(stats, config)
             .map_err(|err| InfrastructureError::OutputError(err.to_string()).into())
+    }
+}
+
+pub struct JsonlWatchEmitter;
+
+impl JsonlWatchEmitter {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl FileStatisticsPresenter for JsonlWatchEmitter {
+    fn present(&self, _stats: &[FileStats], _config: &Config) -> Result<()> {
+        Ok(())
     }
 }
 

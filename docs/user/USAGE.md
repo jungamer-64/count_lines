@@ -142,7 +142,7 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
 
 * `--watch`, `-w` … ファイル変更を監視して差分のみ再計測（インクリメンタルを自動有効化）
 * `--watch-interval <SECS>` … イベントのデバウンス/ポーリング間隔（既定: 1 秒）
-* `--watch-output {full|jsonl}` … ウォッチ時の出力スタイル（既定: `full`。`jsonl` は各リフレッシュ完了イベントを JSONL で通知）
+* `--watch-output {full|jsonl}` … ウォッチ時の出力スタイル（既定: `full`。`jsonl` は `{"type":"run","status":"ok","timestamp":"…","duration_ms":N,"summary":{…},"changed_files":[…],"removed_files":[…]}` のようなイベントを JSON Lines で通知）
 
 ### 比較モード
 

@@ -64,7 +64,7 @@ count_lines --compare snapshot-20240101.json snapshot-20240401.json
 | 進捗・整形 | `--progress` / `--trim_root /path/to/repo` / `--total_row` | 進捗表示やパス整形、CSV/TSV の合計行追加 |
 | 比較 | `--compare old.json new.json` | 2つの JSON スナップショットの差分を表示 |
 | 動作 | `--incremental` / `--cache-dir ~/.cache/count_lines` | キャッシュを使った差分計測（保存先を指定可能） |
-| ウォッチ | `--watch` / `--watch-interval 2` / `--watch-output jsonl` | ファイル変更を監視し差分再集計（`jsonl` ならイベントを JSON Lines で通知） |
+| ウォッチ | `--watch` / `--watch-interval 2` / `--watch-output jsonl` | ファイル変更を監視し差分再集計（`jsonl` なら `{"type":"run",…,"summary":{…},"changed_files":[…],"removed_files":[…]}` を JSON Lines で通知） |
 
 詳細は [`usage.txt`](usage.txt) を参照してください。
 

@@ -10,6 +10,7 @@ use std::{
 use rayon::prelude::*;
 
 use crate::{
+    application::commands::MeasurementOutcome,
     domain::{
         config::Config,
         model::{FileEntry, FileStats, FileStatsV2},
@@ -22,22 +23,25 @@ use crate::{
 };
 
 /// ファイル計測の主要エントリポイント（改善版）
-pub fn measure_entries(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
+pub fn measure_entries(entries: Vec<FileEntry>, config: &Config) -> Result<MeasurementOutcome> {
     if entries.is_empty() {
-        return Ok(Vec::new());
+        return Ok(MeasurementOutcome::new(Vec::new(), Vec::new(), Vec::new()));
     }
 
     if config.incremental {
         return measure_entries_incremental(entries, config);
     }
 
-    measure_all(entries, config)
+    let stats = measure_all(entries, config)?;
+    let changed = stats.iter().map(|s| s.path.clone()).collect();
+    Ok(MeasurementOutcome::new(stats, changed, Vec::new()))
 }
 
-fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
+fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Result<MeasurementOutcome> {
     let mut cache = CacheStore::load(config)?;
     let mut processed: Vec<IndexedResult> = Vec::with_capacity(entries.len());
     let mut pending: Vec<(usize, String, FileEntry)> = Vec::new();
+    let mut changed_files = Vec::new();
 
     for (index, entry) in entries.into_iter().enumerate() {
         if config.text_only && !entry.meta.is_text {
@@ -70,6 +74,7 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
         for (index, key, entry) in pending.into_iter() {
             if let Some(stats) = measured_map.remove(&entry.path) {
                 processed.push(IndexedResult { index, key, entry, stats });
+                changed_files.push(processed.last().unwrap().entry.path.clone());
             }
         }
     }
@@ -84,12 +89,13 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
         results.push(record.stats);
     }
 
-    cache.prune_except(&retain);
+    let removed_keys = cache.prune_except(&retain);
+    let removed_files = removed_keys.into_iter().map(PathBuf::from).collect();
     if let Err(err) = cache.save() {
         eprintln!("[warn] failed to persist cache: {}", err);
     }
 
-    Ok(results)
+    Ok(MeasurementOutcome::new(results, changed_files, removed_files))
 }
 
 fn measure_all(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {

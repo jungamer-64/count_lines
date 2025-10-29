@@ -8,7 +8,7 @@ use std::{
 use count_lines_core::{
     application::commands::{
         AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
-        RunAnalysisCommand, RunAnalysisHandler,
+        MeasurementOutcome, RunAnalysisCommand, RunAnalysisHandler,
     },
     domain::{
         config::{ByKey, Config, Filters},
@@ -89,8 +89,9 @@ impl FileEntryProvider for StubProvider {
     }
 }
 
+#[derive(Clone)]
 enum ProcessorOutcome {
-    Success(Vec<FileStats>),
+    Success(MeasurementOutcome),
     Failure(String),
 }
 
@@ -100,18 +101,22 @@ struct StubProcessor {
 
 impl StubProcessor {
     fn success(stats: Vec<FileStats>) -> Self {
-        Self { outcome: ProcessorOutcome::Success(stats) }
+        Self { outcome: ProcessorOutcome::Success(MeasurementOutcome::new(stats, Vec::new(), Vec::new())) }
     }
 
     fn failure(message: &str) -> Self {
         Self { outcome: ProcessorOutcome::Failure(message.into()) }
     }
+
+    fn with_outcome(outcome: MeasurementOutcome) -> Self {
+        Self { outcome: ProcessorOutcome::Success(outcome) }
+    }
 }
 
 impl FileStatisticsProcessor for StubProcessor {
-    fn measure(&self, _entries: Vec<FileEntry>, _config: &Config) -> Result<Vec<FileStats>> {
+    fn measure(&self, _entries: Vec<FileEntry>, _config: &Config) -> Result<MeasurementOutcome> {
         match &self.outcome {
-            ProcessorOutcome::Success(stats) => Ok(stats.clone()),
+            ProcessorOutcome::Success(outcome) => Ok(outcome.clone()),
             ProcessorOutcome::Failure(message) => {
                 Err(ApplicationError::MeasurementFailed(message.clone()).into())
             }
@@ -182,7 +187,8 @@ fn handler_sorts_results_and_notifies_progress() {
     let (notifier, infos, _) = RecordingNotifier::new();
 
     let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, Some(&notifier));
-    handler.handle(&RunAnalysisCommand::new(&config)).expect("handler succeeds");
+    let outcome = handler.handle(&RunAnalysisCommand::new(&config)).expect("handler succeeds");
+    assert_eq!(outcome.changed_files.len(), 0);
 
     let recorded = calls.lock().unwrap();
     let first_call = recorded.first().expect("presenter called once");
@@ -226,7 +232,8 @@ fn handler_warns_and_continues_when_not_strict() {
     let (notifier, _, warns) = RecordingNotifier::new();
 
     let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, Some(&notifier));
-    handler.handle(&RunAnalysisCommand::new(&config)).expect("non-strict mode succeeds");
+    let outcome = handler.handle(&RunAnalysisCommand::new(&config)).expect("non-strict mode succeeds");
+    assert!(outcome.stats.is_empty());
 
     let warnings = warns.lock().unwrap();
     assert_eq!(warnings.len(), 1);
@@ -235,4 +242,25 @@ fn handler_warns_and_continues_when_not_strict() {
     let recorded = calls.lock().unwrap();
     assert_eq!(recorded.len(), 1);
     assert!(recorded[0].is_empty());
+}
+
+#[test]
+fn handler_returns_change_metadata() {
+    let mut config = base_config();
+    config.incremental = true;
+
+    let provider = StubProvider { entries: vec![make_entry("src/lib.rs")] };
+    let measurement = MeasurementOutcome::new(
+        vec![make_stats("src/lib.rs", 4)],
+        vec![PathBuf::from("src/lib.rs")],
+        vec![PathBuf::from("old.rs")],
+    );
+    let processor = StubProcessor::with_outcome(measurement);
+    let (presenter, _) = RecordingPresenter::new();
+
+    let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, None);
+    let outcome = handler.handle(&RunAnalysisCommand::new(&config)).expect("handler succeeds");
+
+    assert_eq!(outcome.changed_files, vec![PathBuf::from("src/lib.rs")]);
+    assert_eq!(outcome.removed_files, vec![PathBuf::from("old.rs")]);
 }

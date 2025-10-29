@@ -1,10 +1,12 @@
 // crates/core/src/application/commands/run_analysis/handler.rs
 //! RunAnalysisHandlerのリファクタリング版
 
+use std::path::PathBuf;
+
 use crate::{
     application::commands::{
         AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
-        RunAnalysisCommand,
+        MeasurementOutcome, RunAnalysisCommand,
     },
     domain::{analytics::SortStrategy, config::Config},
     error::*,
@@ -28,19 +30,21 @@ impl<'a> RunAnalysisHandler<'a> {
         Self { entries, processor, presenter, notifier }
     }
 
-    pub fn handle(&self, command: &RunAnalysisCommand<'_>) -> Result<()> {
+    pub fn handle(&self, command: &RunAnalysisCommand<'_>) -> Result<RunOutcome> {
         let config = command.config();
 
         self.log_start(config);
 
         let entries = self.collect_entries(config)?;
-        let mut stats = self.measure_statistics(entries, config)?;
+        let MeasurementOutcome { stats: mut_stats, changed_files, removed_files } =
+            self.measure_statistics(entries, config)?;
+        let mut stats = mut_stats;
         self.apply_sorting(&mut stats, config);
         self.present_results(&stats, config)?;
 
         self.log_completion(&stats);
 
-        Ok(())
+        Ok(RunOutcome { stats, changed_files, removed_files })
     }
 
     fn collect_entries(&self, config: &Config) -> Result<Vec<crate::domain::model::FileEntry>> {
@@ -51,13 +55,13 @@ impl<'a> RunAnalysisHandler<'a> {
         &self,
         entries: Vec<crate::domain::model::FileEntry>,
         config: &Config,
-    ) -> Result<Vec<crate::domain::model::FileStats>> {
+    ) -> Result<MeasurementOutcome> {
         match self.processor.measure(entries, config) {
-            Ok(stats) => Ok(stats),
+            Ok(outcome) => Ok(outcome),
             Err(err) if config.strict => Err(ApplicationError::MeasurementFailed(err.to_string()).into()),
             Err(err) => {
                 self.log_warning(&format!("Measurement warning: {}", err));
-                Ok(Vec::new())
+                Ok(MeasurementOutcome::new(Vec::new(), Vec::new(), Vec::new()))
             }
         }
     }
@@ -94,4 +98,11 @@ impl<'a> RunAnalysisHandler<'a> {
             notifier.warn(message);
         }
     }
+}
+
+#[derive(Debug)]
+pub struct RunOutcome {
+    pub stats: Vec<crate::domain::model::FileStats>,
+    pub changed_files: Vec<PathBuf>,
+    pub removed_files: Vec<PathBuf>,
 }

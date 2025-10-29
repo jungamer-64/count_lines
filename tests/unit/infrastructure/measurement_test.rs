@@ -185,9 +185,11 @@ fn incremental_measurement_populates_cache() {
     config.paths = vec![workspace.path().to_path_buf()];
 
     let entry = make_entry(&file_path, &config);
-    let stats = measure_entries(vec![entry], &config).expect("incremental run succeeds");
-    assert_eq!(stats.len(), 1);
-    assert_eq!(stats[0].lines, 2);
+    let outcome = measure_entries(vec![entry], &config).expect("incremental run succeeds");
+    assert_eq!(outcome.stats.len(), 1);
+    assert_eq!(outcome.stats[0].lines, 2);
+    assert_eq!(outcome.changed_files, vec![workspace.path().join("sample.txt")]);
+    assert!(outcome.removed_files.is_empty());
 
     let cache_file = find_cache_file(&cache_root);
     let cache_data = fs::read_to_string(&cache_file).expect("cache readable");
@@ -208,17 +210,22 @@ fn incremental_measurement_updates_changed_files() {
     let mut config = base_config();
     config.incremental = true;
     config.cache_dir = Some(cache_root.clone());
+    config.cache_verify = true;
     config.paths = vec![workspace.path().to_path_buf()];
 
     let entry_first = make_entry(&file_path, &config);
-    let first_stats = measure_entries(vec![entry_first], &config).expect("first run");
-    assert_eq!(first_stats[0].lines, 2);
+    let first_stats = measure_entries(vec![entry_first.clone()], &config).expect("first run");
+    assert_eq!(first_stats.stats[0].lines, 2);
+    assert_eq!(first_stats.changed_files, vec![file_path.clone()]);
+    assert!(first_stats.removed_files.is_empty());
 
     fs::write(&file_path, b"line1\nline2\nline3\n").unwrap();
 
     let entry_second = make_entry(&file_path, &config);
     let second_stats = measure_entries(vec![entry_second], &config).expect("second run");
-    assert_eq!(second_stats[0].lines, 3, "updated file should be remeasured");
+    assert_eq!(second_stats.stats[0].lines, 3, "updated file should be remeasured");
+    assert_eq!(second_stats.changed_files, vec![file_path.clone()]);
+    assert!(second_stats.removed_files.is_empty());
 
     let cache_file = find_cache_file(&cache_root);
     let cache_data = fs::read_to_string(&cache_file).expect("cache readable");
@@ -248,7 +255,9 @@ fn incremental_respects_updated_filters() {
     config.filters.lines_range.min = Some(10);
     let entry_again = make_entry(&file_path, &config);
     let stats = measure_entries(vec![entry_again], &config).expect("filtered run");
-    assert!(stats.is_empty(), "entry should be filtered out");
+    assert!(stats.stats.is_empty(), "entry should be filtered out");
+    assert!(stats.changed_files.is_empty());
+    assert_eq!(stats.removed_files, vec![workspace.path().join("short.txt")]);
 
     let cache_file = find_cache_file(&cache_root);
     let cache_data = fs::read_to_string(&cache_file).expect("cache readable");

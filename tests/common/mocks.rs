@@ -9,7 +9,7 @@ use std::{
 use count_lines_core::{
     application::commands::{
         AnalysisNotifier, FileEntryProvider, FileStatisticsPresenter, FileStatisticsProcessor,
-        SnapshotComparator,
+        MeasurementOutcome, SnapshotComparator,
     },
     domain::{
         config::Config,
@@ -62,7 +62,7 @@ impl FileEntryProvider for MockFileEntryProvider {
 // ============================================================================
 
 pub enum ProcessorBehavior {
-    Success(Vec<FileStats>),
+    Success(MeasurementOutcome),
     Failure(String),
 }
 
@@ -72,7 +72,7 @@ pub struct MockFileStatisticsProcessor {
 
 impl MockFileStatisticsProcessor {
     pub fn success(stats: Vec<FileStats>) -> Self {
-        Self { behavior: ProcessorBehavior::Success(stats) }
+        Self { behavior: ProcessorBehavior::Success(MeasurementOutcome::new(stats, Vec::new(), Vec::new())) }
     }
 
     pub fn failure(message: impl Into<String>) -> Self {
@@ -85,9 +85,9 @@ impl MockFileStatisticsProcessor {
 }
 
 impl FileStatisticsProcessor for MockFileStatisticsProcessor {
-    fn measure(&self, _entries: Vec<FileEntry>, _config: &Config) -> Result<Vec<FileStats>> {
+    fn measure(&self, _entries: Vec<FileEntry>, _config: &Config) -> Result<MeasurementOutcome> {
         match &self.behavior {
-            ProcessorBehavior::Success(stats) => Ok(stats.clone()),
+            ProcessorBehavior::Success(outcome) => Ok(outcome.clone()),
             ProcessorBehavior::Failure(msg) => Err(InfrastructureError::MeasurementError {
                 path: Path::new("mock").to_path_buf(),
                 reason: msg.clone(),
@@ -338,8 +338,8 @@ mod tests {
         let config = ConfigBuilder::new().build();
 
         let result = processor.measure(vec![], &config).unwrap();
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].lines, 42);
+        assert_eq!(result.stats.len(), 1);
+        assert_eq!(result.stats[0].lines, 42);
     }
 
     #[test]
@@ -357,6 +357,7 @@ mod tests {
         let stats = vec![FileStatsBuilder::new("a.rs").lines(10).build()];
         let setup = MockSetup::new().with_stats(stats);
 
-        assert_eq!(setup.processor.measure(vec![], &ConfigBuilder::new().build()).unwrap().len(), 1);
+        let outcome = setup.processor.measure(vec![], &ConfigBuilder::new().build()).unwrap();
+        assert_eq!(outcome.stats.len(), 1);
     }
 }

@@ -2,4 +2,4 @@ pub mod command;
 pub mod handler;
 
 pub use command::RunAnalysisCommand;
-pub use handler::RunAnalysisHandler;
+pub use handler::{RunAnalysisHandler, RunOutcome};

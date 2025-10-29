@@ -1,17 +1,21 @@
+use std::time::Instant;
+
 use anyhow::{Context, Result, anyhow};
 use atty::Stream;
 use chrono::Utc;
+use serde_json::json;
 
 use crate::{
     application::commands::{RunAnalysisCommand, RunAnalysisHandler, SnapshotComparator},
     domain::{
         config::Config,
+        model::Summary,
         options::{OutputFormat, WatchOutput},
     },
     infrastructure::{
         adapters::{
-            ConsoleNotifier, FileSystemEntryProvider, OutputEmitter, ParallelFileStatisticsProcessor,
-            SnapshotDiffAdapter,
+            ConsoleNotifier, FileSystemEntryProvider, JsonlWatchEmitter, OutputEmitter,
+            ParallelFileStatisticsProcessor, SnapshotDiffAdapter,
         },
         cache::CacheStore,
         watch::WatchService,
@@ -49,6 +53,7 @@ pub fn run_with_config(mut config: Config) -> Result<()> {
 }
 
 fn run_analysis(config: &Config, show_banner: bool) -> Result<()> {
+    let start = Instant::now();
     if let Some((old, new)) = &config.compare {
         let comparator = SnapshotDiffAdapter;
         let diff = comparator.compare(old, new).context("compare failed")?;
@@ -67,16 +72,38 @@ fn run_analysis(config: &Config, show_banner: bool) -> Result<()> {
 
     let entry_provider = FileSystemEntryProvider;
     let processor = ParallelFileStatisticsProcessor;
-    let presenter = OutputEmitter;
     let notifier = ConsoleNotifier;
-    let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
     let command = RunAnalysisCommand::new(config);
 
-    handler.handle(&command)?;
-
     if config.watch && config.watch_output == WatchOutput::Jsonl {
-        let timestamp = Utc::now().to_rfc3339();
-        println!("{{\"type\":\"run\",\"status\":\"ok\",\"timestamp\":\"{}\"}}", timestamp);
+        let presenter = JsonlWatchEmitter::new();
+        let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
+        let outcome = handler.handle(&command)?;
+
+        let duration_ms = start.elapsed().as_millis();
+        let summary = Summary::from_stats(&outcome.stats);
+        let changed: Vec<_> = outcome.changed_files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        let removed: Vec<_> = outcome.removed_files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+
+        let payload = json!({
+            "type": "run",
+            "status": "ok",
+            "timestamp": Utc::now().to_rfc3339(),
+            "duration_ms": duration_ms,
+            "summary": {
+                "lines": summary.lines,
+                "chars": summary.chars,
+                "words": summary.words,
+                "files": summary.files
+            },
+            "changed_files": changed,
+            "removed_files": removed
+        });
+        println!("{}", payload);
+    } else {
+        let presenter = OutputEmitter;
+        let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
+        handler.handle(&command)?;
     }
     Ok(())
 }
