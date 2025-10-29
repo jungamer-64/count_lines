@@ -50,6 +50,11 @@ fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOp
         strict: true,
         incremental: false,
         cache_dir: None,
+        cache_verify: false,
+        clear_cache: false,
+        watch: false,
+        watch_interval: None,
+        watch_output: count_lines_core::domain::options::WatchOutput::Full,
         compare: None,
     }
 }

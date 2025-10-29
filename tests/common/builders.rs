@@ -1,6 +1,6 @@
 //! テストデータ構築用ビルダー
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Local};
 use count_lines_core::domain::{
@@ -146,7 +146,7 @@ impl ConfigBuilder {
     pub fn new() -> Self {
         use count_lines_core::domain::{
             config::{Config, Filters},
-            options::OutputFormat,
+            options::{OutputFormat, WatchOutput},
         };
 
         Self {
@@ -183,6 +183,11 @@ impl ConfigBuilder {
                 strict: false,
                 incremental: false,
                 cache_dir: None,
+                cache_verify: false,
+                clear_cache: false,
+                watch: false,
+                watch_interval: Duration::from_secs(1),
+                watch_output: WatchOutput::Full,
                 compare: None,
             },
         }
@@ -220,6 +225,16 @@ impl ConfigBuilder {
 
     pub fn cache_dir(mut self, dir: PathBuf) -> Self {
         self.config.cache_dir = Some(dir);
+        self
+    }
+
+    pub fn watch(mut self) -> Self {
+        self.config.watch = true;
+        self
+    }
+
+    pub fn watch_interval(mut self, secs: u64) -> Self {
+        self.config.watch_interval = Duration::from_secs(secs);
         self
     }
 

@@ -2,11 +2,12 @@ use std::{
     collections::{HashMap, HashSet, hash_map::DefaultHasher},
     fs,
     hash::{Hash, Hasher},
-    io::{self, Write},
+    io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     domain::{
@@ -26,12 +27,14 @@ struct CacheEntry {
     lines: u64,
     chars: u64,
     words: Option<u64>,
+    hash_hex: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 struct CacheSignature {
     count_newlines_in_chars: bool,
     words: bool,
+    cache_verify: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,15 +87,22 @@ impl CacheStore {
         logical_absolute(path).to_string_lossy().into_owned()
     }
 
-    pub fn get_if_fresh(&self, key: &str, entry: &FileEntry, requires_words: bool) -> Option<FileStats> {
+    pub fn get_if_fresh(
+        &self,
+        key: &str,
+        entry: &FileEntry,
+        requires_words: bool,
+        verify_hash: bool,
+    ) -> Option<FileStats> {
         self.entries
             .get(key)
-            .filter(|cached| cached.matches(entry, requires_words))
+            .filter(|cached| cached.matches(entry, requires_words, verify_hash))
             .map(|cached| cached.to_stats(entry))
     }
 
-    pub fn update(&mut self, key: String, entry: &FileEntry, stats: &FileStats) {
-        self.entries.insert(key, CacheEntry::from_result(entry, stats));
+    pub fn update(&mut self, key: String, entry: &FileEntry, stats: &FileStats, verify_hash: bool) {
+        let hash_hex = verify_hash.then(|| hash_file(&entry.path)).flatten();
+        self.entries.insert(key, CacheEntry::from_result(entry, stats, hash_hex));
     }
 
     pub fn prune_except(&mut self, retain: &HashSet<String>) {
@@ -131,21 +141,33 @@ impl CacheStore {
 }
 
 impl CacheEntry {
-    fn matches(&self, entry: &FileEntry, requires_words: bool) -> bool {
+    fn matches(&self, entry: &FileEntry, requires_words: bool, verify_hash: bool) -> bool {
         if requires_words && self.words.is_none() {
             return false;
         }
-        self.size == entry.meta.size
-            && self.mtime_millis == entry.meta.mtime.as_ref().map(|dt| dt.timestamp_millis())
+        if self.size != entry.meta.size {
+            return false;
+        }
+        if self.mtime_millis != entry.meta.mtime.as_ref().map(|dt| dt.timestamp_millis()) {
+            return false;
+        }
+        if !verify_hash {
+            return true;
+        }
+        match (&self.hash_hex, hash_file(&entry.path)) {
+            (Some(expected), Some(actual)) => expected == &actual,
+            _ => false,
+        }
     }
 
-    fn from_result(entry: &FileEntry, stats: &FileStats) -> Self {
+    fn from_result(entry: &FileEntry, stats: &FileStats, hash_hex: Option<String>) -> Self {
         Self {
             size: entry.meta.size,
             mtime_millis: entry.meta.mtime.as_ref().map(|dt| dt.timestamp_millis()),
             lines: stats.lines as u64,
             chars: stats.chars as u64,
             words: stats.words.map(|w| w as u64),
+            hash_hex,
         }
     }
 
@@ -162,7 +184,11 @@ impl CacheEntry {
 
 impl CacheSignature {
     fn from_config(config: &Config) -> Self {
-        Self { count_newlines_in_chars: config.count_newlines_in_chars, words: config.words }
+        Self {
+            count_newlines_in_chars: config.count_newlines_in_chars,
+            words: config.words,
+            cache_verify: config.cache_verify,
+        }
     }
 }
 
@@ -208,4 +234,32 @@ fn workspace_hash(config: &Config) -> u64 {
         path.hash(&mut hasher);
     }
     hasher.finish()
+}
+
+fn hash_file(path: &Path) -> Option<String> {
+    let mut file = fs::File::open(path).ok()?;
+    let mut hasher = Xxh3::new();
+    let mut buf = [0u8; 8192];
+    loop {
+        match file.read(&mut buf) {
+            Ok(0) => break,
+            Ok(n) => hasher.update(&buf[..n]),
+            Err(_) => return None,
+        }
+    }
+    Some(format!("{:016x}", hasher.digest()))
+}
+
+impl CacheStore {
+    pub fn clear(config: &Config) -> Result<()> {
+        let store = Self::load(config)?;
+        if let Some(path) = store.path {
+            if let Err(err) = fs::remove_file(&path) {
+                if err.kind() != io::ErrorKind::NotFound {
+                    return Err(InfrastructureError::FileWrite { path, source: err }.into());
+                }
+            }
+        }
+        Ok(())
+    }
 }

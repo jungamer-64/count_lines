@@ -50,6 +50,8 @@ serde_yaml = "0.9"
 walkdir = "2.5"
 thiserror = "2.0.17"
 dirs = "5"
+notify = "6.1"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
 
 [profile.release]
 opt-level = 3

@@ -49,6 +49,11 @@ fn base_options(root: &Path) -> ConfigOptions {
         strict: false,
         incremental: false,
         cache_dir: None,
+        cache_verify: false,
+        clear_cache: false,
+        watch: false,
+        watch_interval: None,
+        watch_output: count_lines_core::domain::options::WatchOutput::Full,
         compare: None,
     }
 }

@@ -1,6 +1,6 @@
 use clap::{ValueEnum, builder::PossibleValue};
 
-use crate::domain::options::OutputFormat;
+use crate::domain::options::{OutputFormat, WatchOutput};
 
 impl ValueEnum for OutputFormat {
     fn value_variants<'a>() -> &'a [Self] {
@@ -24,6 +24,20 @@ impl ValueEnum for OutputFormat {
             OutputFormat::Yaml => PossibleValue::new("yaml"),
             OutputFormat::Md => PossibleValue::new("md"),
             OutputFormat::Jsonl => PossibleValue::new("jsonl"),
+        };
+        Some(value)
+    }
+}
+
+impl ValueEnum for WatchOutput {
+    fn value_variants<'a>() -> &'a [Self] {
+        &[WatchOutput::Full, WatchOutput::Jsonl]
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        let value = match self {
+            WatchOutput::Full => PossibleValue::new("full"),
+            WatchOutput::Jsonl => PossibleValue::new("jsonl"),
         };
         Some(value)
     }

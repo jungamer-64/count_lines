@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `--sort size` を追加し、ファイルサイズでのソートをサポートしました。行数/文字数/単語数と同様に `:desc` 修飾子で降順指定が可能です。
 - `--incremental` / `--cache-dir` オプションを追加し、キャッシュを利用した差分計測をサポートしました。小規模変更時の再実行が高速化されます。
+- `--watch` / `--watch-interval` / `--watch-output` を追加し、ファイル変更を監視しながらインクリメンタル再計測できるウォッチモードを導入しました。
+- キャッシュ検証/管理のための `--cache-verify` / `--clear-cache` を追加し、mtime 精度やキャッシュリセットに対応しました。
 
 ## [0.7.0] - 2025-10-29
 

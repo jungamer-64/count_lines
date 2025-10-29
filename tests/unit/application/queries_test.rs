@@ -43,6 +43,11 @@ fn base_options() -> ConfigOptions {
         strict: false,
         incremental: false,
         cache_dir: None,
+        cache_verify: false,
+        clear_cache: false,
+        watch: false,
+        watch_interval: None,
+        watch_output: count_lines_core::domain::options::WatchOutput::Full,
         compare: None,
     }
 }
@@ -81,4 +86,16 @@ fn size_sort_does_not_enable_word_counting() {
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(!config.words, "size sorting should not enable word counting");
     assert_eq!(config.sort_specs, vec![(SortKey::Size, true)]);
+}
+
+#[test]
+fn watch_enables_incremental_and_defaults_interval() {
+    let mut options = base_options();
+    options.watch = true;
+    options.watch_interval = Some(3);
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert!(config.watch, "watch should be enabled");
+    assert!(config.incremental, "watch mode should force incremental execution");
+    assert_eq!(config.watch_interval, std::time::Duration::from_secs(3));
 }

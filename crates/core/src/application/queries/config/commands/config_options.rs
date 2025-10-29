@@ -5,7 +5,7 @@ use chrono::{DateTime, Local};
 use super::FilterOptions;
 use crate::domain::{
     grouping::ByMode,
-    options::{OutputFormat, SortKey},
+    options::{OutputFormat, SortKey, WatchOutput},
 };
 
 /// Command DTO used to capture configuration input.
@@ -44,5 +44,10 @@ pub struct ConfigOptions {
     pub strict: bool,
     pub incremental: bool,
     pub cache_dir: Option<PathBuf>,
+    pub cache_verify: bool,
+    pub clear_cache: bool,
+    pub watch: bool,
+    pub watch_interval: Option<u64>,
+    pub watch_output: WatchOutput,
     pub compare: Option<(PathBuf, PathBuf)>,
 }

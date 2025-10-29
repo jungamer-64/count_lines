@@ -13,6 +13,13 @@ pub enum OutputFormat {
     Jsonl,
 }
 
+/// Output mode used while watching for file changes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WatchOutput {
+    Full,
+    Jsonl,
+}
+
 /// Sorting keys available for ordering results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortKey {

@@ -10,7 +10,12 @@ use crate::{
     error::{PresentationError, Result},
 };
 
-fn validate_numeric_args(top: Option<usize>, by_limit: Option<usize>, jobs: Option<usize>) -> Result<()> {
+fn validate_numeric_args(
+    top: Option<usize>,
+    by_limit: Option<usize>,
+    jobs: Option<usize>,
+    watch_interval: Option<u64>,
+) -> Result<()> {
     if let Some(t) = top
         && t == 0
     {
@@ -41,6 +46,16 @@ fn validate_numeric_args(top: Option<usize>, by_limit: Option<usize>, jobs: Opti
         }
         .into());
     }
+    if let Some(interval) = watch_interval
+        && interval == 0
+    {
+        return Err(PresentationError::InvalidValue {
+            flag: "--watch-interval".to_string(),
+            value: interval.to_string(),
+            reason: "must be at least 1".to_string(),
+        }
+        .into());
+    }
     Ok(())
 }
 
@@ -55,7 +70,7 @@ pub fn load_config() -> Result<Config> {
 /// Convert parsed CLI arguments into a domain configuration.
 pub fn build_config(args: Args) -> Result<Config> {
     // Validate numeric arguments
-    validate_numeric_args(args.top, args.by_limit, args.jobs)?;
+    validate_numeric_args(args.top, args.by_limit, args.jobs, args.watch_interval)?;
 
     let filter_options = FilterOptions {
         include: args.include,
@@ -111,6 +126,11 @@ pub fn build_config(args: Args) -> Result<Config> {
         strict: args.strict,
         incremental: args.incremental,
         cache_dir: args.cache_dir,
+        cache_verify: args.cache_verify,
+        clear_cache: args.clear_cache,
+        watch: args.watch,
+        watch_interval: args.watch_interval,
+        watch_output: args.watch_output,
         compare: compare_tuple,
     };
 
@@ -173,5 +193,14 @@ mod tests {
         let config = build_config(args).expect("config builds");
         let cache_dir = config.cache_dir.expect("cache dir should be set");
         assert!(cache_dir.is_absolute(), "cache dir should be normalised to an absolute path");
+    }
+
+    #[test]
+    fn watch_flag_enables_incremental_and_defaults_interval() {
+        let args = Args::parse_from(["count_lines", "--watch"]);
+        let config = build_config(args).expect("config builds");
+        assert!(config.watch);
+        assert!(config.incremental, "watch should force incremental mode");
+        assert_eq!(config.watch_interval, std::time::Duration::from_secs(1));
     }
 }

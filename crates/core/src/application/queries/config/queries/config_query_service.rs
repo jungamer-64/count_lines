@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Duration};
 
 use crate::{
     application::queries::config::commands::{ConfigOptions, FilterOptions},
@@ -23,6 +23,10 @@ impl ConfigQueryService {
         let by_modes = Self::convert_by_modes(query.by);
         let abs_path = query.abs_path || query.abs_canonical;
         let trim_root = query.trim_root.map(|p| logical_absolute(&p));
+        let watch_interval_secs = query.watch_interval.unwrap_or(1).max(1);
+        let watch_interval = Duration::from_secs(watch_interval_secs);
+        let cache_dir = query.cache_dir.map(|p| logical_absolute(&p));
+        let incremental = query.incremental || query.watch;
 
         Ok(Config {
             format: query.format,
@@ -55,8 +59,13 @@ impl ConfigQueryService {
             ratio: query.ratio,
             output: query.output,
             strict: query.strict,
-            incremental: query.incremental,
-            cache_dir: query.cache_dir.map(|p| logical_absolute(&p)),
+            incremental,
+            cache_dir,
+            cache_verify: query.cache_verify,
+            clear_cache: query.clear_cache,
+            watch: query.watch,
+            watch_interval,
+            watch_output: query.watch_output,
             compare: query.compare,
         })
     }

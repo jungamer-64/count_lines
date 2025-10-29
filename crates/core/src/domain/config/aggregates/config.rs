@@ -1,10 +1,10 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Local};
 
 use crate::domain::{
     config::{ByKey, Filters},
-    options::{OutputFormat, SortKey},
+    options::{OutputFormat, SortKey, WatchOutput},
 };
 
 /// Domain representation of resolved configuration options.
@@ -42,5 +42,10 @@ pub struct Config {
     pub strict: bool,
     pub incremental: bool,
     pub cache_dir: Option<PathBuf>,
+    pub cache_verify: bool,
+    pub clear_cache: bool,
+    pub watch: bool,
+    pub watch_interval: Duration,
+    pub watch_output: WatchOutput,
     pub compare: Option<(PathBuf, PathBuf)>,
 }

@@ -1,7 +1,7 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use count_lines_core::{
@@ -100,6 +100,11 @@ fn base_config() -> Config {
         strict: false,
         incremental: false,
         cache_dir: None,
+        cache_verify: false,
+        clear_cache: false,
+        watch: false,
+        watch_interval: Duration::from_secs(1),
+        watch_output: count_lines_core::domain::options::WatchOutput::Full,
         compare: None,
     }
 }

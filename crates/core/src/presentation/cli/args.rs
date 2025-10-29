@@ -6,7 +6,7 @@ use clap::{Parser, ValueHint};
 use super::parsers::{DateTimeArg, SizeArg};
 use crate::domain::{
     grouping::ByMode,
-    options::{OutputFormat, SortSpec},
+    options::{OutputFormat, SortSpec, WatchOutput},
 };
 
 /// Top-level CLI arguments parsed via clap.
@@ -210,6 +210,26 @@ pub struct Args {
     /// キャッシュ保存先を明示的に指定
     #[arg(long, value_hint = ValueHint::DirPath, help_heading = "動作")]
     pub cache_dir: Option<PathBuf>,
+
+    /// キャッシュを検証する際にハッシュを使用
+    #[arg(long, help_heading = "動作")]
+    pub cache_verify: bool,
+
+    /// キャッシュを削除してから実行
+    #[arg(long, help_heading = "動作")]
+    pub clear_cache: bool,
+
+    /// 変更を監視して継続的に再実行
+    #[arg(short = 'w', long, help_heading = "動作")]
+    pub watch: bool,
+
+    /// 監視イベントのデバウンス/ポーリング間隔 (秒)
+    #[arg(long, help_heading = "動作")]
+    pub watch_interval: Option<u64>,
+
+    /// watch時の出力モード
+    #[arg(long, value_enum, default_value = "full", help_heading = "動作")]
+    pub watch_output: WatchOutput,
 
     /// 比較: 2つの JSON を比較表示
     #[arg(long, num_args = 2, value_names = ["OLD", "NEW"], value_hint = ValueHint::FilePath, help_heading = "比較")]

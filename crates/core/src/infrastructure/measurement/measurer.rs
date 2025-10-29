@@ -46,7 +46,7 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
         }
 
         let key = CacheStore::path_key(&entry.path);
-        if let Some(mut stats) = cache.get_if_fresh(&key, &entry, config.words) {
+        if let Some(mut stats) = cache.get_if_fresh(&key, &entry, config.words, config.cache_verify) {
             match FileMeasurer::apply_filters(stats.to_v2(), config)? {
                 Some(filtered) => {
                     stats = FileStats::from_v2(filtered);
@@ -80,7 +80,7 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
     let mut results = Vec::with_capacity(processed.len());
     for record in processed {
         retain.insert(record.key.clone());
-        cache.update(record.key.clone(), &record.entry, &record.stats);
+        cache.update(record.key.clone(), &record.entry, &record.stats, config.cache_verify);
         results.push(record.stats);
     }
 
