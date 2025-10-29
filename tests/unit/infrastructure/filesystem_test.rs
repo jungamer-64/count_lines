@@ -66,6 +66,8 @@ fn base_config(root: &Path) -> Config {
         ratio: false,
         output: None,
         strict: false,
+        incremental: false,
+        cache_dir: None,
         compare: None,
     }
 }

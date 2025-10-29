@@ -136,6 +136,7 @@ impl SortKey {
                 let b_words = b.words().unwrap_or_default();
                 a_words.cmp(&b_words)
             }
+            Self::Size => a.size().cmp(&b.size()),
             Self::Name => a.path().as_path().cmp(b.path().as_path()),
             Self::Ext => a.ext().cmp(b.ext()),
         }
@@ -171,7 +172,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::domain::value_objects::{CharCount, FilePath, LineCount};
+    use crate::domain::value_objects::{CharCount, FilePath, FileSize, LineCount};
 
     fn make_stats(name: &str, lines: usize, chars: usize) -> FileStats {
         FileStatsV2::builder(FilePath::new(PathBuf::from(name)))
@@ -205,6 +206,26 @@ mod tests {
 
         let names: Vec<_> = stats.iter().map(|s| s.path.to_string_lossy().to_string()).collect();
         assert_eq!(names, vec!["a.txt", "b.txt", "c.txt"]);
+    }
+
+    #[test]
+    fn sort_by_size_descending() {
+        fn make_stats_with_size(name: &str, size: u64) -> FileStats {
+            FileStatsV2::builder(FilePath::new(PathBuf::from(name)))
+                .lines(LineCount::new(1))
+                .chars(CharCount::new(1))
+                .size(FileSize::new(size))
+                .build()
+                .to_legacy()
+        }
+
+        let mut stats = vec![make_stats_with_size("small.txt", 10), make_stats_with_size("large.txt", 100)];
+        let strategy = SortStrategy::new(vec![SortSpec::descending(SortKey::Size)]);
+
+        strategy.apply(&mut stats);
+
+        let names: Vec<_> = stats.iter().map(|s| s.path.to_string_lossy().to_string()).collect();
+        assert_eq!(names, vec!["large.txt", "small.txt"]);
     }
 
     #[test]

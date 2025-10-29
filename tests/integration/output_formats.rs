@@ -48,6 +48,8 @@ fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOp
         ratio: false,
         output: Some(output),
         strict: true,
+        incremental: false,
+        cache_dir: None,
         compare: None,
     }
 }

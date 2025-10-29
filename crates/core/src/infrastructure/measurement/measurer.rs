@@ -1,7 +1,11 @@
 // crates/core/src/infrastructure/measurement/measurer.rs
 //! ファイル計測のリファクタリング版
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use rayon::prelude::*;
 
@@ -11,7 +15,10 @@ use crate::{
         model::{FileEntry, FileStats, FileStatsV2},
     },
     error::*,
-    infrastructure::measurement::strategies::{measure_by_lines, measure_entire_file},
+    infrastructure::{
+        cache::CacheStore,
+        measurement::strategies::{measure_by_lines, measure_entire_file},
+    },
 };
 
 /// ファイル計測の主要エントリポイント（改善版）
@@ -20,12 +27,83 @@ pub fn measure_entries(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<F
         return Ok(Vec::new());
     }
 
-    // 小規模セットは順次処理（並列化オーバーヘッド回避）
+    if config.incremental {
+        return measure_entries_incremental(entries, config);
+    }
+
+    measure_all(entries, config)
+}
+
+fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
+    let mut cache = CacheStore::load(config)?;
+    let mut processed: Vec<IndexedResult> = Vec::with_capacity(entries.len());
+    let mut pending: Vec<(usize, String, FileEntry)> = Vec::new();
+
+    for (index, entry) in entries.into_iter().enumerate() {
+        if config.text_only && !entry.meta.is_text {
+            // テキストのみの場合、非テキストは常に除外
+            continue;
+        }
+
+        let key = CacheStore::path_key(&entry.path);
+        if let Some(mut stats) = cache.get_if_fresh(&key, &entry, config.words) {
+            match FileMeasurer::apply_filters(stats.to_v2(), config)? {
+                Some(filtered) => {
+                    stats = FileStats::from_v2(filtered);
+                    processed.push(IndexedResult { index, key, entry, stats });
+                }
+                None => {
+                    // フィルタ条件を満たさない場合は結果にもキャッシュにも残さない
+                }
+            }
+        } else {
+            pending.push((index, key, entry));
+        }
+    }
+
+    if !pending.is_empty() {
+        let measure_input: Vec<FileEntry> = pending.iter().map(|(_, _, entry)| entry.clone()).collect();
+        let measured = measure_all(measure_input, config)?;
+        let mut measured_map: HashMap<PathBuf, FileStats> =
+            measured.into_iter().map(|stat| (stat.path.clone(), stat)).collect();
+
+        for (index, key, entry) in pending.into_iter() {
+            if let Some(stats) = measured_map.remove(&entry.path) {
+                processed.push(IndexedResult { index, key, entry, stats });
+            }
+        }
+    }
+
+    processed.sort_by_key(|r| r.index);
+
+    let mut retain = HashSet::new();
+    let mut results = Vec::with_capacity(processed.len());
+    for record in processed {
+        retain.insert(record.key.clone());
+        cache.update(record.key.clone(), &record.entry, &record.stats);
+        results.push(record.stats);
+    }
+
+    cache.prune_except(&retain);
+    if let Err(err) = cache.save() {
+        eprintln!("[warn] failed to persist cache: {}", err);
+    }
+
+    Ok(results)
+}
+
+fn measure_all(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
     if entries.len() < 10 || config.jobs == 1 {
         return measure_sequential(entries, config);
     }
-
     measure_parallel(entries, config)
+}
+
+struct IndexedResult {
+    index: usize,
+    key: String,
+    entry: FileEntry,
+    stats: FileStats,
 }
 
 /// 順次処理版
@@ -284,6 +362,8 @@ mod tests {
             ratio: false,
             output: None,
             strict: false,
+            incremental: false,
+            cache_dir: None,
             compare: None,
         }
     }

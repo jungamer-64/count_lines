@@ -55,6 +55,8 @@ impl ConfigQueryService {
             ratio: query.ratio,
             output: query.output,
             strict: query.strict,
+            incremental: query.incremental,
+            cache_dir: query.cache_dir.map(|p| logical_absolute(&p)),
             compare: query.compare,
         })
     }

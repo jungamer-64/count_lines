@@ -42,5 +42,7 @@ pub struct ConfigOptions {
     pub ratio: bool,
     pub output: Option<PathBuf>,
     pub strict: bool,
+    pub incremental: bool,
+    pub cache_dir: Option<PathBuf>,
     pub compare: Option<(PathBuf, PathBuf)>,
 }

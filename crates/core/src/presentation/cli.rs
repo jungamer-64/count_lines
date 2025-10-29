@@ -109,6 +109,8 @@ pub fn build_config(args: Args) -> Result<Config> {
         ratio: args.ratio,
         output: args.output,
         strict: args.strict,
+        incremental: args.incremental,
+        cache_dir: args.cache_dir,
         compare: compare_tuple,
     };
 
@@ -143,10 +145,33 @@ mod tests {
     }
 
     #[test]
+    fn sort_by_size_is_accepted_without_enabling_words() {
+        let args = Args::parse_from(["count_lines", "--sort", "size:desc"]);
+        let config = build_config(args).expect("config builds");
+        assert!(!config.words, "sorting by size should not enable word counting");
+        assert_eq!(config.sort_specs, vec![(crate::domain::options::SortKey::Size, true)]);
+    }
+
+    #[test]
     fn abs_canonical_implies_abs_path() {
         let args = Args::parse_from(["count_lines", "--abs-canonical"]);
         let config = build_config(args).expect("config builds");
         assert!(config.abs_canonical);
         assert!(config.abs_path, "--abs-canonical should imply absolute path formatting");
+    }
+
+    #[test]
+    fn incremental_flag_enables_cache_usage() {
+        let args = Args::parse_from(["count_lines", "--incremental"]);
+        let config = build_config(args).expect("config builds");
+        assert!(config.incremental, "--incremental should enable incremental mode");
+    }
+
+    #[test]
+    fn cache_dir_is_normalised_to_absolute_path() {
+        let args = Args::parse_from(["count_lines", "--cache-dir", "./tmp/cache"]);
+        let config = build_config(args).expect("config builds");
+        let cache_dir = config.cache_dir.expect("cache dir should be set");
+        assert!(cache_dir.is_absolute(), "cache dir should be normalised to an absolute path");
     }
 }

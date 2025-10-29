@@ -203,6 +203,14 @@ pub struct Args {
     #[arg(long, help_heading = "動作")]
     pub strict: bool,
 
+    /// インクリメンタルキャッシュを利用して差分のみを再計測
+    #[arg(long, help_heading = "動作")]
+    pub incremental: bool,
+
+    /// キャッシュ保存先を明示的に指定
+    #[arg(long, value_hint = ValueHint::DirPath, help_heading = "動作")]
+    pub cache_dir: Option<PathBuf>,
+
     /// 比較: 2つの JSON を比較表示
     #[arg(long, num_args = 2, value_names = ["OLD", "NEW"], value_hint = ValueHint::FilePath, help_heading = "比較")]
     pub compare: Option<Vec<PathBuf>>,

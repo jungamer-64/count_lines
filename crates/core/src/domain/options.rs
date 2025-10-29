@@ -19,6 +19,7 @@ pub enum SortKey {
     Lines,
     Chars,
     Words,
+    Size,
     Name,
     Ext,
 }
@@ -58,8 +59,26 @@ fn parse_sort_key(key_str: &str) -> Result<SortKey, String> {
         "lines" => Ok(SortKey::Lines),
         "chars" => Ok(SortKey::Chars),
         "words" => Ok(SortKey::Words),
+        "size" => Ok(SortKey::Size),
         "name" => Ok(SortKey::Name),
         "ext" => Ok(SortKey::Ext),
         other => Err(format!("Unknown sort key: {other}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_size_sort_key() {
+        let spec: SortSpec = "size:desc".parse().expect("size sort parses");
+        assert!(matches!(spec.0.as_slice(), [(SortKey::Size, true)]));
+    }
+
+    #[test]
+    fn rejects_unknown_sort_key() {
+        let err = "invalid".parse::<SortSpec>().expect_err("invalid key should fail");
+        assert!(err.contains("Unknown sort key"));
     }
 }

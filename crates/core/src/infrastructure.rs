@@ -1,4 +1,5 @@
 pub mod adapters;
+pub mod cache;
 pub mod comparison;
 pub mod filesystem;
 pub mod io;

@@ -57,12 +57,13 @@ count_lines --compare snapshot-20240101.json snapshot-20240401.json
 | 分類 | 代表的なオプション | 説明 |
 | ---- | ------------------ | ---- |
 | 出力形式 | `--format table|csv|tsv|json|yaml|md|jsonl` | 既定は `table`。`--ratio` で比率列を追加可能 |
-| ソート | `--sort lines:desc,name` | カンマ区切りで複合ソート。`desc` 指定可 |
+| ソート | `--sort lines:desc,name` | カンマ区切りで複合ソート（キー: `lines`, `chars`, `words`, `size`, `name`, `ext`）。`desc` 指定可 |
 | 集計 | `--by ext` / `--by dir=2` / `--by mtime:month` | 拡張子・ディレクトリ・更新時刻バケットでのサマリ |
 | フィルタ | `--include '*.rs'` / `--min_lines 50` / `--filter "lines > 100 && ext == 'rs'"` | glob / サイズ / 行数 / 文字数 / 単語数 / mtime / 式による絞り込み |
 | I/O | `--git` / `--hidden` / `--files_from list.txt` | `.gitignore` 尊重、隠しファイルを含める、ファイルリスト入力など |
 | 進捗・整形 | `--progress` / `--trim_root /path/to/repo` / `--total_row` | 進捗表示やパス整形、CSV/TSV の合計行追加 |
 | 比較 | `--compare old.json new.json` | 2つの JSON スナップショットの差分を表示 |
+| 動作 | `--incremental` / `--cache-dir ~/.cache/count_lines` | キャッシュを使った差分計測（保存先を指定可能） |
 
 詳細は [`usage.txt`](usage.txt) を参照してください。
 

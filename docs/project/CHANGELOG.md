@@ -7,7 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No notable changes yet._
+### Added
+- `--sort size` を追加し、ファイルサイズでのソートをサポートしました。行数/文字数/単語数と同様に `:desc` 修飾子で降順指定が可能です。
+- `--incremental` / `--cache-dir` オプションを追加し、キャッシュを利用した差分計測をサポートしました。小規模変更時の再実行が高速化されます。
 
 ## [0.7.0] - 2025-10-29
 

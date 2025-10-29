@@ -181,6 +181,8 @@ impl ConfigBuilder {
                 ratio: false,
                 output: None,
                 strict: false,
+                incremental: false,
+                cache_dir: None,
                 compare: None,
             },
         }
@@ -208,6 +210,16 @@ impl ConfigBuilder {
 
     pub fn strict(mut self) -> Self {
         self.config.strict = true;
+        self
+    }
+
+    pub fn incremental(mut self) -> Self {
+        self.config.incremental = true;
+        self
+    }
+
+    pub fn cache_dir(mut self, dir: PathBuf) -> Self {
+        self.config.cache_dir = Some(dir);
         self
     }
 

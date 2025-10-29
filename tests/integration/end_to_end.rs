@@ -47,6 +47,8 @@ fn base_options(root: &Path) -> ConfigOptions {
         ratio: false,
         output: None,
         strict: false,
+        incremental: false,
+        cache_dir: None,
         compare: None,
     }
 }

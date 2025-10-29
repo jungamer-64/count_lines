@@ -41,6 +41,8 @@ fn base_options() -> ConfigOptions {
         ratio: false,
         output: None,
         strict: false,
+        incremental: false,
+        cache_dir: None,
         compare: None,
     }
 }
@@ -69,4 +71,14 @@ fn build_errors_on_invalid_filter_expression() {
 
     let err = ConfigQueryService::build(options).expect_err("invalid filter should error");
     assert!(err.to_string().contains("Invalid pattern"));
+}
+
+#[test]
+fn size_sort_does_not_enable_word_counting() {
+    let mut options = base_options();
+    options.sort_specs = vec![(SortKey::Size, true)];
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert!(!config.words, "size sorting should not enable word counting");
+    assert_eq!(config.sort_specs, vec![(SortKey::Size, true)]);
 }

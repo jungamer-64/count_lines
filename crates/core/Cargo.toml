@@ -24,3 +24,4 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 walkdir.workspace = true
 thiserror.workspace = true
+dirs.workspace = true

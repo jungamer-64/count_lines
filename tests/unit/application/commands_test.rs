@@ -49,6 +49,8 @@ fn base_config() -> Config {
         ratio: false,
         output: None,
         strict: false,
+        incremental: false,
+        cache_dir: None,
         compare: None,
     }
 }
