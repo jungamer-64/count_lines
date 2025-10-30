@@ -52,6 +52,8 @@ thiserror = "2.0.17"
 dirs = "5"
 notify = "6.1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
+fs2 = "0.4"
+tempfile = "3"
 
 [profile.release]
 opt-level = 3

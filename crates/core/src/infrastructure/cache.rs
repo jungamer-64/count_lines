@@ -1,13 +1,14 @@
 use std::{
-    collections::{HashMap, HashSet, hash_map::DefaultHasher},
+    collections::{HashMap, HashSet},
     fs,
-    hash::{Hash, Hasher},
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
+use fs2::FileExt;
+use std::convert::TryFrom;
 
 use crate::{
     domain::{
@@ -125,21 +126,30 @@ impl CacheStore {
         };
         let data = serde_json::to_vec_pretty(&file)?;
         let tmp_path = path.with_extension("tmp");
-        if let Some(parent) = path.parent() {
-            if let Err(err) = fs::create_dir_all(parent) {
+        if let Some(parent) = path.parent()
+            && let Err(err) = fs::create_dir_all(parent) {
                 return Err(InfrastructureError::FileWrite { path: parent.to_path_buf(), source: err }.into());
             }
-        }
-        {
-            let mut file = fs::File::create(&tmp_path)
-                .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
-            file.write_all(&data)
-                .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
-            file.flush()
-                .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
-        }
-        fs::rename(&tmp_path, path)
-            .map_err(|err| InfrastructureError::FileWrite { path: path.clone(), source: err })?;
+        // Acquire an exclusive lock to prevent concurrent writers from corrupting the cache.
+        let lock_path = path.with_extension("lock");
+        let lock_file = fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&lock_path)
+            .map_err(|err| InfrastructureError::FileWrite { path: lock_path.clone(), source: err })?;
+
+        lock_file
+            .lock_exclusive()
+            .map_err(|err| InfrastructureError::FileWrite { path: lock_path.clone(), source: err })?;
+
+        // Write atomically while holding the lock
+        write_tmp_and_rename(&tmp_path, path, &data)
+            .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
+
+        // release lock and remove lock file if possible
+        let _ = lock_file.unlock();
+        let _ = fs::remove_file(&lock_path);
         Ok(())
     }
 }
@@ -167,7 +177,7 @@ impl CacheEntry {
     fn from_result(entry: &FileEntry, stats: &FileStats, hash_hex: Option<String>) -> Self {
         Self {
             size: entry.meta.size,
-            mtime_millis: entry.meta.mtime.as_ref().map(|dt| dt.timestamp_millis()),
+            mtime_millis: entry.meta.mtime.as_ref().map(chrono::DateTime::timestamp_millis),
             lines: stats.lines as u64,
             chars: stats.chars as u64,
             words: stats.words.map(|w| w as u64),
@@ -176,13 +186,10 @@ impl CacheEntry {
     }
 
     pub fn to_stats(&self, entry: &FileEntry) -> FileStats {
-        FileStats::new(
-            entry.path.clone(),
-            self.lines as usize,
-            self.chars as usize,
-            self.words.map(|w| w as usize),
-            &entry.meta,
-        )
+        let lines = usize::try_from(self.lines).unwrap_or(usize::MAX);
+        let chars = usize::try_from(self.chars).unwrap_or(usize::MAX);
+        let words = self.words.map(|w| usize::try_from(w).unwrap_or(usize::MAX));
+        FileStats::new(entry.path.clone(), lines, chars, words, &entry.meta)
     }
 }
 
@@ -224,20 +231,36 @@ fn ensure_dir(path: &Path) -> io::Result<()> {
     fs::create_dir_all(path)
 }
 
+fn write_tmp_and_rename(tmp_path: &Path, final_path: &Path, data: &[u8]) -> std::io::Result<()> {
+    if let Some(parent) = final_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let mut file = fs::File::create(tmp_path)?;
+    file.write_all(data)?;
+    file.flush()?;
+    fs::rename(tmp_path, final_path)?;
+    Ok(())
+}
+
 fn cache_file_name(config: &Config) -> String {
     let hash = workspace_hash(config);
     format!("count_lines-cache-{hash:016x}.json")
 }
 
 fn workspace_hash(config: &Config) -> u64 {
-    let mut hasher = DefaultHasher::new();
+    // Use a stable, cross-process hash (xxh3) so the cache filename is deterministic
+    // for the same workspace paths. Avoid DefaultHasher which is intentionally
+    // randomized per-process and therefore unsuitable for persistent filenames.
+    let mut hasher = Xxh3::new();
     let mut paths: Vec<String> =
         config.paths.iter().map(|path| logical_absolute(path).to_string_lossy().into_owned()).collect();
     paths.sort();
     for path in paths {
-        path.hash(&mut hasher);
+        hasher.update(path.as_bytes());
+        // separator to avoid accidental concatenation collisions
+        hasher.update(&[0]);
     }
-    hasher.finish()
+    hasher.digest()
 }
 
 fn hash_file(path: &Path) -> Option<String> {
@@ -258,12 +281,134 @@ impl CacheStore {
     pub fn clear(config: &Config) -> Result<()> {
         let store = Self::load(config)?;
         if let Some(path) = store.path {
-            if let Err(err) = fs::remove_file(&path) {
-                if err.kind() != io::ErrorKind::NotFound {
-                    return Err(InfrastructureError::FileWrite { path, source: err }.into());
-                }
+            // Try to acquire lock before removing to avoid racing with a writer
+            let lock_path = path.with_extension("lock");
+            if let Ok(lock_file) = fs::OpenOptions::new().create(true).append(true).open(&lock_path) {
+                let _ = lock_file.lock_exclusive();
+                let res = fs::remove_file(&path);
+                let _ = lock_file.unlock();
+                let _ = fs::remove_file(&lock_path);
+                if let Err(err) = res
+                    && err.kind() != io::ErrorKind::NotFound {
+                        return Err(InfrastructureError::FileWrite { path, source: err }.into());
+                    }
+            } else {
+                // fallback: try to remove directly
+                if let Err(err) = fs::remove_file(&path)
+                    && err.kind() != io::ErrorKind::NotFound {
+                        return Err(InfrastructureError::FileWrite { path, source: err }.into());
+                    }
             }
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::application::queries::config::commands::{ConfigOptions, FilterOptions};
+    use crate::application::queries::config::queries::ConfigQueryService;
+    use crate::domain::options::{OutputFormat, WatchOutput};
+    use std::path::PathBuf;
+
+    fn make_options_with_paths(paths: Vec<&str>) -> ConfigOptions {
+        ConfigOptions {
+            format: OutputFormat::Table,
+            sort_specs: vec![],
+            top_n: None,
+            by: vec![],
+            summary_only: false,
+            total_only: false,
+            by_limit: None,
+            filters: FilterOptions::default(),
+            hidden: false,
+            follow: false,
+            use_git: false,
+            jobs: None,
+            no_default_prune: false,
+            abs_path: false,
+            abs_canonical: false,
+            trim_root: None,
+            words: false,
+            count_newlines_in_chars: false,
+            text_only: false,
+            fast_text_detect: false,
+            files_from: None,
+            files_from0: None,
+            paths: paths.into_iter().map(PathBuf::from).collect(),
+            mtime_since: None,
+            mtime_until: None,
+            total_row: false,
+            progress: false,
+            ratio: false,
+            output: None,
+            strict: false,
+            incremental: false,
+            cache_dir: None,
+            cache_verify: false,
+            clear_cache: false,
+            watch: false,
+            watch_interval: None,
+            watch_output: WatchOutput::Full,
+            compare: None,
+        }
+    }
+
+    #[test]
+    fn workspace_hash_is_deterministic_for_path_order() {
+        let opts1 = make_options_with_paths(vec!["./a", "./b"]);
+        let opts2 = make_options_with_paths(vec!["./b", "./a"]);
+        let config1 = ConfigQueryService::build(opts1).expect("build config");
+        let config2 = ConfigQueryService::build(opts2).expect("build config");
+    let name1 = super::cache_file_name(&config1);
+    let name2 = super::cache_file_name(&config2);
+        assert_eq!(name1, name2, "cache file names should match regardless of path order");
+    }
+
+    #[test]
+    fn concurrent_cache_saves_are_atomic() {
+        use std::thread;
+        use tempfile::tempdir;
+
+        let tmp = tempdir().expect("tempdir");
+    let opts = make_options_with_paths(vec!["."]);
+        let mut config = ConfigQueryService::build(opts).expect("build config");
+        config.cache_dir = Some(tmp.path().to_path_buf());
+
+        let n = 8usize;
+        let mut handles = Vec::with_capacity(n);
+
+        for i in 0..n {
+            let cfg = config.clone();
+            handles.push(thread::spawn(move || {
+                let mut store = super::CacheStore::load(&cfg).expect("load cache");
+                let path = cfg.cache_dir.as_ref().unwrap().join(format!("f_{i}.txt"));
+                let meta = crate::domain::model::FileMeta { size: 0, mtime: None, is_text: true, ext: "txt".to_string(), name: format!("f_{i}.txt") };
+                let entry = crate::domain::model::FileEntry { path: path.clone(), meta: meta.clone() };
+                let stats = crate::domain::model::entities::file_stats::FileStats::new(path, 0, 0, None, &meta);
+                store.update(format!("k{i}"), &entry, &stats, false);
+                // retry save a few times in case of transient filesystem races on some platforms
+                let mut attempts = 0;
+                loop {
+                    match store.save() {
+                        Ok(()) => break,
+                        Err(_) if attempts < 5 => {
+                            attempts += 1;
+                            std::thread::sleep(std::time::Duration::from_millis(5));
+                        }
+                        Err(e) => panic!("save: {e:?}"),
+                    }
+                }
+            }));
+        }
+
+        for h in handles { h.join().expect("join"); }
+
+    let path = super::resolve_cache_path(&config).expect("resolve cache path");
+        let contents = std::fs::read_to_string(path).expect("read cache");
+        let parsed: serde_json::Value = serde_json::from_str(&contents).expect("parse cache");
+        let entries = parsed.get("entries").and_then(|e| e.as_object()).expect("entries");
+        // concurrent saves should not corrupt the cache JSON; at least one entry should exist
+        assert!(!entries.is_empty());
     }
 }

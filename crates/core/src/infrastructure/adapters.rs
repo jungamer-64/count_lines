@@ -39,6 +39,12 @@ impl FileStatisticsPresenter for OutputEmitter {
 
 pub struct JsonlWatchEmitter;
 
+impl Default for JsonlWatchEmitter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JsonlWatchEmitter {
     pub fn new() -> Self {
         Self

@@ -78,6 +78,7 @@ impl SortStrategy {
     }
 
     /// デフォルト戦略（行数降順）
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self {
         Self::new(vec![SortSpec::descending(SortKey::Lines)])
     }
@@ -121,6 +122,12 @@ impl SortStrategy {
             }
         }
         Ordering::Equal
+    }
+}
+
+impl Default for SortStrategy {
+    fn default() -> Self {
+        Self::new(vec![SortSpec::descending(SortKey::Lines)])
     }
 }
 

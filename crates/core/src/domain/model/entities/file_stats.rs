@@ -33,7 +33,7 @@ impl FileStats {
             chars,
             words,
             size: meta.size,
-            mtime: meta.mtime.clone(),
+            mtime: meta.mtime,
             ext: meta.ext.clone(),
             name: meta.name.clone(),
         }
@@ -79,6 +79,7 @@ mod file_stats_v2 {
     }
 
     impl FileStats {
+        #[allow(clippy::too_many_arguments)]
         pub fn new(
             path: FilePath,
             lines: LineCount,
@@ -143,7 +144,7 @@ mod file_stats_v2 {
                 chars: self.chars.value(),
                 words: self.words.map(|w| w.value()),
                 size: self.size.bytes(),
-                mtime: self.mtime.as_ref().map(|m| m.timestamp().clone()),
+                mtime: self.mtime.as_ref().map(|m| *m.timestamp()),
                 ext: self.ext.as_str().to_string(),
                 name: self.name.as_str().to_string(),
             }
@@ -160,7 +161,7 @@ mod file_stats_v2 {
                 chars: CharCount::new(legacy.chars),
                 words: legacy.words.map(WordCount::new),
                 size: FileSize::new(legacy.size),
-                mtime: legacy.mtime.as_ref().map(|m| ModificationTime::new(m.clone())),
+                mtime: legacy.mtime.as_ref().map(|m| ModificationTime::new(*m)),
                 ext: FileExtension::new(legacy.ext.clone()),
                 name: FileName::new(legacy.name.clone()),
             }
