@@ -39,35 +39,60 @@ fn write_markdown_rows(stats: &[FileStats], config: &Config, out: &mut impl Writ
     let summary = Summary::from_stats(stats);
     for s in limited(stats, config) {
         let path = format_path(s, config).replace('|', "\\|");
-        if config.words {
-            if config.ratio {
-                writeln!(
-                    out,
-                    "| {} | {} | {} | {} | {} | {} |",
-                    format_ratio(s.lines, summary.lines),
-                    s.lines,
-                    format_ratio(s.chars, summary.chars),
-                    s.chars,
-                    s.words.unwrap_or(0),
-                    path
-                )?;
-            } else {
-                writeln!(out, "| {} | {} | {} | {} |", s.lines, s.chars, s.words.unwrap_or(0), path)?;
-            }
-        } else if config.ratio {
-            writeln!(
-                out,
-                "| {} | {} | {} | {} | {} |",
-                format_ratio(s.lines, summary.lines),
-                s.lines,
-                format_ratio(s.chars, summary.chars),
-                s.chars,
-                path
-            )?;
-        } else {
-            writeln!(out, "| {} | {} | {} |", s.lines, s.chars, path)?;
+        match (config.words, config.ratio) {
+            (true, true) => write_row_words_ratio(out, s, &summary, &path)?,
+            (true, false) => write_row_words(out, s, &path)?,
+            (false, true) => write_row_ratio(out, s, &summary, &path)?,
+            (false, false) => write_row_basic(out, s, &path)?,
         }
     }
+    Ok(())
+}
+
+fn write_row_words_ratio(
+    out: &mut impl Write,
+    s: &FileStats,
+    summary: &Summary,
+    path: &str,
+) -> Result<()> {
+    writeln!(
+        out,
+        "| {} | {} | {} | {} | {} | {} |",
+        format_ratio(s.lines, summary.lines),
+        s.lines,
+        format_ratio(s.chars, summary.chars),
+        s.chars,
+        s.words.unwrap_or(0),
+        path
+    )?;
+    Ok(())
+}
+
+fn write_row_words(out: &mut impl Write, s: &FileStats, path: &str) -> Result<()> {
+    writeln!(out, "| {} | {} | {} | {} |", s.lines, s.chars, s.words.unwrap_or(0), path)?;
+    Ok(())
+}
+
+fn write_row_ratio(
+    out: &mut impl Write,
+    s: &FileStats,
+    summary: &Summary,
+    path: &str,
+) -> Result<()> {
+    writeln!(
+        out,
+        "| {} | {} | {} | {} | {} |",
+        format_ratio(s.lines, summary.lines),
+        s.lines,
+        format_ratio(s.chars, summary.chars),
+        s.chars,
+        path
+    )?;
+    Ok(())
+}
+
+fn write_row_basic(out: &mut impl Write, s: &FileStats, path: &str) -> Result<()> {
+    writeln!(out, "| {} | {} | {} |", s.lines, s.chars, path)?;
     Ok(())
 }
 

@@ -17,7 +17,7 @@ echo "Command: count_lines"
 echo "---"
 count_lines
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 2: Count with top N limit
@@ -26,7 +26,7 @@ echo "Command: count_lines --top 10"
 echo "---"
 count_lines --top 10
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 3: Count specific file types
@@ -35,7 +35,7 @@ echo "Command: count_lines --ext rs"
 echo "---"
 count_lines --ext rs
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 4: JSON output
@@ -44,7 +44,7 @@ echo "Command: count_lines --format json --top 5"
 echo "---"
 count_lines --format json --top 5
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 5: CSV output for spreadsheet import
@@ -53,7 +53,7 @@ echo "Command: count_lines --format csv --total-row --top 5"
 echo "---"
 count_lines --format csv --total-row --top 5
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 6: Sort by different columns
@@ -62,7 +62,7 @@ echo "Command: count_lines --sort lines:desc --top 10"
 echo "---"
 count_lines --sort lines:desc --top 10
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 7: Group by file extension
@@ -71,7 +71,7 @@ echo "Command: count_lines --by ext"
 echo "---"
 count_lines --by ext
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 8: Filter by size
@@ -80,7 +80,7 @@ echo "Command: count_lines --min-size 1024 --top 10"
 echo "---"
 count_lines --min-size 1024 --top 10
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 9: Markdown output for documentation
@@ -89,7 +89,7 @@ echo "Command: count_lines --format md --top 10"
 echo "---"
 count_lines --format md --top 10
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 10: Show percentages
@@ -98,7 +98,7 @@ echo "Command: count_lines --ratio --top 10"
 echo "---"
 count_lines --ratio --top 10
 echo ""
-read -p "Press Enter to continue..."
+read -r -p "Press Enter to continue..."
 echo ""
 
 # Example 11: Git mode (respects .gitignore)

@@ -1,5 +1,4 @@
 use std::{
-    fmt,
     ops::{Add, AddAssign},
 };
 
@@ -58,11 +57,9 @@ impl From<usize> for LineCount {
     }
 }
 
-impl fmt::Display for LineCount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// Display implementations are moved to a small submodule to keep this file
+// concise for static analysis (Lizard) and to group formatting logic.
+mod counts_display;
 
 /// 文字数を表す値オブジェクト
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -117,11 +114,6 @@ impl From<usize> for CharCount {
     }
 }
 
-impl fmt::Display for CharCount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
 
 /// 単語数を表す値オブジェクト
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -176,11 +168,7 @@ impl From<usize> for WordCount {
     }
 }
 
-impl fmt::Display for WordCount {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+// (display impls are in `counts_display`)
 
 #[cfg(test)]
 mod tests {

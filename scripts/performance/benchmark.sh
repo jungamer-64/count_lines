@@ -4,6 +4,7 @@
 
 set -e
 
+# shellcheck disable=SC2034
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -53,17 +54,22 @@ echo ""
 run_benchmark() {
     local name="$1"
     shift
-    local cmd="$@"
+    # capture remaining args as an array to avoid word-splitting issues
+    local -a cmd=("$@")
 
     echo_benchmark "Running: $name"
-    echo "Command: $cmd"
+    echo "Command: ${cmd[*]}"
 
     # Run with time measurement
-    local start=$(date +%s.%N)
-    eval "$cmd" > /dev/null 2>&1
-    local end=$(date +%s.%N)
+    local start
+    start=$(date +%s.%N)
+    # execute the command array
+    "${cmd[@]}" > /dev/null 2>&1
+    local end
+    end=$(date +%s.%N)
 
-    local duration=$(echo "$end - $start" | bc)
+    local duration
+    duration=$(echo "$end - $start" | bc)
     echo_result "Duration: ${duration}s"
     echo "$name,$duration" >> "$RESULTS_DIR/results.csv"
     echo ""

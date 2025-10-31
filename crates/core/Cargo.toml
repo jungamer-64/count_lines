@@ -9,7 +9,7 @@ description = "Core library powering the count_lines CLI tool"
 
 [dependencies]
 anyhow.workspace = true
-atty.workspace = true
+libc.workspace = true
 bytecount.workspace = true
 chrono.workspace = true
 clap.workspace = true
@@ -29,3 +29,4 @@ notify.workspace = true
 xxhash-rust.workspace = true
 fs2.workspace = true
 tempfile.workspace = true
+nix = { version = "0.30", features = ["fs"] }

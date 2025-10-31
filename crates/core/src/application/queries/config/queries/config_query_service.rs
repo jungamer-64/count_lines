@@ -15,25 +15,27 @@ pub struct ConfigQueryService;
 
 impl ConfigQueryService {
     /// 設定を構築
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err` when filter expression parsing fails or when provided
+    /// options are invalid and cannot be materialised into a domain `Config`.
     pub fn build(query: ConfigOptions) -> Result<Config> {
-        let filters = Self::build_filters(&query.filters)?;
-        let jobs = query.jobs.unwrap_or_else(num_cpus::get).max(1);
-        let words = Self::should_enable_words(&query, &filters);
-        let paths = Self::normalize_paths(query.paths);
-        let by_modes = Self::convert_by_modes(query.by);
-        let abs_path = query.abs_path || query.abs_canonical;
-        let trim_root = query.trim_root.map(|p| logical_absolute(&p));
-        let watch_interval_secs = query.watch_interval.unwrap_or(1).max(1);
-        let watch_interval = Duration::from_secs(watch_interval_secs);
-        let cache_dir = query.cache_dir.map(|p| logical_absolute(&p));
-        let incremental = query.incremental || query.watch;
+    let filters = Self::build_filters(&query.filters)?;
+    let jobs = Self::determine_jobs(&query);
+    let words = Self::should_enable_words(&query, &filters);
+    let (abs_path, trim_root) = Self::abs_and_trim(&query);
+    let watch_interval = Self::watch_interval(&query);
+    let cache_dir = Self::cache_dir(&query);
+    let paths = Self::normalize_paths(query.paths);
+    let by_modes = Self::convert_by_modes(&query.by);
+    let incremental = query.incremental || query.watch;
 
         Ok(Config {
             format: query.format,
             sort_specs: query.sort_specs,
             top_n: query.top_n,
-            by_modes,
-            summary_only: query.summary_only,
+            by_modes, summary_only: query.summary_only,
             total_only: query.total_only,
             by_limit: query.by_limit,
             filters,
@@ -70,6 +72,25 @@ impl ConfigQueryService {
         })
     }
 
+    fn determine_jobs(query: &ConfigOptions) -> usize {
+        query.jobs.unwrap_or_else(num_cpus::get).max(1)
+    }
+
+    fn abs_and_trim(query: &ConfigOptions) -> (bool, Option<std::path::PathBuf>) {
+        let abs_path = query.abs_path || query.abs_canonical;
+        let trim_root = query.trim_root.as_ref().map(|p| logical_absolute(p));
+        (abs_path, trim_root)
+    }
+
+    fn watch_interval(query: &ConfigOptions) -> Duration {
+        let secs = query.watch_interval.unwrap_or(1).max(1);
+        Duration::from_secs(secs)
+    }
+
+    fn cache_dir(query: &ConfigOptions) -> Option<std::path::PathBuf> {
+        query.cache_dir.as_ref().map(|p| logical_absolute(p))
+    }
+
     fn build_filters(options: &FilterOptions) -> Result<Filters> {
         let filter_ast = options
             .filter
@@ -100,7 +121,7 @@ impl ConfigQueryService {
     fn parse_extensions(ext_arg: Option<&str>) -> HashSet<String> {
         ext_arg
             .map(|s| {
-                s.split(',').map(str::trim).filter(|e| !e.is_empty()).map(|e| e.to_lowercase()).collect()
+                s.split(',').map(str::trim).filter(|e| !e.is_empty()).map(str::to_lowercase).collect()
             })
             .unwrap_or_default()
     }
@@ -114,11 +135,7 @@ impl ConfigQueryService {
     }
 
     fn filter_uses_words(filters: &Filters) -> bool {
-        filters
-            .filter_ast
-            .as_ref()
-            .map(|ast| ast.iter_variable_identifiers().any(|id| id == "words"))
-            .unwrap_or(false)
+        filters.filter_ast.as_ref().is_some_and(|ast| ast.iter_variable_identifiers().any(|id| id == "words"))
     }
 
     fn sort_uses_words(sort_specs: &[(crate::domain::options::SortKey, bool)]) -> bool {
@@ -129,8 +146,13 @@ impl ConfigQueryService {
         if paths.is_empty() { vec![std::path::PathBuf::from(".")] } else { paths }
     }
 
-    fn convert_by_modes(modes: Vec<ByMode>) -> Vec<ByKey> {
-        modes.into_iter().filter(|mode| !matches!(mode, ByMode::None)).map(Self::convert_by_mode).collect()
+    fn convert_by_modes(modes: &[ByMode]) -> Vec<ByKey> {
+        modes
+            .iter()
+            .copied()
+            .filter(|mode| !matches!(mode, ByMode::None))
+            .map(Self::convert_by_mode)
+            .collect()
     }
 
     fn convert_by_mode(mode: ByMode) -> ByKey {

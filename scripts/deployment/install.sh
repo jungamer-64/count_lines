@@ -8,6 +8,8 @@ set -euo pipefail
 # グローバル定数
 # ========================================
 readonly SCRIPT_VERSION="2.2.0"
+# shellcheck disable=SC2034
+# SCRIPT_VERSION is kept for informational/packaging purposes
 
 # ========================================
 # インストーラー設定
@@ -44,6 +46,8 @@ validate_options() {
 # ========================================
 ensure_path_in_rc() {
   local rc_file="$1"
+  # shellcheck disable=SC2016
+  # keep the literal $HOME here so the target rc file receives an expansion at runtime
   local path_line='export PATH="$HOME/.local/bin:$PATH"'
   
   [[ -f "$rc_file" ]] || touch "$rc_file"

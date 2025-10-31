@@ -12,6 +12,11 @@ use crate::{domain::config::Config, error::InfrastructureError};
 pub struct WatchService;
 
 impl WatchService {
+    /// Run the watch service: try to use filesystem notifications and fall back to polling.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the provided `on_change` callback returns an error during polling.
     pub fn run<F>(config: &Config, interval: Duration, mut on_change: F) -> Result<()>
     where
         F: FnMut() -> Result<()>,
@@ -20,8 +25,7 @@ impl WatchService {
             Ok(()) => Ok(()),
             Err(err) => {
                 eprintln!(
-                    "[warn] file watcher unavailable ({}). Falling back to polling every {:?}.",
-                    err, interval
+                    "[warn] file watcher unavailable ({err}). Falling back to polling every {interval:?}.",
                 );
                 Self::poll_loop(interval, &mut on_change)
             }
@@ -33,6 +37,18 @@ impl WatchService {
     where
         F: FnMut() -> Result<()>,
     {
+        let (watcher, rx) = Self::create_watcher(config)?;
+        // Keep `watcher` alive in this scope so it continues watching.
+        let _keep = &watcher;
+        Self::event_loop(&rx, interval, on_change)
+    }
+
+    fn create_watcher(
+        config: &Config,
+    ) -> std::result::Result<(
+        RecommendedWatcher,
+        std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>,
+    ), InfrastructureError> {
         let (tx, rx) = mpsc::channel();
         let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res| {
             let _ = tx.send(res);
@@ -45,44 +61,84 @@ impl WatchService {
                 .map_err(|err| InfrastructureError::OutputError(err.to_string()))?;
         }
 
+        Ok((watcher, rx))
+    }
+
+    fn event_loop<F>(
+        rx: &std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>,
+        interval: Duration,
+        on_change: &mut F,
+    ) -> Result<()>
+    where
+        F: FnMut() -> Result<()>,
+    {
         let mut pending: Option<Instant> = None;
 
         loop {
-            if let Some(start) = pending {
-                let elapsed = start.elapsed();
-                if elapsed >= interval {
-                    on_change()?;
-                    pending = None;
-                    continue;
-                }
-                match rx.recv_timeout(interval - elapsed) {
-                    Ok(Ok(event)) => {
-                        if Self::is_relevant(&event.kind) {
-                            pending = Some(Instant::now());
-                        }
-                    }
-                    Ok(Err(err)) => {
-                        eprintln!("[warn] watcher error: {err}");
-                    }
-                    Err(mpsc::RecvTimeoutError::Timeout) => {
-                        on_change()?;
-                        pending = None;
-                    }
-                    Err(mpsc::RecvTimeoutError::Disconnected) => {
-                        return Self::poll_loop(interval, on_change);
-                    }
-                }
+            if pending.is_some() {
+                Self::process_pending(rx, interval, on_change, &mut pending)?;
             } else {
-                match rx.recv() {
-                    Ok(Ok(event)) => {
-                        if Self::is_relevant(&event.kind) {
-                            pending = Some(Instant::now());
-                        }
-                    }
-                    Ok(Err(err)) => eprintln!("[warn] watcher error: {err}"),
-                    Err(_) => return Self::poll_loop(interval, on_change),
+                Self::process_idle(rx, interval, on_change, &mut pending)?;
+            }
+        }
+    }
+
+    fn process_pending<F>(
+        rx: &std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>,
+        interval: Duration,
+        on_change: &mut F,
+        pending: &mut Option<Instant>,
+    ) -> Result<()>
+    where
+        F: FnMut() -> Result<()>,
+    {
+        let start = pending.expect("pending should be Some when process_pending is called");
+        let elapsed = start.elapsed();
+        if elapsed >= interval {
+            on_change()?;
+            *pending = None;
+            return Ok(());
+        }
+
+        let remaining = interval.checked_sub(elapsed).unwrap_or_default();
+        match rx.recv_timeout(remaining) {
+            Ok(Ok(event)) => {
+                if Self::is_relevant(event.kind) {
+                    *pending = Some(Instant::now());
                 }
             }
+            Ok(Err(err)) => {
+                eprintln!("[warn] watcher error: {err}");
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                on_change()?;
+                *pending = None;
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Self::poll_loop(interval, on_change);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn process_idle<F>(
+        rx: &std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>,
+        interval: Duration,
+        on_change: &mut F,
+        pending: &mut Option<Instant>,
+    ) -> Result<()>
+    where
+        F: FnMut() -> Result<()>,
+    {
+        match rx.recv() {
+            Ok(Ok(event)) => {
+                if Self::is_relevant(event.kind) {
+                    *pending = Some(Instant::now());
+                }
+            }
+            Ok(Err(err)) => eprintln!("[warn] watcher error: {err}"),
+            Err(_) => return Self::poll_loop(interval, on_change),
         }
 
         Ok(())
@@ -98,7 +154,7 @@ impl WatchService {
         }
     }
 
-    fn is_relevant(kind: &EventKind) -> bool {
+    const fn is_relevant(kind: EventKind) -> bool {
         matches!(
             kind,
             EventKind::Any

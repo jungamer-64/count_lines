@@ -26,17 +26,7 @@ pub fn output_table(stats: &[FileStats], config: &Config, out: &mut impl Write) 
 
 fn write_table_header(config: &Config, out: &mut impl Write) -> Result<()> {
     writeln!(out)?;
-    if config.words {
-        if config.ratio {
-            writeln!(out, "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\t   WORDS\tFILE")?;
-        } else {
-            writeln!(out, "    LINES\t CHARACTERS\t   WORDS\tFILE")?;
-        }
-    } else if config.ratio {
-        writeln!(out, "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\tFILE")?;
-    } else {
-        writeln!(out, "    LINES\t CHARACTERS\tFILE")?;
-    }
+    writeln!(out, "{}", header_line(config))?;
     writeln!(out, "----------------------------------------------")?;
     Ok(())
 }
@@ -45,37 +35,49 @@ fn write_table_rows(stats: &[FileStats], config: &Config, out: &mut impl Write) 
     let summary = Summary::from_stats(stats);
     for s in limited(stats, config) {
         let path = format_path(s, config);
-        if config.words {
-            if config.ratio {
-                writeln!(
-                    out,
-                    "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{:>7}\t{}",
-                    format_ratio(s.lines, summary.lines),
-                    s.lines,
-                    format_ratio(s.chars, summary.chars),
-                    s.chars,
-                    s.words.unwrap_or(0),
-                    path
-                )?;
-            } else {
-                writeln!(out, "{:>10}\t{:>10}\t{:>7}\t{}", s.lines, s.chars, s.words.unwrap_or(0), path)?;
-            }
-        } else if config.ratio {
-            writeln!(
-                out,
-                "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{}",
+        let line = format_row(s, &summary, config, &path);
+        writeln!(out, "{}", line)?;
+    }
+    writeln!(out, "---")?;
+    Ok(())
+}
+
+fn header_line(config: &Config) -> &'static str {
+    match (config.words, config.ratio) {
+        (true, true) => "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\t   WORDS\tFILE",
+        (true, false) => "    LINES\t CHARACTERS\t   WORDS\tFILE",
+        (false, true) => "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\tFILE",
+        (false, false) => "    LINES\t CHARACTERS\tFILE",
+    }
+}
+
+fn format_row(s: &FileStats, summary: &Summary, config: &Config, path: &str) -> String {
+    if config.words {
+        if config.ratio {
+            format!(
+                "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{:>7}\t{}",
                 format_ratio(s.lines, summary.lines),
                 s.lines,
                 format_ratio(s.chars, summary.chars),
                 s.chars,
+                s.words.unwrap_or(0),
                 path
-            )?;
+            )
         } else {
-            writeln!(out, "{:>10}\t{:>10}\t{}", s.lines, s.chars, path)?;
+            format!("{:>10}\t{:>10}\t{:>7}\t{}", s.lines, s.chars, s.words.unwrap_or(0), path)
         }
+    } else if config.ratio {
+        format!(
+            "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{}",
+            format_ratio(s.lines, summary.lines),
+            s.lines,
+            format_ratio(s.chars, summary.chars),
+            s.chars,
+            path
+        )
+    } else {
+        format!("{:>10}\t{:>10}\t{}", s.lines, s.chars, path)
     }
-    writeln!(out, "---")?;
-    Ok(())
 }
 
 fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
