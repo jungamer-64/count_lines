@@ -2,9 +2,9 @@ mod args;
 mod parsers;
 mod value_enum;
 
+pub use args::Args;
 use clap::Parser;
-
-use crate::{
+use count_lines_core::{
     application::{ConfigOptions, ConfigQueryService, FilterOptions},
     domain::config::Config,
     error::{PresentationError, Result},
@@ -87,9 +87,7 @@ fn make_filter_options(args: &Args) -> FilterOptions {
 }
 
 fn make_compare_tuple(args: &Args) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
-    args.compare
-        .as_ref()
-        .and_then(|v| if v.len() == 2 { Some((v[0].clone(), v[1].clone())) } else { None })
+    args.compare.as_ref().and_then(|v| if v.len() == 2 { Some((v[0].clone(), v[1].clone())) } else { None })
 }
 
 /// Build `ConfigOptions` from CLI args and precomputed pieces.
@@ -99,10 +97,10 @@ fn make_config_options(
     filters: FilterOptions,
 ) -> ConfigOptions {
     ConfigOptions {
-        format: args.format,
-    sort_specs: args.sort.0.clone(),
-    top_n: args.top,
-    by: args.by.clone(),
+        format: args.format.into(),
+        sort_specs: args.sort.0.clone(),
+        top_n: args.top,
+        by: args.by.clone(),
         summary_only: args.summary_only,
         total_only: args.total_only,
         by_limit: args.by_limit,
@@ -114,20 +112,20 @@ fn make_config_options(
         no_default_prune: args.no_default_prune,
         abs_path: args.abs_path,
         abs_canonical: args.abs_canonical,
-    trim_root: args.trim_root.clone(),
+        trim_root: args.trim_root.clone(),
         words: args.words,
         count_newlines_in_chars: args.count_newlines_in_chars,
         text_only: args.text_only,
         fast_text_detect: args.fast_text_detect,
-    files_from: args.files_from.clone(),
-    files_from0: args.files_from0.clone(),
-    paths: args.paths.clone(),
+        files_from: args.files_from.clone(),
+        files_from0: args.files_from0.clone(),
+        paths: args.paths.clone(),
         mtime_since: args.mtime_since.map(|d| d.0),
         mtime_until: args.mtime_until.map(|d| d.0),
         total_row: args.total_row,
         progress: args.progress,
         ratio: args.ratio,
-    output: args.output.clone(),
+        output: args.output.clone(),
         strict: args.strict,
         incremental: args.incremental,
         cache_dir: args.cache_dir.clone(),
@@ -135,12 +133,10 @@ fn make_config_options(
         clear_cache: args.clear_cache,
         watch: args.watch,
         watch_interval: args.watch_interval,
-        watch_output: args.watch_output,
+        watch_output: args.watch_output.into(),
         compare: compare_tuple,
     }
 }
-
-pub use args::Args;
 
 /// Parse CLI arguments and materialise a domain [`Config`].
 ///
@@ -161,10 +157,8 @@ pub fn load_config() -> Result<Config> {
 /// Returns `Err` when argument validation fails or when `ConfigQueryService`
 /// cannot build a `Config` from the provided options.
 pub fn build_config(args: &Args) -> Result<Config> {
-    // Validate numeric arguments
     validate_numeric_args(args.top, args.by_limit, args.jobs, args.watch_interval)?;
 
-    // Use helpers which avoid taking ownership of `args` here to keep this function short.
     let filter_options = make_filter_options(args);
     let compare_tuple = make_compare_tuple(args);
     let options = make_config_options(args, compare_tuple, filter_options);
@@ -173,7 +167,10 @@ pub fn build_config(args: &Args) -> Result<Config> {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
+
     use clap::Parser;
+    use count_lines_core::domain::options::SortKey;
 
     use super::*;
 
@@ -203,7 +200,7 @@ mod tests {
         let args = Args::parse_from(["count_lines", "--sort", "size:desc"]);
         let config = build_config(&args).expect("config builds");
         assert!(!config.words, "sorting by size should not enable word counting");
-        assert_eq!(config.sort_specs, vec![(crate::domain::options::SortKey::Size, true)]);
+        assert_eq!(config.sort_specs, vec![(SortKey::Size, true)]);
     }
 
     #[test]
@@ -235,6 +232,6 @@ mod tests {
         let config = build_config(&args).expect("config builds");
         assert!(config.watch);
         assert!(config.incremental, "watch should force incremental mode");
-        assert_eq!(config.watch_interval, std::time::Duration::from_secs(1));
+        assert_eq!(config.watch_interval, Duration::from_secs(1));
     }
 }

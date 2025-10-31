@@ -1,6 +1,11 @@
+#![allow(dead_code)]
 /// テストフィクスチャ管理
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use std::{fs, path::{Path, PathBuf}, time::{SystemTime, UNIX_EPOCH}};
 use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 /// 一時ディレクトリ管理
@@ -13,10 +18,7 @@ pub struct TempWorkspace {
 #[allow(dead_code)]
 impl TempWorkspace {
     pub fn new(_prefix: &str) -> Self {
-        let td = TempBuilder::new()
-            .prefix("count_lines_test_")
-            .tempdir()
-            .expect("create temp workspace");
+        let td = TempBuilder::new().prefix("count_lines_test_").tempdir().expect("create temp workspace");
 
         Self { tempdir: td, files: Vec::new() }
     }
@@ -87,6 +89,7 @@ version = "0.1.0"
 }
 
 /// 一時ファイル管理
+#[allow(dead_code)]
 pub struct TempFile {
     _td: TempfileTempDir,
     path: PathBuf,

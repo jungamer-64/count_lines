@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // tests/common/mocks.rs
 //! テスト用モック実装
 

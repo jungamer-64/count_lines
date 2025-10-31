@@ -9,13 +9,10 @@ description = "Core library powering the count_lines CLI tool"
 
 [dependencies]
 anyhow.workspace = true
-libc.workspace = true
 bytecount.workspace = true
 chrono.workspace = true
-clap.workspace = true
 evalexpr.workspace = true
 glob.workspace = true
-indicatif.workspace = true
 num_cpus.workspace = true
 rayon.workspace = true
 regex.workspace = true
@@ -24,9 +21,9 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 walkdir.workspace = true
 thiserror.workspace = true
-dirs.workspace = true
 notify.workspace = true
 xxhash-rust.workspace = true
 fs2.workspace = true
+
+[dev-dependencies]
 tempfile.workspace = true
-nix = { version = "0.30", features = ["fs"] }

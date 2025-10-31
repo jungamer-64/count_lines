@@ -1,14 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs,
+    convert::TryFrom,
+    env, fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
 
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
-use fs2::FileExt;
-use std::convert::TryFrom;
 
 use crate::{
     domain::{
@@ -127,9 +127,10 @@ impl CacheStore {
         let data = serde_json::to_vec_pretty(&file)?;
         let tmp_path = path.with_extension("tmp");
         if let Some(parent) = path.parent()
-            && let Err(err) = fs::create_dir_all(parent) {
-                return Err(InfrastructureError::FileWrite { path: parent.to_path_buf(), source: err }.into());
-            }
+            && let Err(err) = fs::create_dir_all(parent)
+        {
+            return Err(InfrastructureError::FileWrite { path: parent.to_path_buf(), source: err }.into());
+        }
         // Acquire an exclusive lock to prevent concurrent writers from corrupting the cache.
         let lock_path = path.with_extension("lock");
         let lock_file = fs::OpenOptions::new()
@@ -212,8 +213,15 @@ fn resolve_cache_path(config: &Config) -> Option<PathBuf> {
         return None;
     }
 
-    if let Some(mut dir) = dirs::cache_dir() {
+    if let Some(cache_home) = env::var_os("XDG_CACHE_HOME") {
+        let mut dir = PathBuf::from(cache_home);
         dir.push("count_lines");
+        if ensure_dir(&dir).is_ok() {
+            return Some(dir.join(cache_file_name(config)));
+        }
+    } else if let Some(home) = env::var_os("HOME") {
+        let mut dir = PathBuf::from(home);
+        dir.push(".cache/count_lines");
         if ensure_dir(&dir).is_ok() {
             return Some(dir.join(cache_file_name(config)));
         }
@@ -289,15 +297,17 @@ impl CacheStore {
                 let _ = lock_file.unlock();
                 let _ = fs::remove_file(&lock_path);
                 if let Err(err) = res
-                    && err.kind() != io::ErrorKind::NotFound {
-                        return Err(InfrastructureError::FileWrite { path, source: err }.into());
-                    }
+                    && err.kind() != io::ErrorKind::NotFound
+                {
+                    return Err(InfrastructureError::FileWrite { path, source: err }.into());
+                }
             } else {
                 // fallback: try to remove directly
                 if let Err(err) = fs::remove_file(&path)
-                    && err.kind() != io::ErrorKind::NotFound {
-                        return Err(InfrastructureError::FileWrite { path, source: err }.into());
-                    }
+                    && err.kind() != io::ErrorKind::NotFound
+                {
+                    return Err(InfrastructureError::FileWrite { path, source: err }.into());
+                }
             }
         }
         Ok(())
@@ -306,10 +316,15 @@ impl CacheStore {
 
 #[cfg(test)]
 mod tests {
-    use crate::application::queries::config::commands::{ConfigOptions, FilterOptions};
-    use crate::application::queries::config::queries::ConfigQueryService;
-    use crate::domain::options::{OutputFormat, WatchOutput};
     use std::path::PathBuf;
+
+    use crate::{
+        application::queries::config::{
+            commands::{ConfigOptions, FilterOptions},
+            queries::ConfigQueryService,
+        },
+        domain::options::{OutputFormat, WatchOutput},
+    };
 
     fn make_options_with_paths(paths: Vec<&str>) -> ConfigOptions {
         ConfigOptions {
@@ -360,18 +375,19 @@ mod tests {
         let opts2 = make_options_with_paths(vec!["./b", "./a"]);
         let config1 = ConfigQueryService::build(opts1).expect("build config");
         let config2 = ConfigQueryService::build(opts2).expect("build config");
-    let name1 = super::cache_file_name(&config1);
-    let name2 = super::cache_file_name(&config2);
+        let name1 = super::cache_file_name(&config1);
+        let name2 = super::cache_file_name(&config2);
         assert_eq!(name1, name2, "cache file names should match regardless of path order");
     }
 
     #[test]
     fn concurrent_cache_saves_are_atomic() {
         use std::thread;
+
         use tempfile::tempdir;
 
         let tmp = tempdir().expect("tempdir");
-    let opts = make_options_with_paths(vec!["."]);
+        let opts = make_options_with_paths(vec!["."]);
         let mut config = ConfigQueryService::build(opts).expect("build config");
         config.cache_dir = Some(tmp.path().to_path_buf());
 
@@ -383,9 +399,16 @@ mod tests {
             handles.push(thread::spawn(move || {
                 let mut store = super::CacheStore::load(&cfg).expect("load cache");
                 let path = cfg.cache_dir.as_ref().unwrap().join(format!("f_{i}.txt"));
-                let meta = crate::domain::model::FileMeta { size: 0, mtime: None, is_text: true, ext: "txt".to_string(), name: format!("f_{i}.txt") };
+                let meta = crate::domain::model::FileMeta {
+                    size: 0,
+                    mtime: None,
+                    is_text: true,
+                    ext: "txt".to_string(),
+                    name: format!("f_{i}.txt"),
+                };
                 let entry = crate::domain::model::FileEntry { path: path.clone(), meta: meta.clone() };
-                let stats = crate::domain::model::entities::file_stats::FileStats::new(path, 0, 0, None, &meta);
+                let stats =
+                    crate::domain::model::entities::file_stats::FileStats::new(path, 0, 0, None, &meta);
                 store.update(format!("k{i}"), &entry, &stats, false);
                 // retry save a few times in case of transient filesystem races on some platforms
                 let mut attempts = 0;
@@ -402,9 +425,11 @@ mod tests {
             }));
         }
 
-        for h in handles { h.join().expect("join"); }
+        for h in handles {
+            h.join().expect("join");
+        }
 
-    let path = super::resolve_cache_path(&config).expect("resolve cache path");
+        let path = super::resolve_cache_path(&config).expect("resolve cache path");
         let contents = std::fs::read_to_string(path).expect("read cache");
         let parsed: serde_json::Value = serde_json::from_str(&contents).expect("parse cache");
         let entries = parsed.get("entries").and_then(|e| e.as_object()).expect("entries");

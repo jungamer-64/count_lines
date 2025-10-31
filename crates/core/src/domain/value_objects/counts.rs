@@ -1,6 +1,4 @@
-use std::{
-    ops::{Add, AddAssign},
-};
+use std::ops::{Add, AddAssign};
 
 use serde::{Deserialize, Serialize};
 
@@ -113,7 +111,6 @@ impl From<usize> for CharCount {
         Self::new(value)
     }
 }
-
 
 /// 単語数を表す値オブジェクト
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]

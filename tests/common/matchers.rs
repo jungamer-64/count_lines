@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! アサーションヘルパー
 
 use count_lines_core::domain::model::{FileStats, FileStatsV2};

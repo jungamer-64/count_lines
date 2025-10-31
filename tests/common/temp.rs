@@ -1,4 +1,9 @@
-use std::{fs, path::{Path, PathBuf}};
+#![allow(dead_code)]
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
 use tempfile::TempDir as TempfileTempDir;
 
 #[derive(Debug)]
@@ -9,10 +14,7 @@ pub struct TempDir {
 impl TempDir {
     pub fn new(_prefix: &str, _namespace: &str) -> Self {
         // Use tempfile to create a secure unique temp directory
-        let dir = tempfile::Builder::new()
-            .prefix("count_lines_")
-            .tempdir()
-            .expect("create temp dir");
+        let dir = tempfile::Builder::new().prefix("count_lines_").tempdir().expect("create temp dir");
         Self { inner: dir }
     }
 
@@ -28,7 +30,7 @@ impl TempDir {
         fs::write(&path, contents).unwrap();
         path
     }
-    }
+}
 
 #[derive(Debug)]
 #[allow(dead_code)]

@@ -1,4 +1,4 @@
-use std::time::Instant;
+use std::{io::IsTerminal, time::Instant};
 
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
@@ -19,18 +19,7 @@ use crate::{
         cache::CacheStore,
         watch::WatchService,
     },
-    presentation::cli,
 };
-
-/// Entrypoint wrapper that loads CLI configuration and runs the application.
-///
-/// # Errors
-///
-/// Returns an error if configuration loading or runtime execution fails.
-pub fn run() -> Result<()> {
-    let config = cli::load_config().map_err(anyhow::Error::from)?;
-    run_with_config(config)
-}
 
 /// Run the application with a pre-loaded `Config`.
 ///
@@ -99,7 +88,7 @@ fn run_analysis(config: &Config, show_banner: bool) -> Result<()> {
             "changed_files": changed,
             "removed_files": removed
         });
-    println!("{payload}");
+        println!("{payload}");
     } else {
         let presenter = OutputEmitter;
         let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
@@ -138,30 +127,6 @@ fn start_watch_loop(config: &Config) -> Result<()> {
     Ok(())
 }
 
-    // Use libc directly to avoid bringing the `atty` crate into the dependency tree.
-    // This performs a simple isatty(STDOUT_FILENO) check on Unix-like platforms.
-    //
-    // Semgrep may flag the following `unsafe` usage. We document the safety
-    // rationale below and add an inline suppression comment so automated
-    // scanners can be satisfied while keeping the implementation minimal and
-    // dependency-free.
-    //
-    // Use `nix::unistd::isatty` which provides a safe wrapper around the
-    // platform `isatty` check. This lets us avoid any `unsafe` blocks in the
-    // repository source code while still correctly detecting terminal
-    // connectivity on Unix-like platforms.
-    fn is_stdout_tty() -> bool {
-        #[cfg(unix)]
-        {
-            // Use the std `Stdout` handle which implements `AsFd` so we can
-            // call the generic `nix::unistd::isatty` safely. If the call
-            // fails for any reason, conservatively return `false`.
-            nix::unistd::isatty(std::io::stdout()).unwrap_or(false)
-        }
-
-        #[cfg(not(unix))]
-        {
-            // On non-Unix platforms we conservatively return `true` so behavior is preserved.
-            true
-        }
-    }
+fn is_stdout_tty() -> bool {
+    std::io::stdout().is_terminal()
+}

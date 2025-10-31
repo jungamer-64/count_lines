@@ -81,9 +81,10 @@ impl<'a> RunAnalysisHandler<'a> {
 
     fn log_start(&self, config: &Config) {
         if config.progress
-            && let Some(notifier) = self.notifier {
-                notifier.info("[count_lines] Starting analysis...");
-            }
+            && let Some(notifier) = self.notifier
+        {
+            notifier.info("[count_lines] Starting analysis...");
+        }
     }
 
     fn log_completion(&self, stats: &[crate::domain::model::FileStats]) {

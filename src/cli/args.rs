@@ -1,12 +1,11 @@
-// crates/core/src/presentation/cli/args.rs
 use std::path::PathBuf;
 
 use clap::{Parser, ValueHint};
+use count_lines_core::domain::{grouping::ByMode, options::SortSpec};
 
-use super::parsers::{DateTimeArg, SizeArg};
-use crate::domain::{
-    grouping::ByMode,
-    options::{OutputFormat, SortSpec, WatchOutput},
+use super::{
+    parsers::{DateTimeArg, SizeArg},
+    value_enum::{CliOutputFormat, CliWatchOutput},
 };
 
 /// Top-level CLI arguments parsed via clap.
@@ -16,13 +15,11 @@ use crate::domain::{
     version = crate::VERSION,
     about = "ファイル行数/文字数/単語数の集計ツール",
     long_about = Some(include_str!("../../usage.txt")),
-    // ファイル入力ソースは排他的（paths / files_from / files_from0）
     group(
         clap::ArgGroup::new("input_source")
             .args(&["paths", "files_from", "files_from0"])
             .multiple(false)
     ),
-    // 絶対パス出力モードは排他的（abs_path / abs_canonical）
     group(
         clap::ArgGroup::new("abs_mode")
             .args(&["abs_path", "abs_canonical"])
@@ -33,7 +30,7 @@ use crate::domain::{
 pub struct Args {
     /// 出力フォーマット
     #[arg(long, value_enum, default_value = "table", help_heading = "出力")]
-    pub format: OutputFormat,
+    pub format: CliOutputFormat,
 
     /// ソートキー（複数可, 例: lines:desc,chars:desc,name）。`words` を含む場合は単語数計測が自動有効化されます。
     #[arg(long, default_value = "lines:desc", help_heading = "出力")]
@@ -229,7 +226,7 @@ pub struct Args {
 
     /// watch時の出力モード
     #[arg(long, value_enum, default_value = "full", help_heading = "動作")]
-    pub watch_output: WatchOutput,
+    pub watch_output: CliWatchOutput,
 
     /// 比較: 2つの JSON を比較表示
     #[arg(long, num_args = 2, value_names = ["OLD", "NEW"], value_hint = ValueHint::FilePath, help_heading = "比較")]

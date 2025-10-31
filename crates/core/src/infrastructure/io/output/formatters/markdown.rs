@@ -49,12 +49,7 @@ fn write_markdown_rows(stats: &[FileStats], config: &Config, out: &mut impl Writ
     Ok(())
 }
 
-fn write_row_words_ratio(
-    out: &mut impl Write,
-    s: &FileStats,
-    summary: &Summary,
-    path: &str,
-) -> Result<()> {
+fn write_row_words_ratio(out: &mut impl Write, s: &FileStats, summary: &Summary, path: &str) -> Result<()> {
     writeln!(
         out,
         "| {} | {} | {} | {} | {} | {} |",
@@ -73,12 +68,7 @@ fn write_row_words(out: &mut impl Write, s: &FileStats, path: &str) -> Result<()
     Ok(())
 }
 
-fn write_row_ratio(
-    out: &mut impl Write,
-    s: &FileStats,
-    summary: &Summary,
-    path: &str,
-) -> Result<()> {
+fn write_row_ratio(out: &mut impl Write, s: &FileStats, summary: &Summary, path: &str) -> Result<()> {
     writeln!(
         out,
         "| {} | {} | {} | {} | {} |",

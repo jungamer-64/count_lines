@@ -7,8 +7,8 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
+use evalexpr::{ContextWithMutableVariables, HashMapContext, Value};
 use rayon::prelude::*;
-use evalexpr::{HashMapContext, ContextWithMutableVariables, Value};
 
 use crate::{
     application::commands::MeasurementOutcome,
@@ -126,16 +126,17 @@ fn measure_parallel(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<File
         .map_err(|e| InfrastructureError::ThreadPoolCreation { details: e.to_string() })?;
 
     let results: Vec<_> = pool.install(|| {
-        entries
-            .into_par_iter()
-            .map(|entry| process_entry(entry, config, progress.as_ref()))
-            .collect()
+        entries.into_par_iter().map(|entry| process_entry(entry, config, progress.as_ref())).collect()
     });
 
     collect_parallel_results(results, config)
 }
 
-fn process_entry(entry: FileEntry, config: &Config, progress: Option<&(AtomicUsize, usize)>) -> (std::path::PathBuf, Result<Option<FileStats>>) {
+fn process_entry(
+    entry: FileEntry,
+    config: &Config,
+    progress: Option<&(AtomicUsize, usize)>,
+) -> (std::path::PathBuf, Result<Option<FileStats>>) {
     let result = FileMeasurer::measure(&entry, config);
 
     if let Some((counter, total)) = progress {
@@ -153,7 +154,10 @@ fn process_entry(entry: FileEntry, config: &Config, progress: Option<&(AtomicUsi
 /// Returns a Vec<FileStats> containing successful measurements. If `config.strict` is true
 /// this will return early with the first error encountered. When `config.progress` is true
 /// warnings are emitted for failed measurements.
-fn collect_parallel_results(results: Vec<(std::path::PathBuf, Result<Option<FileStats>>)>, config: &Config) -> Result<Vec<FileStats>> {
+fn collect_parallel_results(
+    results: Vec<(std::path::PathBuf, Result<Option<FileStats>>)>,
+    config: &Config,
+) -> Result<Vec<FileStats>> {
     let mut stats = Vec::new();
     let mut failure_count = 0usize;
 
@@ -229,15 +233,17 @@ impl FileMeasurer {
 
         // 単語数フィルタ
         if let Some(words) = stats.words()
-            && !filters.words_range.contains(words.value()) {
-                return Ok(None);
-            }
+            && !filters.words_range.contains(words.value())
+        {
+            return Ok(None);
+        }
 
         // 式フィルタ
         if let Some(ast) = &filters.filter_ast
-            && !Self::eval_filter(&stats, ast)? {
-                return Ok(None);
-            }
+            && !Self::eval_filter(&stats, ast)?
+        {
+            return Ok(None);
+        }
 
         Ok(Some(stats))
     }
@@ -252,8 +258,14 @@ impl FileMeasurer {
     /// Performs safe conversion to `i64` and returns a `DomainError` on overflow or context errors.
     fn set_int_from_usize(ctx: &mut HashMapContext, key: &str, val: usize) -> Result<()> {
         use std::convert::TryFrom;
-        let v = i64::try_from(val).map_err(|_| DomainError::InvalidFilterExpression { expression: String::new(), details: format!("numeric overflow for {key}") })?;
-        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() })?;
+        let v = i64::try_from(val).map_err(|_| DomainError::InvalidFilterExpression {
+            expression: String::new(),
+            details: format!("numeric overflow for {key}"),
+        })?;
+        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| DomainError::InvalidFilterExpression {
+            expression: String::new(),
+            details: e.to_string(),
+        })?;
         Ok(())
     }
 
@@ -261,20 +273,31 @@ impl FileMeasurer {
     /// Performs safe conversion to `i64` and returns a `DomainError` on overflow or context errors.
     fn set_int_from_u64(ctx: &mut HashMapContext, key: &str, val: u64) -> Result<()> {
         use std::convert::TryFrom;
-        let v = i64::try_from(val).map_err(|_| DomainError::InvalidFilterExpression { expression: String::new(), details: format!("numeric overflow for {key}") })?;
-        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() })?;
+        let v = i64::try_from(val).map_err(|_| DomainError::InvalidFilterExpression {
+            expression: String::new(),
+            details: format!("numeric overflow for {key}"),
+        })?;
+        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| DomainError::InvalidFilterExpression {
+            expression: String::new(),
+            details: e.to_string(),
+        })?;
         Ok(())
     }
 
     /// Set an integer variable in the eval context from an i64 value.
     fn set_int_direct(ctx: &mut HashMapContext, key: &str, val: i64) -> Result<()> {
-        ctx.set_value(key.into(), Value::Int(val)).map_err(|e| DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() })?;
+        ctx.set_value(key.into(), Value::Int(val)).map_err(|e| DomainError::InvalidFilterExpression {
+            expression: String::new(),
+            details: e.to_string(),
+        })?;
         Ok(())
     }
 
     /// Set a string variable in the eval context.
     fn set_string(ctx: &mut HashMapContext, key: &str, val: &str) -> Result<()> {
-        ctx.set_value(key.into(), Value::String(val.to_string())).map_err(|e| DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() })?;
+        ctx.set_value(key.into(), Value::String(val.to_string())).map_err(|e| {
+            DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() }
+        })?;
         Ok(())
     }
 
@@ -316,8 +339,11 @@ impl FileMeasurer {
         Ok(ctx)
     }
 
-
-    fn collect_cached_entries(entries: Vec<FileEntry>, cache: &CacheStore, config: &Config) -> Result<(Vec<IndexedResult>, Vec<PendingEntry>)> {
+    fn collect_cached_entries(
+        entries: Vec<FileEntry>,
+        cache: &CacheStore,
+        config: &Config,
+    ) -> Result<(Vec<IndexedResult>, Vec<PendingEntry>)> {
         let mut processed: Vec<IndexedResult> = Vec::with_capacity(entries.len());
         let mut pending: Vec<(usize, String, FileEntry)> = Vec::new();
 
@@ -342,10 +368,14 @@ impl FileMeasurer {
         Ok((processed, pending))
     }
 
-    fn measure_pending_entries(pending: Vec<PendingEntry>, config: &Config) -> Result<(Vec<IndexedResult>, Vec<PathBuf>)> {
+    fn measure_pending_entries(
+        pending: Vec<PendingEntry>,
+        config: &Config,
+    ) -> Result<(Vec<IndexedResult>, Vec<PathBuf>)> {
         let measure_input: Vec<FileEntry> = pending.iter().map(|(_, _, entry)| entry.clone()).collect();
         let measured = measure_all(measure_input, config)?;
-        let mut measured_map: HashMap<PathBuf, FileStats> = measured.into_iter().map(|stat| (stat.path.clone(), stat)).collect();
+        let mut measured_map: HashMap<PathBuf, FileStats> =
+            measured.into_iter().map(|stat| (stat.path.clone(), stat)).collect();
 
         let mut processed: Vec<IndexedResult> = Vec::with_capacity(measured_map.len());
         let mut changed_files: Vec<PathBuf> = Vec::new();
@@ -367,15 +397,15 @@ impl FileMeasurer {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
-    use std::time::Duration;
-    use crate::domain::model::FileMeta;
-    use std::io::Write;
+    use std::{fs, io::Write, path::Path, time::Duration};
+
     use tempfile::NamedTempFile;
 
     use super::*;
-    use crate::infrastructure::measurement::strategies::{measure_by_lines, measure_entire_file};
+    use crate::{
+        domain::model::FileMeta,
+        infrastructure::measurement::strategies::{measure_by_lines, measure_entire_file},
+    };
 
     struct TempFile {
         pub path: std::path::PathBuf,
@@ -546,7 +576,11 @@ mod tests {
             (file1.path, Ok(Some(stats1))),
             (
                 file2.path.clone(),
-                Err(InfrastructureError::MeasurementError { path: file2.path, reason: "simulated".to_string() }.into()),
+                Err(InfrastructureError::MeasurementError {
+                    path: file2.path,
+                    reason: "simulated".to_string(),
+                }
+                .into()),
             ),
         ];
 

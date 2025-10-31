@@ -45,10 +45,10 @@ impl WatchService {
 
     fn create_watcher(
         config: &Config,
-    ) -> std::result::Result<(
-        RecommendedWatcher,
-        std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>,
-    ), InfrastructureError> {
+    ) -> std::result::Result<
+        (RecommendedWatcher, std::sync::mpsc::Receiver<Result<notify::Event, notify::Error>>),
+        InfrastructureError,
+    > {
         let (tx, rx) = mpsc::channel();
         let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res| {
             let _ = tx.send(res);

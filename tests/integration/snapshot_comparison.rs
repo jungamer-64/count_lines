@@ -1,8 +1,12 @@
-use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
-use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
+use std::{
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use count_lines_core::infrastructure::comparison;
 use serde_json::json;
+use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 struct TempFile {
     _td: TempfileTempDir,

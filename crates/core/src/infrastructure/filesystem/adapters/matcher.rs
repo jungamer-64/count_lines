@@ -75,10 +75,10 @@ impl PathMatcher {
         let name = file_name.to_string_lossy();
 
         // includeパターンのチェック
-        if !filters.include_patterns.is_empty()
-            && !filters.include_patterns.iter().any(|p| p.matches(&name)) {
-                return false;
-            }
+        if !filters.include_patterns.is_empty() && !filters.include_patterns.iter().any(|p| p.matches(&name))
+        {
+            return false;
+        }
 
         // excludeパターンのチェック
         !filters.exclude_patterns.iter().any(|p| p.matches(&name))
@@ -86,10 +86,9 @@ impl PathMatcher {
 
     fn matches_path_patterns(path: &Path, filters: &Filters) -> bool {
         // includeパスパターンのチェック
-        if !filters.include_paths.is_empty()
-            && !filters.include_paths.iter().any(|p| p.matches_path(path)) {
-                return false;
-            }
+        if !filters.include_paths.is_empty() && !filters.include_paths.iter().any(|p| p.matches_path(path)) {
+            return false;
+        }
 
         // excludeパスパターンのチェック
         !filters.exclude_paths.iter().any(|p| p.matches_path(path))
@@ -128,14 +127,16 @@ impl PathMatcher {
         let modified: DateTime<Local> = modified_sys.into();
 
         if let Some(since) = config.mtime_since
-            && modified < since {
-                return false;
-            }
+            && modified < since
+        {
+            return false;
+        }
 
         if let Some(until) = config.mtime_until
-            && modified > until {
-                return false;
-            }
+            && modified > until
+        {
+            return false;
+        }
 
         true
     }

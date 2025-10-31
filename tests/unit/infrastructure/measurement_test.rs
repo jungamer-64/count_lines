@@ -1,5 +1,8 @@
-use std::{fs, path::{Path, PathBuf}, time::Duration};
-use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use count_lines_core::{
     domain::{
@@ -16,6 +19,7 @@ use count_lines_core::{
     },
 };
 use serde_json::Value;
+use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 struct TempDirResource {
     td: TempfileTempDir,
@@ -45,7 +49,6 @@ impl TempFile {
         Self { _td: td, path }
     }
 }
- 
 
 fn base_config() -> Config {
     Config {

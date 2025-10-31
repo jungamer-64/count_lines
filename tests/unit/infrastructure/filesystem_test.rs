@@ -4,7 +4,6 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 use count_lines_core::{
     domain::{
@@ -13,6 +12,7 @@ use count_lines_core::{
     },
     infrastructure::filesystem::services::{collect_entries, collect_walk_entries},
 };
+use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 struct TempDir {
     _td: TempfileTempDir,

@@ -21,21 +21,22 @@ impl ConfigQueryService {
     /// Returns `Err` when filter expression parsing fails or when provided
     /// options are invalid and cannot be materialised into a domain `Config`.
     pub fn build(query: ConfigOptions) -> Result<Config> {
-    let filters = Self::build_filters(&query.filters)?;
-    let jobs = Self::determine_jobs(&query);
-    let words = Self::should_enable_words(&query, &filters);
-    let (abs_path, trim_root) = Self::abs_and_trim(&query);
-    let watch_interval = Self::watch_interval(&query);
-    let cache_dir = Self::cache_dir(&query);
-    let paths = Self::normalize_paths(query.paths);
-    let by_modes = Self::convert_by_modes(&query.by);
-    let incremental = query.incremental || query.watch;
+        let filters = Self::build_filters(&query.filters)?;
+        let jobs = Self::determine_jobs(&query);
+        let words = Self::should_enable_words(&query, &filters);
+        let (abs_path, trim_root) = Self::abs_and_trim(&query);
+        let watch_interval = Self::watch_interval(&query);
+        let cache_dir = Self::cache_dir(&query);
+        let paths = Self::normalize_paths(query.paths);
+        let by_modes = Self::convert_by_modes(&query.by);
+        let incremental = query.incremental || query.watch;
 
         Ok(Config {
             format: query.format,
             sort_specs: query.sort_specs,
             top_n: query.top_n,
-            by_modes, summary_only: query.summary_only,
+            by_modes,
+            summary_only: query.summary_only,
             total_only: query.total_only,
             by_limit: query.by_limit,
             filters,
@@ -120,9 +121,7 @@ impl ConfigQueryService {
 
     fn parse_extensions(ext_arg: Option<&str>) -> HashSet<String> {
         ext_arg
-            .map(|s| {
-                s.split(',').map(str::trim).filter(|e| !e.is_empty()).map(str::to_lowercase).collect()
-            })
+            .map(|s| s.split(',').map(str::trim).filter(|e| !e.is_empty()).map(str::to_lowercase).collect())
             .unwrap_or_default()
     }
 
