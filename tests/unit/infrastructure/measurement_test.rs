@@ -1,4 +1,4 @@
-use std::{fs, path::{Path, PathBuf}, time::{Duration, SystemTime, UNIX_EPOCH}};
+use std::{fs, path::{Path, PathBuf}, time::Duration};
 use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 use count_lines_core::{

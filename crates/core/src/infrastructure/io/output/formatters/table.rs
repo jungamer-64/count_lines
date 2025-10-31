@@ -52,32 +52,43 @@ fn header_line(config: &Config) -> &'static str {
 }
 
 fn format_row(s: &FileStats, summary: &Summary, config: &Config, path: &str) -> String {
-    if config.words {
-        if config.ratio {
-            format!(
-                "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{:>7}\t{}",
-                format_ratio(s.lines, summary.lines),
-                s.lines,
-                format_ratio(s.chars, summary.chars),
-                s.chars,
-                s.words.unwrap_or(0),
-                path
-            )
-        } else {
-            format!("{:>10}\t{:>10}\t{:>7}\t{}", s.lines, s.chars, s.words.unwrap_or(0), path)
-        }
-    } else if config.ratio {
-        format!(
-            "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{}",
-            format_ratio(s.lines, summary.lines),
-            s.lines,
-            format_ratio(s.chars, summary.chars),
-            s.chars,
-            path
-        )
-    } else {
-        format!("{:>10}\t{:>10}\t{}", s.lines, s.chars, path)
+    match (config.words, config.ratio) {
+        (true, true) => format_row_words_ratio(s, summary, path),
+        (true, false) => format_row_words(s, path),
+        (false, true) => format_row_ratio(s, summary, path),
+        (false, false) => format_row_basic(s, path),
     }
+}
+
+fn format_row_words_ratio(s: &FileStats, summary: &Summary, path: &str) -> String {
+    format!(
+        "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{:>7}\t{}",
+        format_ratio(s.lines, summary.lines),
+        s.lines,
+        format_ratio(s.chars, summary.chars),
+        s.chars,
+        s.words.unwrap_or(0),
+        path
+    )
+}
+
+fn format_row_words(s: &FileStats, path: &str) -> String {
+    format!("{:>10}\t{:>10}\t{:>7}\t{}", s.lines, s.chars, s.words.unwrap_or(0), path)
+}
+
+fn format_row_ratio(s: &FileStats, summary: &Summary, path: &str) -> String {
+    format!(
+        "{:>10}\t{:>10}\t{:>12}\t{:>11}\t{}",
+        format_ratio(s.lines, summary.lines),
+        s.lines,
+        format_ratio(s.chars, summary.chars),
+        s.chars,
+        path
+    )
+}
+
+fn format_row_basic(s: &FileStats, path: &str) -> String {
+    format!("{:>10}\t{:>10}\t{}", s.lines, s.chars, path)
 }
 
 fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {

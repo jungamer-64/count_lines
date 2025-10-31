@@ -2,7 +2,7 @@ use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 

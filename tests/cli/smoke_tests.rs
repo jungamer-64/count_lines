@@ -1,12 +1,9 @@
-use std::process::Command;
-
-use assert_cmd::prelude::*;
+use assert_cmd::Command;
 use predicates::prelude::*;
 
 #[test]
 fn shows_help() {
-    Command::cargo_bin("count_lines")
-        .expect("binary exists")
+    Command::new(env!("CARGO_BIN_EXE_count_lines"))
         .arg("--help")
         .assert()
         .success()
@@ -15,8 +12,7 @@ fn shows_help() {
 
 #[test]
 fn processes_single_file() {
-    Command::cargo_bin("count_lines")
-        .expect("binary exists")
+    Command::new(env!("CARGO_BIN_EXE_count_lines"))
         .args(["--format", "json", "Cargo.toml"])
         .assert()
         .success()
