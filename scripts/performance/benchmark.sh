@@ -85,7 +85,7 @@ echo ""
 
 # Benchmark 1: Current directory (small)
 run_benchmark "Small directory scan" \
-    "$BINARY ."
+    "$BINARY" "."
 
 # Benchmark 2: Recursive scan with limits
 run_benchmark "Top 20 files" \
@@ -93,61 +93,63 @@ run_benchmark "Top 20 files" \
 
 # Benchmark 3: JSON output
 run_benchmark "JSON format output" \
-    "$BINARY --format json ."
+    "$BINARY" "--top" "20" "."
 
 # Benchmark 4: YAML output
 run_benchmark "YAML format output" \
-    "$BINARY --format yaml ."
+    "$BINARY" "--format" "json" "."
 
 # Benchmark 5: CSV output
 run_benchmark "CSV format output" \
-    "$BINARY --format csv ."
+    "$BINARY" "--format" "yaml" "."
 
 # Benchmark 6: Markdown output
 run_benchmark "Markdown format output" \
-    "$BINARY --format md ."
+    "$BINARY" "--format" "csv" "."
 
 # Benchmark 7: With sorting
 run_benchmark "Sorted by lines (desc)" \
-    "$BINARY --sort lines:desc ."
+    "$BINARY" "--format" "md" "."
 
 # Benchmark 8: With grouping by extension
 run_benchmark "Group by extension" \
-    "$BINARY --by ext ."
+    "$BINARY" "--sort" "lines:desc" "."
 
 # Benchmark 9: With filtering
 run_benchmark "Filter Rust files only" \
-    "$BINARY --ext rs ."
+    "$BINARY" "--by" "ext" "."
 
 # Benchmark 10: Git mode (if in git repo)
 if [ -d ".git" ]; then
-    run_benchmark "Git mode (respects .gitignore)" \
+    "$BINARY" "--ext" "rs" "."
         "$BINARY --git ."
 fi
 
-# Benchmark 11: With progress indicator (redirected)
+# Note: run_benchmark redirects stdout/stderr to /dev/null internally; no explicit shell redirection needed
+run_benchmark "With progress indicator" \
+    "$BINARY" "--progress" "."
 run_benchmark "With progress indicator" \
     "$BINARY --progress . 2>&1"
 
-# Benchmark 12: Large scan with multiple filters
+    "$BINARY" "--ext" "rs,toml,md" "--min-lines" "10" "--sort" "lines:desc" "."
 run_benchmark "Complex query (multi-filter)" \
     "$BINARY --ext rs,toml,md --min-lines 10 --sort lines:desc ."
 
-# Benchmark 13: Directory grouping
+    "$BINARY" "--by" "dir=2" "."
 run_benchmark "Group by directory (depth 2)" \
     "$BINARY --by dir=2 ."
 
 # If crates directory exists, benchmark on larger tree
-if [ -d "crates" ]; then
+        "$BINARY" "crates/"
     run_benchmark "Deep directory tree (crates/)" \
         "$BINARY crates/"
 fi
 
-# Generate summary report
+    "$BINARY" "--format" "jsonl" "--ext" "rs" "--top" "5" "."
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Summary Report"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    "$BINARY" "--hidden" "--include" ".*" "--top" "10" "."
 echo ""
 
 # Calculate statistics

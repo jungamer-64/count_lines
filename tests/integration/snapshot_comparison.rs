@@ -1,30 +1,21 @@
-use std::{
-    fs,
-    path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 use count_lines_core::infrastructure::comparison;
 use serde_json::json;
 
 struct TempFile {
+    _td: TempfileTempDir,
     path: PathBuf,
 }
 
 impl TempFile {
     fn new(prefix: &str, contents: &str) -> Self {
-        let base = std::env::temp_dir().join("count_lines_snapshot");
-        fs::create_dir_all(&base).unwrap();
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string();
-        let path = base.join(format!("{prefix}_{unique}.json"));
+        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create tempdir");
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = td.path().join(format!("{}_{}.json", prefix, unique));
         fs::write(&path, contents).unwrap();
-        Self { path }
-    }
-}
-
-impl Drop for TempFile {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
+        Self { _td: td, path }
     }
 }
 

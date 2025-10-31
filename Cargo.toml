@@ -29,6 +29,7 @@ assert_cmd.workspace = true
 predicates.workspace = true
 chrono.workspace = true
 serde_json.workspace = true
+tempfile = { workspace = true }
 
 [workspace.dependencies]
 anyhow = "1"

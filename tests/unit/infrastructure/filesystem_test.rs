@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 use count_lines_core::{
     domain::{
@@ -14,23 +15,15 @@ use count_lines_core::{
 };
 
 struct TempDir {
+    _td: TempfileTempDir,
     path: PathBuf,
 }
 
 impl TempDir {
     fn new(prefix: &str) -> Self {
-        let base = std::env::temp_dir().join("count_lines_tests");
-        fs::create_dir_all(&base).unwrap();
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos().to_string();
-        let path = base.join(format!("{prefix}_{unique}"));
-        fs::create_dir(&path).unwrap();
-        Self { path }
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
+        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create tempdir");
+        let path = td.path().to_path_buf();
+        Self { _td: td, path }
     }
 }
 

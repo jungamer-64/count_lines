@@ -1,34 +1,29 @@
-//! テストフィクスチャ管理
+/// テストフィクスチャ管理
 
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, path::{Path, PathBuf}, time::{SystemTime, UNIX_EPOCH}};
+use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
 /// 一時ディレクトリ管理
 #[allow(dead_code)]
 pub struct TempWorkspace {
-    root: PathBuf,
+    tempdir: TempfileTempDir,
     files: Vec<PathBuf>,
 }
 
 #[allow(dead_code)]
 impl TempWorkspace {
-    pub fn new(prefix: &str) -> Self {
-        let base = std::env::temp_dir().join("count_lines_test");
-        fs::create_dir_all(&base).unwrap();
+    pub fn new(_prefix: &str) -> Self {
+        let td = TempBuilder::new()
+            .prefix("count_lines_test_")
+            .tempdir()
+            .expect("create temp workspace");
 
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let root = base.join(format!("{prefix}_{unique}"));
-        fs::create_dir(&root).unwrap();
-
-        Self { root, files: Vec::new() }
+        Self { tempdir: td, files: Vec::new() }
     }
 
     /// ファイルを作成
     pub fn create_file(&mut self, path: &str, content: &str) -> &PathBuf {
-        let full_path = self.root.join(path);
+        let full_path = self.tempdir.path().join(path);
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent).unwrap();
         }
@@ -39,7 +34,7 @@ impl TempWorkspace {
 
     /// バイナリファイルを作成
     pub fn create_binary(&mut self, path: &str, content: &[u8]) -> &PathBuf {
-        let full_path = self.root.join(path);
+        let full_path = self.tempdir.path().join(path);
         if let Some(parent) = full_path.parent() {
             fs::create_dir_all(parent).unwrap();
         }
@@ -50,14 +45,14 @@ impl TempWorkspace {
 
     /// ディレクトリを作成
     pub fn create_dir(&mut self, path: &str) -> PathBuf {
-        let full_path = self.root.join(path);
+        let full_path = self.tempdir.path().join(path);
         fs::create_dir_all(&full_path).unwrap();
         full_path
     }
 
     /// ルートパスを取得
     pub fn path(&self) -> &Path {
-        &self.root
+        self.tempdir.path()
     }
 
     /// 作成されたすべてのファイルパスを取得
@@ -91,40 +86,26 @@ version = "0.1.0"
     }
 }
 
-impl Drop for TempWorkspace {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
-    }
-}
-
 /// 一時ファイル管理
 pub struct TempFile {
+    _td: TempfileTempDir,
     path: PathBuf,
 }
 
 impl TempFile {
     pub fn new(prefix: &str, content: &str) -> Self {
-        let base = std::env::temp_dir().join("count_lines_test");
-        fs::create_dir_all(&base).unwrap();
-
+        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create temp file dir");
         let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let path = base.join(format!("{prefix}_{unique}.tmp"));
+        let path = td.path().join(format!("{}_{}.tmp", prefix, unique));
         fs::write(&path, content).unwrap();
 
-        Self { path }
+        Self { _td: td, path }
     }
 
     pub fn path(&self) -> &Path {
         &self.path
     }
 }
-
-impl Drop for TempFile {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.path);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
