@@ -8,7 +8,62 @@ use std::{
 
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
-use xxhash_rust::xxh3::Xxh3;
+
+#[cfg(feature = "hash-xx")]
+type CacheHasher = xxhash_rust::xxh3::Xxh3;
+#[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
+type CacheHasher = ahash::AHasher;
+#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
+type CacheHasher = std::collections::hash_map::DefaultHasher;
+
+#[cfg(feature = "hash-xx")]
+fn new_hasher() -> CacheHasher {
+    CacheHasher::new()
+}
+
+#[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
+fn new_hasher() -> CacheHasher {
+    CacheHasher::new_with_keys(0, 0)
+}
+
+#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
+fn new_hasher() -> CacheHasher {
+    CacheHasher::new()
+}
+
+#[cfg(feature = "hash-xx")]
+fn update_hasher(hasher: &mut CacheHasher, bytes: &[u8]) {
+    hasher.update(bytes);
+}
+
+#[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
+fn update_hasher(hasher: &mut CacheHasher, bytes: &[u8]) {
+    use std::hash::Hasher;
+    hasher.write(bytes);
+}
+
+#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
+fn update_hasher(hasher: &mut CacheHasher, bytes: &[u8]) {
+    use std::hash::Hasher;
+    hasher.write(bytes);
+}
+
+#[cfg(feature = "hash-xx")]
+fn finalize_hasher(hasher: CacheHasher) -> u64 {
+    hasher.digest()
+}
+
+#[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
+fn finalize_hasher(hasher: CacheHasher) -> u64 {
+    use std::hash::Hasher;
+    hasher.finish()
+}
+
+#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
+fn finalize_hasher(hasher: CacheHasher) -> u64 {
+    use std::hash::Hasher;
+    hasher.finish()
+}
 
 use crate::{
     domain::{
@@ -163,7 +218,9 @@ impl CacheEntry {
         if self.size != entry.meta.size {
             return false;
         }
-        if self.mtime_millis != entry.meta.mtime.as_ref().map(|dt| dt.timestamp_millis()) {
+        if self.mtime_millis
+            != entry.meta.mtime.as_ref().map(|dt: &chrono::DateTime<chrono::Local>| dt.timestamp_millis())
+        {
             return false;
         }
         if !verify_hash {
@@ -256,33 +313,32 @@ fn cache_file_name(config: &Config) -> String {
 }
 
 fn workspace_hash(config: &Config) -> u64 {
-    // Use a stable, cross-process hash (xxh3) so the cache filename is deterministic
-    // for the same workspace paths. Avoid DefaultHasher which is intentionally
-    // randomized per-process and therefore unsuitable for persistent filenames.
-    let mut hasher = Xxh3::new();
+    // Use a stable, cross-process hash so the cache filename is deterministic
+    // for the same workspace paths.
+    let mut hasher = new_hasher();
     let mut paths: Vec<String> =
         config.paths.iter().map(|path| logical_absolute(path).to_string_lossy().into_owned()).collect();
     paths.sort();
     for path in paths {
-        hasher.update(path.as_bytes());
+        update_hasher(&mut hasher, path.as_bytes());
         // separator to avoid accidental concatenation collisions
-        hasher.update(&[0]);
+        update_hasher(&mut hasher, &[0]);
     }
-    hasher.digest()
+    finalize_hasher(hasher)
 }
 
 fn hash_file(path: &Path) -> Option<String> {
     let mut file = fs::File::open(path).ok()?;
-    let mut hasher = Xxh3::new();
+    let mut hasher = new_hasher();
     let mut buf = [0u8; 8192];
     loop {
         match file.read(&mut buf) {
             Ok(0) => break,
-            Ok(n) => hasher.update(&buf[..n]),
+            Ok(n) => update_hasher(&mut hasher, &buf[..n]),
             Err(_) => return None,
         }
     }
-    Some(format!("{:016x}", hasher.digest()))
+    Some(format!("{:016x}", finalize_hasher(hasher)))
 }
 
 impl CacheStore {

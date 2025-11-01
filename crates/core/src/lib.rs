@@ -15,6 +15,8 @@ pub mod version;
 
 pub use application::{ConfigOptions, ConfigQueryService, FilterOptions};
 pub use bootstrap::run_with_config;
+pub use count_lines_ports as ports;
+pub use count_lines_shared_kernel as shared_kernel;
 pub use domain::config::Config;
 pub use error::{CountLinesError, Result};
 pub use version::VERSION;

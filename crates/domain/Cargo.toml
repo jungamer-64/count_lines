@@ -1,0 +1,17 @@
+[package]
+name = "count_lines_domain"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+eval = ["dep:evalexpr"]
+
+[dependencies]
+count_lines_shared_kernel.workspace = true
+chrono.workspace = true
+globset.workspace = true
+serde.workspace = true
+evalexpr = { workspace = true, optional = true }

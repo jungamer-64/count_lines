@@ -1,4 +1,3 @@
-pub mod adapters;
 pub mod services;
 
 pub use services::{

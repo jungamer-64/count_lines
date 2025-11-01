@@ -7,23 +7,38 @@ repository.workspace = true
 
 description = "Core library powering the count_lines CLI tool"
 
+[features]
+default = []
+parallel = ["dep:rayon"]
+yaml = ["dep:serde_yaml", "count_lines_shared_kernel/yaml"]
+eval = ["dep:evalexpr", "count_lines_shared_kernel/eval", "count_lines_domain/eval"]
+watch = ["dep:notify"]
+hash-xx = ["dep:xxhash-rust"]
+hash-a = ["dep:ahash"]
+
 [dependencies]
 anyhow.workspace = true
 bytecount.workspace = true
 chrono.workspace = true
-evalexpr.workspace = true
-glob.workspace = true
-num_cpus.workspace = true
-rayon.workspace = true
 regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_yaml.workspace = true
-walkdir.workspace = true
 thiserror.workspace = true
-notify.workspace = true
-xxhash-rust.workspace = true
 fs2.workspace = true
+num_cpus.workspace = true
+globset.workspace = true
+ignore.workspace = true
+count_lines_shared_kernel.workspace = true
+count_lines_domain.workspace = true
+count_lines_ports.workspace = true
+count_lines_usecase.workspace = true
+count_lines_infra.workspace = true
+rayon = { workspace = true, optional = true }
+serde_yaml = { workspace = true, optional = true }
+evalexpr = { workspace = true, optional = true }
+notify = { workspace = true, optional = true }
+xxhash-rust = { workspace = true, optional = true }
+ahash = { version = "0.8", optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true

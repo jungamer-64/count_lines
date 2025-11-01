@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, NaiveDate, NaiveDateTime, TimeZone};
+use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, TimeZone};
 
 /// Wrapper type to parse sizes with optional suffixes (e.g. 10K, 5MiB).
 #[derive(Debug, Clone, Copy)]
@@ -51,7 +51,9 @@ impl std::str::FromStr for DateTimeArg {
 }
 
 fn try_rfc3339(s: &str) -> Option<DateTimeArg> {
-    chrono::DateTime::parse_from_rfc3339(s).ok().map(|dt| DateTimeArg(dt.with_timezone(&Local)))
+    chrono::DateTime::parse_from_rfc3339(s)
+        .ok()
+        .map(|dt: DateTime<FixedOffset>| DateTimeArg(dt.with_timezone(&Local)))
 }
 
 fn try_datetime_format(s: &str) -> Option<DateTimeArg> {
@@ -64,7 +66,7 @@ fn try_datetime_format(s: &str) -> Option<DateTimeArg> {
 fn try_date_format(s: &str) -> Option<DateTimeArg> {
     NaiveDate::parse_from_str(s, "%Y-%m-%d")
         .ok()
-        .and_then(|nd| nd.and_hms_opt(0, 0, 0))
+        .and_then(|nd: NaiveDate| nd.and_hms_opt(0, 0, 0))
         .and_then(|ndt| Local.from_local_datetime(&ndt).single())
         .map(DateTimeArg)
 }

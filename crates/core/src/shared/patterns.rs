@@ -1,14 +1,17 @@
-use glob::Pattern;
-
-use crate::error::{DomainError, Result};
+use crate::{
+    domain::config::value_objects::GlobPattern,
+    error::{DomainError, Result},
+};
 
 /// glob パターンのコレクションをパースする
-pub fn parse_patterns(patterns: &[String]) -> Result<Vec<Pattern>> {
+pub fn parse_patterns(patterns: &[String]) -> Result<Vec<GlobPattern>> {
     patterns
         .iter()
         .map(|pattern| {
-            Pattern::new(pattern)
-                .map_err(|source| DomainError::InvalidPattern { pattern: pattern.clone(), source })
+            GlobPattern::new(pattern).map_err(|err| DomainError::InvalidPattern {
+                pattern: pattern.clone(),
+                details: err.to_string(),
+            })
         })
         .collect::<std::result::Result<Vec<_>, DomainError>>()
         .map_err(Into::into)

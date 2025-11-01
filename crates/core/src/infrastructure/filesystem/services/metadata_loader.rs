@@ -1,24 +1,18 @@
 use std::{io::Read, path::Path};
 
-use crate::{
-    domain::{config::Config, model::FileMeta},
-    infrastructure::persistence::FileReader,
-};
+use crate::{domain::model::FileMeta, infrastructure::persistence::FileReader};
 
 /// Domain service responsible for translating filesystem data into metadata value objects.
 pub struct FileMetadataLoader;
 
 impl FileMetadataLoader {
-    pub fn build(path: &Path, config: &Config) -> Option<FileMeta> {
+    pub fn build(path: &Path, fast_text_detect: bool) -> Option<FileMeta> {
         let metadata = std::fs::metadata(path).ok()?;
         let size = metadata.len();
         let mtime = metadata.modified().ok().map(Into::into);
 
-        let is_text = if config.fast_text_detect {
-            Self::quick_text_check(path)
-        } else {
-            Self::strict_text_check(path)
-        };
+        let is_text =
+            if fast_text_detect { Self::quick_text_check(path) } else { Self::strict_text_check(path) };
         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         Some(FileMeta { size, mtime, is_text, ext, name })

@@ -10,27 +10,20 @@ keywords = ["count", "lines", "statistics", "files", "metrics"]
 categories = ["command-line-utilities", "development-tools"]
 
 [workspace]
-members = ["crates/core"]
+members = [
+  "crates/shared-kernel",
+  "crates/domain",
+  "crates/ports",
+  "crates/usecase",
+  "crates/infra",
+  "crates/core"
+]
 
 [workspace.package]
 version = "0.7.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/jungamer-64/count_lines"
-
-[dependencies]
-anyhow.workspace = true
-count_lines_core = { version = "0.7.0", path = "crates/core" }
-proptest = "1.9.0"
-thiserror = "2.0.17"
-clap.workspace = true
-chrono.workspace = true
-
-[dev-dependencies]
-assert_cmd.workspace = true
-predicates.workspace = true
-serde_json.workspace = true
-tempfile = { workspace = true }
 
 [workspace.dependencies]
 anyhow = "1"
@@ -39,7 +32,9 @@ bytecount = "0.6"
 chrono = { version = "0.4", features = ["serde", "clock"] }
 clap = { version = "4.5", features = ["derive"] }
 evalexpr = "12"
-glob = "0.3"
+ignore = "0.4"
+globset = "0.4"
+notify = "6.1"
 num_cpus = "1.17"
 predicates = "3"
 rayon = "1.11"
@@ -47,12 +42,39 @@ regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
-walkdir = "2.5"
 thiserror = "2.0.17"
-notify = "6.1"
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 fs2 = "0.4"
 tempfile = "3"
+count_lines_shared_kernel = { path = "crates/shared-kernel" }
+count_lines_domain = { path = "crates/domain" }
+count_lines_ports = { path = "crates/ports" }
+count_lines_usecase = { path = "crates/usecase" }
+count_lines_infra = { path = "crates/infra" }
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+ignore.workspace = true
+notify.workspace = true
+num_cpus.workspace = true
+regex.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+count_lines_core = { version = "0.7.0", path = "crates/core", features = [
+  "parallel",
+  "yaml",
+  "eval",
+  "watch",
+  "hash-xx"
+] }
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+proptest = "1.9.0"
 
 [profile.release]
 opt-level = 3

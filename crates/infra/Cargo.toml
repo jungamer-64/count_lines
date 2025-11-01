@@ -1,0 +1,15 @@
+[package]
+name = "count_lines_infra"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+description = "Infrastructure adapters for count_lines (filesystem, persistence, etc.)"
+
+[dependencies]
+count_lines_shared_kernel.workspace = true
+count_lines_ports.workspace = true
+chrono.workspace = true
+globset.workspace = true
+ignore.workspace = true

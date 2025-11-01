@@ -105,7 +105,7 @@ fn make_meta(path: &PathBuf) -> FileMeta {
 }
 
 fn make_entry(path: &Path, config: &Config) -> FileEntry {
-    let meta = FileMetadataLoader::build(path, config).expect("metadata loads");
+    let meta = FileMetadataLoader::build(path, config.fast_text_detect).expect("metadata loads");
     FileEntry { path: path.to_path_buf(), meta }
 }
 

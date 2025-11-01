@@ -1,16 +1,22 @@
-use std::{
-    sync::mpsc,
-    thread,
-    time::{Duration, Instant},
-};
+use std::time::Duration;
 
 use anyhow::Result;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher, event::EventKind};
+#[cfg(not(feature = "watch"))]
+use anyhow::bail;
+#[cfg(feature = "watch")]
+use {
+    notify::{RecommendedWatcher, RecursiveMode, Watcher, event::EventKind},
+    std::{sync::mpsc, thread, time::Instant},
+};
 
-use crate::{domain::config::Config, error::InfrastructureError};
+use crate::domain::config::Config;
+#[cfg(feature = "watch")]
+use crate::error::InfrastructureError;
 
+#[cfg(feature = "watch")]
 pub struct WatchService;
 
+#[cfg(feature = "watch")]
 impl WatchService {
     /// Run the watch service: try to use filesystem notifications and fall back to polling.
     ///
@@ -32,7 +38,6 @@ impl WatchService {
         }
     }
 
-    #[allow(unreachable_code)]
     fn watch_with_notify<F>(config: &Config, interval: Duration, on_change: &mut F) -> Result<()>
     where
         F: FnMut() -> Result<()>,
@@ -163,5 +168,18 @@ impl WatchService {
                 | EventKind::Remove(_)
                 | EventKind::Other
         )
+    }
+}
+
+#[cfg(not(feature = "watch"))]
+pub struct WatchService;
+
+#[cfg(not(feature = "watch"))]
+impl WatchService {
+    pub fn run<F>(_config: &Config, _interval: Duration, _on_change: F) -> Result<()>
+    where
+        F: FnMut() -> Result<()>,
+    {
+        bail!("watch feature disabled at compile time")
     }
 }

@@ -1,0 +1,19 @@
+[package]
+name = "count_lines_shared_kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+yaml = ["dep:serde_yaml"]
+eval = ["dep:evalexpr"]
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+chrono.workspace = true
+serde_json.workspace = true
+serde_yaml = { workspace = true, optional = true }
+evalexpr = { workspace = true, optional = true }

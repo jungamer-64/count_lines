@@ -3,7 +3,7 @@ use std::{collections::HashSet, time::Duration};
 use crate::{
     application::queries::config::commands::{ConfigOptions, FilterOptions},
     domain::{
-        config::{ByKey, Config, Filters, Range, SizeRange},
+        config::{ByKey, Config, FilterAst, Filters, Range, SizeRange},
         grouping::ByMode,
     },
     error::{DomainError, Result},
@@ -93,16 +93,7 @@ impl ConfigQueryService {
     }
 
     fn build_filters(options: &FilterOptions) -> Result<Filters> {
-        let filter_ast = options
-            .filter
-            .as_ref()
-            .map(|expr| {
-                evalexpr::build_operator_tree(expr).map_err(|e| DomainError::InvalidFilterExpression {
-                    expression: expr.clone(),
-                    details: e.to_string(),
-                })
-            })
-            .transpose()?;
+        let filter_ast = Self::build_filter_ast(&options.filter)?;
 
         Ok(Filters {
             include_patterns: parse_patterns(&options.include)?,
@@ -133,8 +124,14 @@ impl ConfigQueryService {
             || Self::sort_uses_words(&query.sort_specs)
     }
 
+    #[cfg(feature = "eval")]
     fn filter_uses_words(filters: &Filters) -> bool {
         filters.filter_ast.as_ref().is_some_and(|ast| ast.iter_variable_identifiers().any(|id| id == "words"))
+    }
+
+    #[cfg(not(feature = "eval"))]
+    fn filter_uses_words(_filters: &Filters) -> bool {
+        false
     }
 
     fn sort_uses_words(sort_specs: &[(crate::domain::options::SortKey, bool)]) -> bool {
@@ -161,5 +158,28 @@ impl ConfigQueryService {
             ByMode::Mtime(granularity) => ByKey::Mtime(granularity),
             ByMode::None => unreachable!("None modes should be filtered out"),
         }
+    }
+
+    fn build_filter_ast(filter: &Option<String>) -> Result<Option<FilterAst>> {
+        match filter {
+            Some(expr) => Self::parse_filter_expression(expr),
+            None => Ok(None),
+        }
+    }
+
+    #[cfg(feature = "eval")]
+    fn parse_filter_expression(expr: &str) -> Result<Option<FilterAst>> {
+        evalexpr::build_operator_tree(expr).map(Some).map_err(|e| {
+            DomainError::InvalidFilterExpression { expression: expr.to_string(), details: e.to_string() }
+                .into()
+        })
+    }
+
+    #[cfg(not(feature = "eval"))]
+    fn parse_filter_expression(expr: &str) -> Result<Option<FilterAst>> {
+        Err(DomainError::InvalidConfiguration {
+            reason: format!("filter expressions require the 'eval' feature: {expr}"),
+        }
+        .into())
     }
 }

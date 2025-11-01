@@ -1,0 +1,11 @@
+[package]
+name = "count_lines_ports"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+count_lines_shared_kernel.workspace = true
+chrono.workspace = true
+serde.workspace = true

@@ -20,6 +20,7 @@ pub fn output_json(stats: &[FileStats], config: &Config, out: &mut impl Write) -
     Ok(())
 }
 
+#[cfg(feature = "yaml")]
 pub fn output_yaml(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let output = build_json_output(stats, config);
     let yaml_str = serde_yaml::to_string(&output)?;

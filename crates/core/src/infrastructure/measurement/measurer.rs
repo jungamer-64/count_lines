@@ -1,22 +1,29 @@
 // crates/core/src/infrastructure/measurement/measurer.rs
 //! ファイル計測のリファクタリング版
 
+#[cfg(feature = "parallel")]
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
 };
 
+#[cfg(feature = "eval")]
 use evalexpr::{ContextWithMutableVariables, HashMapContext, Value};
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
+#[cfg(feature = "eval")]
+use crate::domain::config::FilterAst;
+#[cfg(feature = "eval")]
+use crate::error::DomainError;
 use crate::{
     application::commands::MeasurementOutcome,
     domain::{
         config::Config,
         model::{FileEntry, FileStats, FileStatsV2},
     },
-    error::{DomainError, InfrastructureError, Result},
+    error::{InfrastructureError, Result},
     infrastructure::{
         cache::CacheStore,
         measurement::strategies::{measure_by_lines, measure_entire_file},
@@ -77,11 +84,18 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
     Ok(MeasurementOutcome::new(results, changed_files, removed_files))
 }
 
+#[cfg(feature = "parallel")]
 fn measure_all(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
     if entries.len() < 10 || config.jobs == 1 {
         return measure_sequential(entries, config);
     }
     measure_parallel(entries, config)
+}
+
+#[cfg(not(feature = "parallel"))]
+fn measure_all(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
+    let _ = config;
+    measure_sequential(entries, config)
 }
 
 struct IndexedResult {
@@ -117,6 +131,7 @@ fn measure_sequential(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<Fi
 }
 
 /// 並列処理版
+#[cfg(feature = "parallel")]
 fn measure_parallel(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
     let progress = config.progress.then(|| (AtomicUsize::new(0), entries.len()));
 
@@ -132,6 +147,7 @@ fn measure_parallel(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<File
     collect_parallel_results(results, config)
 }
 
+#[cfg(feature = "parallel")]
 fn process_entry(
     entry: FileEntry,
     config: &Config,
@@ -154,6 +170,7 @@ fn process_entry(
 /// Returns a Vec<FileStats> containing successful measurements. If `config.strict` is true
 /// this will return early with the first error encountered. When `config.progress` is true
 /// warnings are emitted for failed measurements.
+#[cfg(feature = "parallel")]
 fn collect_parallel_results(
     results: Vec<(std::path::PathBuf, Result<Option<FileStats>>)>,
     config: &Config,
@@ -239,23 +256,28 @@ impl FileMeasurer {
         }
 
         // 式フィルタ
-        if let Some(ast) = &filters.filter_ast
-            && !Self::eval_filter(&stats, ast)?
+        #[cfg(feature = "eval")]
         {
-            return Ok(None);
+            if let Some(ast) = &filters.filter_ast
+                && !Self::eval_filter(&stats, ast)?
+            {
+                return Ok(None);
+            }
         }
 
         Ok(Some(stats))
     }
 
-    fn eval_filter(stats: &FileStatsV2, ast: &evalexpr::Node) -> Result<bool> {
+    #[cfg(feature = "eval")]
+    fn eval_filter(stats: &FileStatsV2, ast: &FilterAst) -> Result<bool> {
         let ctx = Self::build_eval_context(stats)?;
-        ast.eval_boolean_with_context(&ctx).map_err(|e| {
+        ast.eval_boolean_with_context(&ctx).map_err(|e: evalexpr::EvalexprError| {
             DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() }.into()
         })
     }
     /// Set an integer variable in the eval context from a `usize` value.
     /// Performs safe conversion to `i64` and returns a `DomainError` on overflow or context errors.
+    #[cfg(feature = "eval")]
     fn set_int_from_usize(ctx: &mut HashMapContext, key: &str, val: usize) -> Result<()> {
         use std::convert::TryFrom;
         let v = i64::try_from(val).map_err(|_| DomainError::InvalidFilterExpression {
@@ -271,6 +293,7 @@ impl FileMeasurer {
 
     /// Set an integer variable in the eval context from a `u64` value.
     /// Performs safe conversion to `i64` and returns a `DomainError` on overflow or context errors.
+    #[cfg(feature = "eval")]
     fn set_int_from_u64(ctx: &mut HashMapContext, key: &str, val: u64) -> Result<()> {
         use std::convert::TryFrom;
         let v = i64::try_from(val).map_err(|_| DomainError::InvalidFilterExpression {
@@ -285,6 +308,7 @@ impl FileMeasurer {
     }
 
     /// Set an integer variable in the eval context from an i64 value.
+    #[cfg(feature = "eval")]
     fn set_int_direct(ctx: &mut HashMapContext, key: &str, val: i64) -> Result<()> {
         ctx.set_value(key.into(), Value::Int(val)).map_err(|e| DomainError::InvalidFilterExpression {
             expression: String::new(),
@@ -294,6 +318,7 @@ impl FileMeasurer {
     }
 
     /// Set a string variable in the eval context.
+    #[cfg(feature = "eval")]
     fn set_string(ctx: &mut HashMapContext, key: &str, val: &str) -> Result<()> {
         ctx.set_value(key.into(), Value::String(val.to_string())).map_err(|e| {
             DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() }
@@ -303,6 +328,7 @@ impl FileMeasurer {
 
     /// Populate the eval context with variables derived from `FileStatsV2`.
     /// This delegates to numeric and string population helpers.
+    #[cfg(feature = "eval")]
     fn populate_eval_context(ctx: &mut HashMapContext, stats: &FileStatsV2) -> Result<()> {
         Self::populate_numeric_vars(ctx, stats)?;
         Self::populate_string_vars(ctx, stats)?;
@@ -310,6 +336,7 @@ impl FileMeasurer {
     }
 
     /// Populate numeric variables (lines, chars, words, size, mtime) into the eval context.
+    #[cfg(feature = "eval")]
     fn populate_numeric_vars(ctx: &mut HashMapContext, stats: &FileStatsV2) -> Result<()> {
         Self::set_int_from_usize(ctx, "lines", stats.lines().value())?;
         Self::set_int_from_usize(ctx, "chars", stats.chars().value())?;
@@ -327,12 +354,14 @@ impl FileMeasurer {
     }
 
     /// Populate string variables (ext, name) into the eval context.
+    #[cfg(feature = "eval")]
     fn populate_string_vars(ctx: &mut HashMapContext, stats: &FileStatsV2) -> Result<()> {
         Self::set_string(ctx, "ext", stats.ext().as_str())?;
         Self::set_string(ctx, "name", stats.name().as_str())?;
         Ok(())
     }
 
+    #[cfg(feature = "eval")]
     fn build_eval_context(stats: &FileStatsV2) -> Result<HashMapContext> {
         let mut ctx = HashMapContext::new();
         Self::populate_eval_context(&mut ctx, stats)?;
@@ -527,6 +556,7 @@ mod tests {
         assert_eq!(stats[1].lines, 2);
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn parallel_measurement() {
         let file1 = TempFile::new("line1\nline2");
@@ -548,6 +578,7 @@ mod tests {
         assert_eq!(total_lines, 5);
     }
 
+    #[cfg(feature = "eval")]
     #[test]
     fn build_eval_context_populates_expected_vars() {
         let file = TempFile::new("line1\nline2\nline3");
@@ -561,6 +592,7 @@ mod tests {
         assert!(ast.eval_boolean_with_context(&ctx).expect("eval"));
     }
 
+    #[cfg(feature = "parallel")]
     #[test]
     fn collect_parallel_results_handles_errors() {
         let file1 = TempFile::new("line1\nline2");
