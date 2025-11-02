@@ -506,10 +506,8 @@ fn collect_git_files(roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
         // Compute lowercase keys once per path, sort by key and remove
         // duplicates. This avoids calling `to_lowercase()` twice per item
         // (once during sort and once during retain).
-        let mut keyed: Vec<(String, PathBuf)> = files
-            .into_iter()
-            .map(|p| (p.to_string_lossy().to_lowercase(), p))
-            .collect();
+        let mut keyed: Vec<(String, PathBuf)> =
+            files.into_iter().map(|p| (p.to_string_lossy().to_lowercase(), p)).collect();
         keyed.sort_by(|a, b| a.0.cmp(&b.0));
         keyed.dedup_by(|a, b| a.0 == b.0);
         files = keyed.into_iter().map(|(_k, p)| p).collect();
@@ -614,7 +612,8 @@ fn quick_text_check(path: &Path) -> bool {
                         || s.starts_with(b"GIF87a")
                         || s.starts_with(b"GIF89a")
                         || s.starts_with(b"OggS")
-                        || (s.starts_with(b"RIFF") && (s.get(8..12) == Some(b"WAVE") || s.get(8..12) == Some(b"WEBP")))
+                        || (s.starts_with(b"RIFF")
+                            && (s.get(8..12) == Some(b"WAVE") || s.get(8..12) == Some(b"WEBP")))
                         || s.get(4..8) == Some(b"ftyp")
                         || s.starts_with(b"\x1F\x8B")
                         || s.starts_with(b"BZh")
@@ -690,11 +689,13 @@ impl PlanMatcher {
         // Normalize pattern strings on Windows (replace backslashes) so that
         // path-like detection (contains '/') behaves as expected.
         #[cfg(windows)]
-        let include_pattern_strings = plan.include_patterns.iter().map(|p| p.replace('\\', "/")).collect::<Vec<_>>();
+        let include_pattern_strings =
+            plan.include_patterns.iter().map(|p| p.replace('\\', "/")).collect::<Vec<_>>();
         #[cfg(not(windows))]
         let include_pattern_strings = plan.include_patterns.clone();
         #[cfg(windows)]
-        let exclude_pattern_strings = plan.exclude_patterns.iter().map(|p| p.replace('\\', "/")).collect::<Vec<_>>();
+        let exclude_pattern_strings =
+            plan.exclude_patterns.iter().map(|p| p.replace('\\', "/")).collect::<Vec<_>>();
         #[cfg(not(windows))]
         let exclude_pattern_strings = plan.exclude_patterns.clone();
 
@@ -887,7 +888,9 @@ impl PlanMatcher {
 // Normalize size range (swap when reversed). Extracted for clarity and testability.
 fn normalize_size_range(r: (Option<u64>, Option<u64>)) -> (Option<u64>, Option<u64>) {
     let (mut lo, mut hi) = r;
-    if let (Some(a), Some(b)) = (lo, hi) && a > b {
+    if let (Some(a), Some(b)) = (lo, hi)
+        && a > b
+    {
         std::mem::swap(&mut lo, &mut hi);
     }
     (lo, hi)
@@ -912,7 +915,9 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
             .iter()
             .map(|pattern| {
                 Glob::new(pattern)
-                    .map_err(|err| InfrastructureError::OutputError(format!("invalid glob pattern '{pattern}': {err}")))
+                    .map_err(|err| {
+                        InfrastructureError::OutputError(format!("invalid glob pattern '{pattern}': {err}"))
+                    })
                     .map(|glob| glob.compile_matcher())
             })
             .collect::<std::result::Result<Vec<_>, _>>()
@@ -924,7 +929,9 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
             .iter()
             .map(|pattern| {
                 Glob::new(pattern)
-                    .map_err(|err| InfrastructureError::OutputError(format!("invalid glob pattern '{pattern}': {err}")))
+                    .map_err(|err| {
+                        InfrastructureError::OutputError(format!("invalid glob pattern '{pattern}': {err}"))
+                    })
                     .map(|glob| glob.compile_matcher())
             })
             .collect::<std::result::Result<Vec<_>, _>>()
@@ -1041,7 +1048,11 @@ mod tests {
         plan.include_hidden = false;
         let m = PlanMatcher::new(&plan).unwrap();
         // .git is considered hidden (dot-prefixed)
-        assert!(!m.should_visit_dir(Path::new(".git"), /*include_hidden=*/false, /*no_default_prune=*/true));
+        assert!(!m.should_visit_dir(
+            Path::new(".git"),
+            /*include_hidden=*/ false,
+            /*no_default_prune=*/ true
+        ));
     }
 
     #[test]
@@ -1071,8 +1082,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn symlink_loop_is_prevented() {
-        use std::os::unix::fs::symlink;
-        use std::sync::Arc;
+        use std::{os::unix::fs::symlink, sync::Arc};
 
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path().join("root");
@@ -1109,8 +1119,22 @@ mod tests {
     fn windows_dedup_ignores_case_after_sort() {
         use std::path::PathBuf;
         let mut v = vec![
-            FileEntryDto { path: PathBuf::from("SRC\\A.TXT"), is_text: false, size: 0, ext: "txt".into(), name: "A.TXT".into(), mtime: None },
-            FileEntryDto { path: PathBuf::from("src\\a.txt"), is_text: false, size: 0, ext: "txt".into(), name: "a.txt".into(), mtime: None },
+            FileEntryDto {
+                path: PathBuf::from("SRC\\A.TXT"),
+                is_text: false,
+                size: 0,
+                ext: "txt".into(),
+                name: "A.TXT".into(),
+                mtime: None,
+            },
+            FileEntryDto {
+                path: PathBuf::from("src\\a.txt"),
+                is_text: false,
+                size: 0,
+                ext: "txt".into(),
+                name: "a.txt".into(),
+                mtime: None,
+            },
         ];
         v.sort_by_cached_key(|e| e.path.to_string_lossy().to_lowercase());
         v.dedup_by(|a, b| a.path.to_string_lossy().to_lowercase() == b.path.to_string_lossy().to_lowercase());

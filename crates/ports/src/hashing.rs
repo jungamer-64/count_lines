@@ -1,3 +1,4 @@
+// crates/ports/src/hashing.rs
 use count_lines_shared_kernel::Result;
 
 #[derive(Debug, Clone, Copy)]

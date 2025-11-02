@@ -1,5 +1,10 @@
 // crates/infra/src/persistence/file_writer.rs
-use std::{fs, fs::File, io::{BufWriter, Write}, path::Path};
+use std::{
+    fs,
+    fs::File,
+    io::{BufWriter, Write},
+    path::Path,
+};
 
 /// Helper utilities for writing files.
 pub struct FileWriter;
@@ -19,10 +24,8 @@ impl FileWriter {
         // Create a unique temp file name in the same directory to allow atomic rename.
         // Use PID + current time nanos to avoid an allocation loop while keeping
         // the name creation inexpensive.
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
+        let nanos =
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
         let tmp = parent.join(format!(".{}.{}.tmp", std::process::id(), nanos));
 
         let file = File::create(&tmp)?;

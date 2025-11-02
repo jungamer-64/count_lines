@@ -329,6 +329,7 @@ version = "0.7.0"
 dependencies = [
  "chrono",
  "evalexpr",
+ "num-traits",
  "serde",
  "serde_json",
  "serde_yaml",

@@ -1,3 +1,4 @@
+// crates/ports/src/progress.rs
 use count_lines_shared_kernel::Result;
 
 pub trait ProgressSink: Send + Sync {

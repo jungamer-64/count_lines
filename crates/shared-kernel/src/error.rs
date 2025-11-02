@@ -6,6 +6,14 @@ use thiserror::Error;
 /// Root error type shared across the workspace.
 #[derive(Debug, Error)]
 pub enum CountLinesError {
+    /// Adds human context while preserving original error as the source.
+    #[error("{context}: {source}")]
+    Context {
+        context: String,
+        #[source]
+        source: Box<CountLinesError>,
+    },
+
     #[error("Domain error: {0}")]
     Domain(#[from] DomainError),
 
@@ -178,15 +186,14 @@ impl<T, E> ErrorContext<T> for std::result::Result<T, E>
 where
     E: Into<CountLinesError>,
 {
-    fn context(self, _context: impl Into<String>) -> Result<T> {
-        self.map_err(|e| e.into())
+    fn context(self, context: impl Into<String>) -> Result<T> {
+        self.map_err(|e| CountLinesError::Context { context: context.into(), source: Box::new(e.into()) })
     }
 
     fn with_context<F>(self, f: F) -> Result<T>
     where
         F: FnOnce() -> String,
     {
-        let _ = f();
-        self.map_err(|e| e.into())
+        self.map_err(|e| CountLinesError::Context { context: f(), source: Box::new(e.into()) })
     }
 }
