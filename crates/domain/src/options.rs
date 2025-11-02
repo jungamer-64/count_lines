@@ -88,4 +88,33 @@ mod tests {
         let err = "invalid".parse::<SortSpec>().expect_err("invalid key should fail");
         assert!(err.contains("Unknown sort key"));
     }
+
+    #[test]
+    fn parses_multiple_keys_with_whitespace_and_mixed_case() {
+        let spec: SortSpec = " lines :DESC , chars , NaMe:desc ".parse().expect("sort spec parses");
+        assert_eq!(
+            spec.0,
+            vec![(SortKey::Lines, true), (SortKey::Chars, false), (SortKey::Name, true)]
+        );
+    }
+
+    #[test]
+    fn unknown_direction_defaults_to_ascending() {
+        let spec: SortSpec = "words:ascending".parse().expect("unexpected direction still parses");
+        assert_eq!(spec.0, vec![(SortKey::Words, false)]);
+    }
+
+    #[test]
+    fn empty_spec_is_rejected() {
+        for input in ["", " , ", " \t ,  "] {
+            let err = input.parse::<SortSpec>().expect_err("empty sort spec should fail");
+            assert!(err.contains("empty sort spec"));
+        }
+    }
+
+    #[test]
+    fn accepts_uppercase_sort_keys() {
+        let spec: SortSpec = "EXT:desc".parse().expect("uppercase key parses");
+        assert_eq!(spec.0, vec![(SortKey::Ext, true)]);
+    }
 }

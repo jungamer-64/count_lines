@@ -70,3 +70,62 @@ fn try_date_format(s: &str) -> Option<DateTimeArg> {
         .and_then(|ndt| Local.from_local_datetime(&ndt).single())
         .map(DateTimeArg)
 }
+
+#[cfg(test)]
+mod tests {
+    use chrono::{NaiveDate, NaiveTime, Utc};
+
+    use super::*;
+
+    #[test]
+    fn size_arg_parses_plain_numbers() {
+        let arg: SizeArg = "4096".parse().expect("plain number parses");
+        assert_eq!(arg.0, 4096);
+    }
+
+    #[test]
+    fn size_arg_parses_suffixes_case_insensitively() {
+        let kib: SizeArg = "2KiB".parse().expect("suffix parses");
+        assert_eq!(kib.0, 2 * 1024);
+
+        let mb: SizeArg = "3m".parse().expect("short suffix parses");
+        assert_eq!(mb.0, 3 * 1024 * 1024);
+    }
+
+    #[test]
+    fn size_arg_rejects_invalid_numbers() {
+        let err = "ten".parse::<SizeArg>().expect_err("invalid number should fail");
+        assert!(err.contains("Invalid size number"));
+    }
+
+    #[test]
+    fn datetime_arg_parses_rfc3339() {
+        let arg: DateTimeArg = "2024-05-01T12:34:56Z".parse().expect("valid rfc3339 datetime");
+        let utc = arg.0.with_timezone(&Utc);
+        assert_eq!(utc, Utc.with_ymd_and_hms(2024, 5, 1, 12, 34, 56).unwrap());
+    }
+
+    #[test]
+    fn datetime_arg_parses_space_separated_format() {
+        let arg: DateTimeArg = "2024-05-01 09:10:11".parse().expect("valid datetime");
+        let naive = arg.0.naive_local();
+        let expected_date = NaiveDate::from_ymd_opt(2024, 5, 1).unwrap();
+        let expected_time = NaiveTime::from_hms_opt(9, 10, 11).unwrap();
+        assert_eq!(naive.date(), expected_date);
+        assert_eq!(naive.time(), expected_time);
+    }
+
+    #[test]
+    fn datetime_arg_parses_date_only_format() {
+        let arg: DateTimeArg = "2024-05-01".parse().expect("valid date-only input");
+        let naive = arg.0.naive_local();
+        assert_eq!(naive.date(), NaiveDate::from_ymd_opt(2024, 5, 1).unwrap());
+        assert_eq!(naive.time(), NaiveTime::from_hms_opt(0, 0, 0).unwrap());
+    }
+
+    #[test]
+    fn datetime_arg_rejects_nonsense() {
+        let err = "nonsense".parse::<DateTimeArg>().expect_err("invalid datetime should fail");
+        assert!(err.contains("Cannot parse datetime"));
+    }
+}

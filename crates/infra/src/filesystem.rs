@@ -23,13 +23,24 @@ struct FileMetaLight {
     name: String,
 }
 
-fn build_meta_light(path: &Path) -> Option<FileMetaLight> {
-    let metadata = std::fs::metadata(path).ok()?;
-    // Only consider regular files here. Directories, symlinks to dirs and other
-    // special files should not be treated as file entries.
+// Accept follow_links to make the behaviour consistent with WalkBuilder's
+// follow_links flag. When follow_links is false we use symlink_metadata and
+// explicitly exclude symlinks from being treated as regular files.
+fn build_meta_light(path: &Path, follow_links: bool) -> Option<FileMetaLight> {
+    let metadata =
+        if follow_links { std::fs::metadata(path).ok()? } else { std::fs::symlink_metadata(path).ok()? };
+
+    // If the caller requested not to follow links, treat symlinks as not-a-file.
+    if !follow_links && metadata.file_type().is_symlink() {
+        return None;
+    }
+
+    // Only consider regular files here. Directories and other special files
+    // should not be treated as file entries.
     if !metadata.is_file() {
         return None;
     }
+
     let size = metadata.len();
     let mtime = metadata.modified().ok().map(DateTime::<Local>::from);
     let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
@@ -98,17 +109,25 @@ fn initial_paths(plan: &FileEnumerationPlan) -> Result<Option<Vec<PathBuf>>> {
 }
 
 fn materialise_paths(
-    paths: Vec<PathBuf>,
+    mut paths: Vec<PathBuf>,
     plan: &FileEnumerationPlan,
     matcher: &PlanMatcher,
 ) -> Result<Vec<FileEntryDto>> {
+    // Order-preserving dedup: prefer the first occurrence and drop later
+    // duplicates. This keeps user-supplied ordering stable while removing
+    // redundant work.
+    {
+        let mut seen = HashSet::new();
+        paths.retain(|p| seen.insert(p.clone()));
+    }
+
     let mut entries = Vec::new();
     for path in paths {
         if !plan.include_hidden && is_hidden(&path) {
             continue;
         }
-        match build_meta_light(&path) {
-            Some(light) if matcher.matches_file_light(&path, &light) => {
+        if let Some(light) = build_meta_light(&path, plan.follow_links) {
+            if matcher.matches_file_light(&path, &light) {
                 let is_text = detect_text(&path, plan.fast_text_detect, light.size);
                 let meta = FileMetadata {
                     size: light.size,
@@ -119,7 +138,6 @@ fn materialise_paths(
                 };
                 entries.push(to_port_entry(path, meta));
             }
-            _ => (),
         }
     }
     Ok(entries)
@@ -137,6 +155,7 @@ fn try_build_entry_from_result(
     matcher: &PlanMatcher,
     include_hidden: bool,
     fast_text: bool,
+    follow_links: bool,
 ) -> Option<FileEntryDto> {
     let entry = match result {
         Ok(e) => e,
@@ -146,7 +165,16 @@ fn try_build_entry_from_result(
         }
     };
 
-    if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+    // Treat as a candidate if it's a regular file, or if it's a symlink and
+    // the plan requested following links. The `ignore` crate reports the
+    // DirEntry's file_type without following symlinks, so we must allow
+    // symlinks here and defer to `build_meta_light` (which will follow or
+    // not follow based on `follow_links`) to decide final inclusion.
+    let is_candidate = match entry.file_type() {
+        Some(ft) => ft.is_file() || (follow_links && ft.is_symlink()),
+        None => false,
+    };
+    if !is_candidate {
         return None;
     }
 
@@ -155,7 +183,7 @@ fn try_build_entry_from_result(
         return None;
     }
 
-    match build_meta_light(&path) {
+    match build_meta_light(&path, follow_links) {
         Some(light) if matcher.matches_file_light(&path, &light) => {
             let is_text = detect_text(&path, fast_text, light.size);
             let meta = FileMetadata {
@@ -181,18 +209,32 @@ fn collect_entries_from_root(
 ) -> Result<Vec<FileEntryDto>> {
     let mut builder = WalkBuilder::new(root);
     builder.follow_links(plan.follow_links);
-    builder.hidden(false);
+    // Let the walker suppress hidden files when the plan requests hiding
+    // them. This avoids emitting hidden paths to our closure and reduces IO.
+    builder.hidden(!plan.include_hidden);
     builder.git_ignore(true);
 
     let dir_matcher = Arc::clone(matcher);
     let include_hidden = plan.include_hidden;
     let no_default_prune = plan.no_default_prune;
+    let follow_links = plan.follow_links;
     builder.filter_entry(move |entry| {
-        match entry.file_type() {
-            Some(file_type) if file_type.is_dir() => {
+        if let Some(ft) = entry.file_type() {
+            // Consider directory-like entries. If the entry reports as a
+            // directory, it's clearly directory-like. If it's a symlink and
+            // the plan requests following links, check the target's metadata
+            // to see whether it is a directory and apply pruning accordingly.
+            let is_dir_like = if ft.is_dir() {
+                true
+            } else if follow_links && ft.is_symlink() {
+                std::fs::metadata(entry.path()).map(|m| m.is_dir()).unwrap_or(false)
+            } else {
+                false
+            };
+
+            if is_dir_like {
                 return dir_matcher.should_visit_dir(entry.path(), include_hidden, no_default_prune);
             }
-            _ => (),
         }
         true
     });
@@ -203,6 +245,7 @@ fn collect_entries_from_root(
     let matcher_ref = Arc::clone(matcher);
     let include_hidden = plan.include_hidden;
     let fast_text = plan.fast_text_detect;
+    let follow_links = plan.follow_links;
 
     // Use a thread-local buffer to reduce mutex contention: collect entries in a
     // local Vec and flush them to the shared vector in batches. The
@@ -211,6 +254,11 @@ fn collect_entries_from_root(
     struct LocalCollector {
         buf: Vec<FileEntryDto>,
         shared: Arc<Mutex<Vec<FileEntryDto>>>,
+    }
+    impl LocalCollector {
+        fn with_capacity(shared: Arc<Mutex<Vec<FileEntryDto>>>) -> Self {
+            Self { buf: Vec::with_capacity(FLUSH_THRESHOLD), shared }
+        }
     }
     impl Drop for LocalCollector {
         fn drop(&mut self) {
@@ -224,9 +272,11 @@ fn collect_entries_from_root(
     builder.build_parallel().run(move || {
         let matcher = Arc::clone(&matcher_ref);
         let shared = Arc::clone(&entries_clone);
-        let mut collector = LocalCollector { buf: Vec::new(), shared };
+        let mut collector = LocalCollector::with_capacity(shared);
         Box::new(move |result| {
-            if let Some(dto) = try_build_entry_from_result(result, &matcher, include_hidden, fast_text) {
+            if let Some(dto) =
+                try_build_entry_from_result(result, &matcher, include_hidden, fast_text, follow_links)
+            {
                 collector.buf.push(dto);
                 if collector.buf.len() >= FLUSH_THRESHOLD {
                     let mut guard = collector.shared.lock().unwrap();
@@ -389,8 +439,20 @@ fn quick_text_check(path: &Path) -> bool {
 fn strict_text_check(path: &Path) -> bool {
     match FileReader::open(path) {
         Ok(mut file) => {
-            let mut buf = Vec::new();
-            file.read_to_end(&mut buf).is_ok() && !buf.contains(&0)
+            // Stream the file in fixed-size chunks to avoid allocating for
+            // very large files while searching for NUL bytes.
+            let mut buf = [0u8; 64 * 1024];
+            loop {
+                match file.read(&mut buf) {
+                    Ok(0) => return true, // EOF reached, no NUL seen
+                    Ok(n) => {
+                        if buf[..n].contains(&0) {
+                            return false;
+                        }
+                    }
+                    Err(_) => return false,
+                }
+            }
         }
         Err(_) => false,
     }
@@ -562,15 +624,20 @@ impl PlanMatcher {
     }
 
     fn matches_mtime_light(&self, meta: &FileMetaLight) -> bool {
-        if let Some(mtime) = meta.mtime {
-            if self.mtime_since.is_some_and(|since| mtime < since) {
-                return false;
+        let need_filter = self.mtime_since.is_some() || self.mtime_until.is_some();
+        match (need_filter, meta.mtime) {
+            (false, _) => true,
+            (true, Some(m)) => {
+                if self.mtime_since.is_some_and(|since| m < since) {
+                    return false;
+                }
+                if self.mtime_until.is_some_and(|until| m > until) {
+                    return false;
+                }
+                true
             }
-            if self.mtime_until.is_some_and(|until| mtime > until) {
-                return false;
-            }
+            (true, None) => false,
         }
-        true
     }
 
     fn matches_size(&self, meta: &FileMetadata) -> bool {
@@ -584,15 +651,20 @@ impl PlanMatcher {
     }
 
     fn matches_mtime(&self, meta: &FileMetadata) -> bool {
-        if let Some(mtime) = meta.mtime {
-            if self.mtime_since.is_some_and(|since| mtime < since) {
-                return false;
+        let need_filter = self.mtime_since.is_some() || self.mtime_until.is_some();
+        match (need_filter, meta.mtime) {
+            (false, _) => true,
+            (true, Some(m)) => {
+                if self.mtime_since.is_some_and(|since| m < since) {
+                    return false;
+                }
+                if self.mtime_until.is_some_and(|until| m > until) {
+                    return false;
+                }
+                true
             }
-            if self.mtime_until.is_some_and(|until| mtime > until) {
-                return false;
-            }
+            (true, None) => false,
         }
-        true
     }
 }
 
@@ -614,7 +686,10 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
 fn is_hidden(path: &Path) -> bool {
     use std::os::windows::fs::MetadataExt;
     const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
-    if let Ok(md) = std::fs::metadata(path) {
+    // Use symlink_metadata so that when `path` is itself a symlink we inspect
+    // the symlink entry's attributes rather than following the link and
+    // inspecting the target's attributes.
+    if let Ok(md) = std::fs::symlink_metadata(path) {
         if (md.file_attributes() & FILE_ATTRIBUTE_HIDDEN) != 0 {
             return true;
         }

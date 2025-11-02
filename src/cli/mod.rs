@@ -167,10 +167,13 @@ pub fn build_config(args: &Args) -> Result<Config> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{path::PathBuf, time::Duration};
 
     use clap::Parser;
-    use count_lines_core::domain::options::SortKey;
+    use count_lines_core::{
+        domain::options::SortKey,
+        error::{CountLinesError, PresentationError},
+    };
 
     use super::*;
 
@@ -233,5 +236,54 @@ mod tests {
         assert!(config.watch);
         assert!(config.incremental, "watch should force incremental mode");
         assert_eq!(config.watch_interval, Duration::from_secs(1));
+    }
+
+    #[test]
+    fn validate_numeric_args_rejects_zero_top() {
+        let err = validate_numeric_args(Some(0), None, None, None).unwrap_err();
+        match err {
+            CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) => {
+                assert_eq!(flag, "--top");
+                assert_eq!(value, "0");
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn validate_numeric_args_rejects_jobs_outside_range() {
+        let err_zero = validate_numeric_args(None, None, Some(0), None).unwrap_err();
+        match err_zero {
+            CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) => {
+                assert_eq!(flag, "--jobs");
+                assert_eq!(value, "0");
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+
+        let err_high = validate_numeric_args(None, None, Some(600), None).unwrap_err();
+        match err_high {
+            CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) => {
+                assert_eq!(flag, "--jobs");
+                assert_eq!(value, "600");
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn make_compare_tuple_requires_exactly_two_paths() {
+        let mut args = Args::parse_from(["count_lines"]);
+        args.compare = Some(vec![PathBuf::from("only.json")]);
+
+        assert!(make_compare_tuple(&args).is_none(), "single compare path should be ignored");
+    }
+
+    #[test]
+    fn make_compare_tuple_returns_pair_when_valid() {
+        let args = Args::parse_from(["count_lines", "--compare", "old.json", "new.json"]);
+        let tuple = make_compare_tuple(&args).expect("should produce tuple");
+        assert_eq!(tuple.0, PathBuf::from("old.json"));
+        assert_eq!(tuple.1, PathBuf::from("new.json"));
     }
 }
