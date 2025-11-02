@@ -92,10 +92,7 @@ mod tests {
     #[test]
     fn parses_multiple_keys_with_whitespace_and_mixed_case() {
         let spec: SortSpec = " lines :DESC , chars , NaMe:desc ".parse().expect("sort spec parses");
-        assert_eq!(
-            spec.0,
-            vec![(SortKey::Lines, true), (SortKey::Chars, false), (SortKey::Name, true)]
-        );
+        assert_eq!(spec.0, vec![(SortKey::Lines, true), (SortKey::Chars, false), (SortKey::Name, true)]);
     }
 
     #[test]

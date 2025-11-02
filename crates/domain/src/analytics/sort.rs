@@ -269,6 +269,35 @@ mod tests {
     }
 
     #[test]
+    fn sorted_returns_new_sorted_vector() {
+        let original =
+            vec![make_stats("b.txt", 5, 50), make_stats("a.txt", 10, 100), make_stats("c.txt", 1, 10)];
+
+        let strategy = SortStrategy::new(vec![SortSpec::ascending(SortKey::Lines)]);
+        let sorted = strategy.sorted(original.clone());
+
+        let sorted_lines: Vec<_> = sorted.iter().map(|s| s.lines).collect();
+        assert_eq!(sorted_lines, vec![1, 5, 10]);
+
+        let original_lines: Vec<_> = original.iter().map(|s| s.lines).collect();
+        assert_eq!(original_lines, vec![5, 10, 1], "sorted should not mutate the input vector copy");
+    }
+
+    #[test]
+    fn default_strategy_matches_default_impl() {
+        let via_assoc = SortStrategy::default();
+        let via_trait: SortStrategy = Default::default();
+
+        let mut stats_a = vec![make_stats("alpha.txt", 5, 50), make_stats("beta.txt", 10, 100)];
+        let mut stats_b = stats_a.clone();
+
+        via_assoc.apply(&mut stats_a);
+        via_trait.apply(&mut stats_b);
+
+        assert_eq!(stats_a, stats_b);
+    }
+
+    #[test]
     fn sort_order_conversion() {
         assert_eq!(SortOrder::from(true), SortOrder::Descending);
         assert_eq!(SortOrder::from(false), SortOrder::Ascending);

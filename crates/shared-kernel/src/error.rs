@@ -1,3 +1,4 @@
+// crates/shared-kernel/src/error.rs
 use std::path::PathBuf;
 
 use thiserror::Error;

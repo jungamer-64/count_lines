@@ -99,3 +99,53 @@ fn watch_enables_incremental_and_defaults_interval() {
     assert!(config.incremental, "watch mode should force incremental execution");
     assert_eq!(config.watch_interval, std::time::Duration::from_secs(3));
 }
+
+#[test]
+fn watch_interval_clamps_to_minimum() {
+    let mut options = base_options();
+    options.watch_interval = Some(0);
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert_eq!(config.watch_interval, std::time::Duration::from_secs(1));
+}
+
+#[test]
+fn jobs_option_is_clamped_to_at_least_one() {
+    let mut options = base_options();
+    options.jobs = Some(0);
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert_eq!(config.jobs, 1);
+}
+
+#[test]
+fn cache_dir_is_normalised_and_extensions_are_lowercased() {
+    let mut options = base_options();
+    options.cache_dir = Some(PathBuf::from("tmp/cache"));
+    options.filters.ext = Some("rs,  JS ,, ".into());
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    let ext_filters: std::collections::HashSet<_> = config.filters.ext_filters.iter().cloned().collect();
+    let expected: std::collections::HashSet<_> = ["rs", "js"].into_iter().map(String::from).collect();
+
+    assert!(config.cache_dir.as_ref().map(|p| p.is_absolute()).unwrap_or(false));
+    assert_eq!(ext_filters, expected);
+}
+
+#[test]
+fn paths_are_preserved_when_provided() {
+    let mut options = base_options();
+    options.paths = vec![PathBuf::from("src"), PathBuf::from("tests")];
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert_eq!(config.paths, vec![PathBuf::from("src"), PathBuf::from("tests")]);
+}
+
+#[test]
+fn sorting_by_words_enables_word_counting() {
+    let mut options = base_options();
+    options.sort_specs = vec![(SortKey::Words, false)];
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert!(config.words, "sorting by words should enable word counting");
+}

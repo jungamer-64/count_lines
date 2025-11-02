@@ -82,7 +82,10 @@ impl Aggregator {
             .into_iter()
             .map(|(key, (lines, chars, count))| AggregationGroup::new(key, lines, chars, count))
             .collect();
-        groups.sort_by(|a, b| b.lines.cmp(&a.lines));
+        // Sort primarily by lines (desc). For deterministic ordering when
+        // line counts are equal, sort by key (desc) to keep results stable
+        // across runs and platforms.
+        groups.sort_by(|a, b| b.lines.cmp(&a.lines).then_with(|| b.key.cmp(&a.key)));
         groups
     }
 }
@@ -107,4 +110,99 @@ fn get_dir_key(path: &Path, depth: usize) -> String {
         .take(depth)
         .collect();
     if parts.is_empty() { ".".to_string() } else { parts.join("/") }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        config::ByKey,
+        grouping::Granularity,
+        model::{FileStats, FileStatsBuilder},
+        value_objects::{
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+        },
+    };
+
+    fn build_stat(
+        path: impl Into<std::path::PathBuf>,
+        ext: impl Into<String>,
+        lines: usize,
+        chars: usize,
+        words: Option<usize>,
+        mtime: Option<chrono::DateTime<chrono::Local>>,
+    ) -> FileStats {
+        FileStatsBuilder::new(FilePath::new(path.into()))
+            .lines(LineCount::new(lines))
+            .chars(CharCount::new(chars))
+            .words(words.map(WordCount::new))
+            .size(FileSize::new((chars * 2) as u64))
+            .ext(FileExtension::new(ext.into()))
+            .name(FileName::new("sample".to_string()))
+            .mtime(mtime.map(ModificationTime::new))
+            .build()
+            .to_legacy()
+    }
+
+    #[test]
+    fn aggregates_by_extension_sorted_by_lines_desc() {
+        let stats = vec![
+            build_stat("src/lib.rs", "rs", 50, 500, None, None),
+            build_stat("src/main.rs", "rs", 100, 1_000, None, None),
+            build_stat("README", "", 20, 200, None, None),
+        ];
+
+        let groups = Aggregator::aggregate(&stats, &[ByKey::Ext]);
+        assert_eq!(groups.len(), 1);
+        let (label, rows) = &groups[0];
+        assert_eq!(label, "By Extension");
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].key, "rs");
+        assert_eq!(rows[0].lines, 150);
+        assert_eq!(rows[0].chars, 1_500);
+        assert_eq!(rows[0].count, 2);
+        assert_eq!(rows[1].key, "(noext)");
+        assert_eq!(rows[1].count, 1);
+    }
+
+    #[test]
+    fn aggregates_by_directory_respect_depth() {
+        let stats = vec![
+            build_stat("src/lib.rs", "rs", 10, 100, None, None),
+            build_stat("src/utils/helpers.rs", "rs", 20, 200, None, None),
+            build_stat("tests/integration/main.rs", "rs", 30, 300, None, None),
+        ];
+
+        let groups = Aggregator::aggregate(&stats, &[ByKey::Dir(1)]);
+        let (_, rows) = &groups[0];
+        // Expect two top-level directories at depth 1: 'tests' and 'src'
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].key, "tests");
+        assert_eq!(rows[0].lines, 30);
+        assert_eq!(rows[1].key, "src");
+        assert_eq!(rows[1].lines, 30);
+    }
+
+    #[test]
+    fn aggregates_by_mtime_bucket_counts_files() {
+        let now = chrono::Local::now();
+        let yesterday = now - chrono::Duration::days(1);
+        let stats = vec![
+            build_stat("src/lib.rs", "rs", 10, 100, None, Some(now)),
+            build_stat("src/main.rs", "rs", 20, 200, None, Some(yesterday)),
+        ];
+
+        let groups = Aggregator::aggregate(&stats, &[ByKey::Mtime(Granularity::Day)]);
+        let (_, rows) = &groups[0];
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].count, 1);
+        assert_eq!(rows[1].count, 1);
+    }
+
+    #[test]
+    fn aggregate_returns_empty_without_keys() {
+        let stats = vec![build_stat("src/lib.rs", "rs", 10, 100, None, None)];
+        let groups = Aggregator::aggregate(&stats, &[]);
+        assert!(groups.is_empty());
+    }
 }

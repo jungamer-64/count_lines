@@ -1,3 +1,4 @@
+// crates/shared-kernel/src/value_objects/file_info.rs
 use std::{
     fmt,
     path::{Path, PathBuf},

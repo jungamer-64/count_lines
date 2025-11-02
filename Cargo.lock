@@ -310,6 +310,8 @@ dependencies = [
  "count_lines_shared_kernel",
  "globset",
  "ignore",
+ "memchr",
+ "tempfile",
 ]
 
 [[package]]

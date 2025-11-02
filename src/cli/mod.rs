@@ -241,33 +241,30 @@ mod tests {
     #[test]
     fn validate_numeric_args_rejects_zero_top() {
         let err = validate_numeric_args(Some(0), None, None, None).unwrap_err();
-        match err {
-            CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) => {
-                assert_eq!(flag, "--top");
-                assert_eq!(value, "0");
-            }
-            other => panic!("unexpected error variant: {other:?}"),
+        if let CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) = err {
+            assert_eq!(flag, "--top");
+            assert_eq!(value, "0");
+        } else {
+            panic!("unexpected error variant: {err:?}");
         }
     }
 
     #[test]
     fn validate_numeric_args_rejects_jobs_outside_range() {
         let err_zero = validate_numeric_args(None, None, Some(0), None).unwrap_err();
-        match err_zero {
-            CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) => {
-                assert_eq!(flag, "--jobs");
-                assert_eq!(value, "0");
-            }
-            other => panic!("unexpected error variant: {other:?}"),
+        if let CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) = err_zero {
+            assert_eq!(flag, "--jobs");
+            assert_eq!(value, "0");
+        } else {
+            panic!("unexpected error variant: {err_zero:?}");
         }
 
         let err_high = validate_numeric_args(None, None, Some(600), None).unwrap_err();
-        match err_high {
-            CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) => {
-                assert_eq!(flag, "--jobs");
-                assert_eq!(value, "600");
-            }
-            other => panic!("unexpected error variant: {other:?}"),
+        if let CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) = err_high {
+            assert_eq!(flag, "--jobs");
+            assert_eq!(value, "600");
+        } else {
+            panic!("unexpected error variant: {err_high:?}");
         }
     }
 

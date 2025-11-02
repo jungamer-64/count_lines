@@ -1,3 +1,4 @@
+// crates/shared-kernel/src/lib.rs
 #![allow(clippy::multiple_crate_versions)]
 
 pub use error::{

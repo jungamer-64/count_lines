@@ -1,3 +1,4 @@
+// crates/shared-kernel/src/value_objects/file_meta.rs
 use chrono::{DateTime, Local};
 
 /// Minimal file metadata captured during enumeration.

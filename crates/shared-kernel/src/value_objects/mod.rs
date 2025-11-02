@@ -1,3 +1,4 @@
+// crates/shared-kernel/src/value_objects/mod.rs
 pub mod counts;
 pub mod file_info;
 pub mod file_meta;
