@@ -1,7 +1,8 @@
 use std::{
     collections::HashSet,
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, Read},
     path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use chrono::{DateTime, Local};
@@ -11,6 +12,38 @@ use globset::{Glob, GlobMatcher};
 use ignore::WalkBuilder;
 
 use crate::persistence::FileReader;
+
+const LARGE_TEXT_SNIFF_THRESHOLD: u64 = 16 * 1024 * 1024; // 16 MiB
+
+#[derive(Debug)]
+struct FileMetaLight {
+    size: u64,
+    mtime: Option<DateTime<Local>>,
+    ext: String,
+    name: String,
+}
+
+fn build_meta_light(path: &Path) -> Option<FileMetaLight> {
+    let metadata = std::fs::metadata(path).ok()?;
+    // Only consider regular files here. Directories, symlinks to dirs and other
+    // special files should not be treated as file entries.
+    if !metadata.is_file() {
+        return None;
+    }
+    let size = metadata.len();
+    let mtime = metadata.modified().ok().map(DateTime::<Local>::from);
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    Some(FileMetaLight { size, mtime, ext, name })
+}
+
+fn detect_text(path: &Path, fast: bool, size: u64) -> bool {
+    // For very large files prefer quick sniff to avoid O(file_size) reads.
+    if size >= LARGE_TEXT_SNIFF_THRESHOLD {
+        return quick_text_check(path);
+    }
+    if fast { quick_text_check(path) } else { strict_text_check(path) }
+}
 
 /// Filesystem adapter implementing the `FileEnumerator` port based on the enumeration plan.
 #[derive(Debug, Default)]
@@ -35,11 +68,20 @@ impl FileEnumerator for PlanFileEnumerator {
 fn enumerate_plan(plan: &FileEnumerationPlan) -> Result<Vec<FileEntryDto>> {
     let matcher = PlanMatcher::new(plan)?;
 
-    if let Some(paths) = initial_paths(plan)? {
-        materialise_paths(paths, plan, &matcher)
+    let entries = if let Some(paths) = initial_paths(plan)? {
+        // When the user supplies an explicit file list, preserve the order they
+        // provided (materialise_paths will honor that). Do not sort.
+        materialise_paths(paths, plan, &matcher)?
     } else {
-        walk_roots(plan, matcher)
-    }
+        // For walk-based collection (multiple roots, git lists, etc.) ensure a
+        // deterministic order and remove duplicates from overlapping roots.
+        let mut walk_entries = walk_roots(plan, matcher)?;
+        walk_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        walk_entries.dedup_by(|a, b| a.path == b.path);
+        walk_entries
+    };
+
+    Ok(entries)
 }
 
 fn initial_paths(plan: &FileEnumerationPlan) -> Result<Option<Vec<PathBuf>>> {
@@ -65,61 +107,150 @@ fn materialise_paths(
         if !plan.include_hidden && is_hidden(&path) {
             continue;
         }
-        if let Some(meta) = build_metadata(&path, plan.fast_text_detect) {
-            if matcher.matches_file(&path, &meta) {
+        match build_meta_light(&path) {
+            Some(light) if matcher.matches_file_light(&path, &light) => {
+                let is_text = detect_text(&path, plan.fast_text_detect, light.size);
+                let meta = FileMetadata {
+                    size: light.size,
+                    mtime: light.mtime,
+                    is_text,
+                    ext: light.ext,
+                    name: light.name,
+                };
                 entries.push(to_port_entry(path, meta));
             }
+            _ => (),
         }
     }
     Ok(entries)
 }
 
+// Small helper: process a single `ignore` walk result. Pulled out of the closure
+// to lower the cyclomatic complexity of the parallel walk closure.
+// Note: helper `handle_walk_result` removed in favor of a lighter-weight
+// per-thread buffering strategy implemented in `collect_entries_from_root`.
+
+// Attempt to construct a `FileEntryDto` from a walk result. Returns `None`
+// for non-files, errors, or entries that don't match the given matcher.
+fn try_build_entry_from_result(
+    result: std::result::Result<ignore::DirEntry, ignore::Error>,
+    matcher: &PlanMatcher,
+    include_hidden: bool,
+    fast_text: bool,
+) -> Option<FileEntryDto> {
+    let entry = match result {
+        Ok(e) => e,
+        Err(err) => {
+            eprintln!("[warn] walk error: {err}");
+            return None;
+        }
+    };
+
+    if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+        return None;
+    }
+
+    let path = entry.into_path();
+    if !include_hidden && is_hidden(&path) {
+        return None;
+    }
+
+    match build_meta_light(&path) {
+        Some(light) if matcher.matches_file_light(&path, &light) => {
+            let is_text = detect_text(&path, fast_text, light.size);
+            let meta = FileMetadata {
+                size: light.size,
+                mtime: light.mtime,
+                is_text,
+                ext: light.ext,
+                name: light.name,
+            };
+            return Some(to_port_entry(path, meta));
+        }
+        _ => {}
+    }
+    None
+}
+
+// Collect entries for a single root path. This extracts the per-root builder
+// and parallel run logic out of `walk_roots` so the top-level function stays small.
+fn collect_entries_from_root(
+    root: &Path,
+    plan: &FileEnumerationPlan,
+    matcher: &Arc<PlanMatcher>,
+) -> Result<Vec<FileEntryDto>> {
+    let mut builder = WalkBuilder::new(root);
+    builder.follow_links(plan.follow_links);
+    builder.hidden(false);
+    builder.git_ignore(true);
+
+    let dir_matcher = Arc::clone(matcher);
+    let include_hidden = plan.include_hidden;
+    let no_default_prune = plan.no_default_prune;
+    builder.filter_entry(move |entry| {
+        match entry.file_type() {
+            Some(file_type) if file_type.is_dir() => {
+                return dir_matcher.should_visit_dir(entry.path(), include_hidden, no_default_prune);
+            }
+            _ => (),
+        }
+        true
+    });
+
+    // parallel walk: aggregate entries into a thread-safe Vec
+    let entries_ref: Arc<Mutex<Vec<FileEntryDto>>> = Arc::new(Mutex::new(Vec::new()));
+    let entries_clone = Arc::clone(&entries_ref);
+    let matcher_ref = Arc::clone(matcher);
+    let include_hidden = plan.include_hidden;
+    let fast_text = plan.fast_text_detect;
+
+    // Use a thread-local buffer to reduce mutex contention: collect entries in a
+    // local Vec and flush them to the shared vector in batches. The
+    // LocalCollector ensures leftover items are flushed when the thread exits.
+    const FLUSH_THRESHOLD: usize = 64;
+    struct LocalCollector {
+        buf: Vec<FileEntryDto>,
+        shared: Arc<Mutex<Vec<FileEntryDto>>>,
+    }
+    impl Drop for LocalCollector {
+        fn drop(&mut self) {
+            if !self.buf.is_empty() {
+                let mut guard = self.shared.lock().unwrap();
+                guard.append(&mut self.buf);
+            }
+        }
+    }
+
+    builder.build_parallel().run(move || {
+        let matcher = Arc::clone(&matcher_ref);
+        let shared = Arc::clone(&entries_clone);
+        let mut collector = LocalCollector { buf: Vec::new(), shared };
+        Box::new(move |result| {
+            if let Some(dto) = try_build_entry_from_result(result, &matcher, include_hidden, fast_text) {
+                collector.buf.push(dto);
+                if collector.buf.len() >= FLUSH_THRESHOLD {
+                    let mut guard = collector.shared.lock().unwrap();
+                    guard.append(&mut collector.buf);
+                }
+            }
+            ignore::WalkState::Continue
+        })
+    });
+
+    // merge local entries into main vector
+    let mut guard = entries_ref.lock().unwrap();
+    let mut collected = Vec::new();
+    collected.append(&mut guard);
+    Ok(collected)
+}
+
 fn walk_roots(plan: &FileEnumerationPlan, matcher: PlanMatcher) -> Result<Vec<FileEntryDto>> {
-    let matcher = std::sync::Arc::new(matcher);
+    let matcher = Arc::new(matcher);
     let mut entries = Vec::new();
 
     for root in &plan.roots {
-        let mut builder = WalkBuilder::new(root);
-        builder.follow_links(plan.follow_links);
-        builder.hidden(false);
-        builder.git_ignore(true);
-
-        let dir_matcher = std::sync::Arc::clone(&matcher);
-        let include_hidden = plan.include_hidden;
-        let no_default_prune = plan.no_default_prune;
-        builder.filter_entry(move |entry| {
-            if let Some(file_type) = entry.file_type() {
-                if file_type.is_dir() {
-                    return dir_matcher.should_visit_dir(entry.path(), include_hidden, no_default_prune);
-                }
-            }
-            true
-        });
-
-        for result in builder.build() {
-            let entry = match result {
-                Ok(e) => e,
-                Err(err) => {
-                    eprintln!("[warn] walk error: {err}");
-                    continue;
-                }
-            };
-
-            if !entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                continue;
-            }
-
-            let path = entry.into_path();
-            if !plan.include_hidden && is_hidden(&path) {
-                continue;
-            }
-
-            if let Some(meta) = build_metadata(&path, plan.fast_text_detect) {
-                if matcher.matches_file(&path, &meta) {
-                    entries.push(to_port_entry(path, meta));
-                }
-            }
-        }
+        let mut root_entries = collect_entries_from_root(root, plan, &matcher)?;
+        entries.append(&mut root_entries);
     }
 
     Ok(entries)
@@ -152,7 +283,7 @@ fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
 }
 
 fn read_files_from_null(path: &Path) -> Result<Vec<PathBuf>> {
-    let mut file = File::open(path)
+    let mut file = FileReader::open(path)
         .map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)
@@ -183,10 +314,9 @@ fn collect_git_files(roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
                 source,
             })?;
         if !output.status.success() {
-            let details = String::from_utf8_lossy(&output.stderr).to_string();
-            return Err(
-                InfrastructureError::GitError { operation: "git ls-files".to_string(), details }.into()
-            );
+            // Skip roots that are not git repositories rather than erroring the whole operation.
+            eprintln!("[warn] {} is not a git repo (git ls-files skipped)", root.display());
+            continue;
         }
         for chunk in output.stdout.split(|&b| b == 0) {
             if let Some(path_str) = parse_git_output_chunk(chunk) {
@@ -216,6 +346,7 @@ struct FileMetadata {
     name: String,
 }
 
+#[allow(dead_code)]
 fn build_metadata(path: &Path, fast_text_detect: bool) -> Option<FileMetadata> {
     let metadata = std::fs::metadata(path).ok()?;
     let size = metadata.len();
@@ -227,11 +358,24 @@ fn build_metadata(path: &Path, fast_text_detect: bool) -> Option<FileMetadata> {
 }
 
 fn quick_text_check(path: &Path) -> bool {
-    match File::open(path) {
+    match FileReader::open(path) {
         Ok(mut file) => {
-            let mut buf = [0u8; 1024];
+            // Read a larger sample to allow BOM detection for UTF-16/32.
+            let mut buf = [0u8; 4096];
             match file.read(&mut buf) {
-                Ok(n) => !buf[..n].contains(&0),
+                Ok(n) => {
+                    let s = &buf[..n];
+                    // Allow common BOMs: UTF-8, UTF-16 (LE/BE), UTF-32 (LE/BE).
+                    if s.starts_with(&[0xEF, 0xBB, 0xBF])
+                        || s.starts_with(&[0xFF, 0xFE])
+                        || s.starts_with(&[0xFE, 0xFF])
+                        || s.starts_with(&[0xFF, 0xFE, 0x00, 0x00])
+                        || s.starts_with(&[0x00, 0x00, 0xFE, 0xFF])
+                    {
+                        return true;
+                    }
+                    !s.contains(&0)
+                }
                 Err(err) => {
                     eprintln!("[warn] quick_text_check read error for {}: {err}", path.display());
                     false
@@ -243,7 +387,7 @@ fn quick_text_check(path: &Path) -> bool {
 }
 
 fn strict_text_check(path: &Path) -> bool {
-    match File::open(path) {
+    match FileReader::open(path) {
         Ok(mut file) => {
             let mut buf = Vec::new();
             file.read_to_end(&mut buf).is_ok() && !buf.contains(&0)
@@ -252,9 +396,12 @@ fn strict_text_check(path: &Path) -> bool {
     }
 }
 
+#[allow(dead_code)]
 struct PlanMatcher {
     include_patterns: Vec<GlobMatcher>,
+    include_pattern_strings: Vec<String>,
     exclude_patterns: Vec<GlobMatcher>,
+    exclude_pattern_strings: Vec<String>,
     include_paths: Vec<GlobMatcher>,
     exclude_paths: Vec<GlobMatcher>,
     exclude_dirs: Vec<GlobMatcher>,
@@ -265,11 +412,14 @@ struct PlanMatcher {
     mtime_until: Option<DateTime<Local>>,
 }
 
+#[allow(dead_code)]
 impl PlanMatcher {
     fn new(plan: &FileEnumerationPlan) -> Result<Self> {
         Ok(Self {
             include_patterns: compile_patterns(&plan.include_patterns)?,
+            include_pattern_strings: plan.include_patterns.clone(),
             exclude_patterns: compile_patterns(&plan.exclude_patterns)?,
+            exclude_pattern_strings: plan.exclude_patterns.clone(),
             include_paths: compile_patterns(&plan.include_paths)?,
             exclude_paths: compile_patterns(&plan.exclude_paths)?,
             exclude_dirs: compile_patterns(&plan.exclude_dirs)?,
@@ -287,10 +437,9 @@ impl PlanMatcher {
         }
 
         if !no_default_prune {
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if DEFAULT_PRUNE_DIRS.contains(&name) {
-                    return false;
-                }
+            match path.file_name().and_then(|n| n.to_str()) {
+                Some(name) if DEFAULT_PRUNE_DIRS.contains(&name) => return false,
+                _ => (),
             }
         }
 
@@ -332,31 +481,115 @@ impl PlanMatcher {
         self.ext_filters.contains(&meta.ext)
     }
 
-    fn matches_size(&self, meta: &FileMetadata) -> bool {
-        if let Some(min) = self.size_min {
-            if meta.size < min {
-                return false;
+    // Lightweight matching using only name/path/size/mtime/ext (avoids text checks)
+    fn matches_file_light(&self, path: &Path, meta: &FileMetaLight) -> bool {
+        self.matches_name_or_path(path)
+            && self.matches_extension_light(meta)
+            && self.matches_size_light(meta)
+            && self.matches_mtime_light(meta)
+    }
+
+    fn matches_name_or_path(&self, path: &Path) -> bool {
+        let fname = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+        // include patterns: if present, at least one must match
+        if !self.include_patterns.is_empty() && !self.include_patterns_match(path, fname) {
+            return false;
+        }
+
+        // exclude patterns: none must match
+        if self.exclude_patterns_match(path, fname) {
+            return false;
+        }
+
+        // explicit include/exclude path matchers
+        if !self.include_paths.is_empty() && !self.include_paths.iter().any(|m| m.is_match(path)) {
+            return false;
+        }
+        if self.exclude_paths.iter().any(|m| m.is_match(path)) {
+            return false;
+        }
+
+        true
+    }
+
+    fn include_patterns_match(&self, path: &Path, fname: &str) -> bool {
+        if self.include_patterns.is_empty() {
+            return true;
+        }
+        for (pat, matcher) in self.include_pattern_strings.iter().zip(self.include_patterns.iter()) {
+            let looks_like_path = pat.contains('/') || pat.contains("**");
+            if looks_like_path {
+                if matcher.is_match(path) {
+                    return true;
+                }
+            } else if matcher.is_match(fname) {
+                return true;
             }
         }
-        if let Some(max) = self.size_max {
-            if meta.size > max {
+        false
+    }
+
+    fn exclude_patterns_match(&self, path: &Path, fname: &str) -> bool {
+        for (pat, matcher) in self.exclude_pattern_strings.iter().zip(self.exclude_patterns.iter()) {
+            let looks_like_path = pat.contains('/') || pat.contains("**");
+            if looks_like_path {
+                if matcher.is_match(path) {
+                    return true;
+                }
+            } else if matcher.is_match(fname) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn matches_extension_light(&self, meta: &FileMetaLight) -> bool {
+        if self.ext_filters.is_empty() {
+            return true;
+        }
+        self.ext_filters.contains(&meta.ext)
+    }
+
+    fn matches_size_light(&self, meta: &FileMetaLight) -> bool {
+        if self.size_min.is_some_and(|min| meta.size < min) {
+            return false;
+        }
+        if self.size_max.is_some_and(|max| meta.size > max) {
+            return false;
+        }
+        true
+    }
+
+    fn matches_mtime_light(&self, meta: &FileMetaLight) -> bool {
+        if let Some(mtime) = meta.mtime {
+            if self.mtime_since.is_some_and(|since| mtime < since) {
+                return false;
+            }
+            if self.mtime_until.is_some_and(|until| mtime > until) {
                 return false;
             }
         }
         true
     }
 
+    fn matches_size(&self, meta: &FileMetadata) -> bool {
+        if self.size_min.is_some_and(|min| meta.size < min) {
+            return false;
+        }
+        if self.size_max.is_some_and(|max| meta.size > max) {
+            return false;
+        }
+        true
+    }
+
     fn matches_mtime(&self, meta: &FileMetadata) -> bool {
         if let Some(mtime) = meta.mtime {
-            if let Some(since) = self.mtime_since {
-                if mtime < since {
-                    return false;
-                }
+            if self.mtime_since.is_some_and(|since| mtime < since) {
+                return false;
             }
-            if let Some(until) = self.mtime_until {
-                if mtime > until {
-                    return false;
-                }
+            if self.mtime_until.is_some_and(|until| mtime > until) {
+                return false;
             }
         }
         true
@@ -377,6 +610,19 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
         .map_err(Into::into)
 }
 
+#[cfg(target_os = "windows")]
+fn is_hidden(path: &Path) -> bool {
+    use std::os::windows::fs::MetadataExt;
+    const FILE_ATTRIBUTE_HIDDEN: u32 = 0x2;
+    if let Ok(md) = std::fs::metadata(path) {
+        if (md.file_attributes() & FILE_ATTRIBUTE_HIDDEN) != 0 {
+            return true;
+        }
+    }
+    path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with('.')).unwrap_or(false)
+}
+
+#[cfg(not(target_os = "windows"))]
 fn is_hidden(path: &Path) -> bool {
     path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with('.')).unwrap_or(false)
 }

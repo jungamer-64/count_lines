@@ -105,16 +105,12 @@ impl Config {
             return false;
         }
 
-        if let Some(since) = self.mtime_since {
-            if meta.mtime.map_or(false, |mtime| mtime < since) {
-                return false;
-            }
+        if self.mtime_since.is_some_and(|since| meta.mtime.is_some_and(|mtime| mtime < since)) {
+            return false;
         }
 
-        if let Some(until) = self.mtime_until {
-            if meta.mtime.map_or(false, |mtime| mtime > until) {
-                return false;
-            }
+        if self.mtime_until.is_some_and(|until| meta.mtime.is_some_and(|mtime| mtime > until)) {
+            return false;
         }
 
         true
