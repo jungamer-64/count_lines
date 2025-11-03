@@ -1,3 +1,4 @@
+// tests/unit/application/queries_test.rs
 use std::path::PathBuf;
 
 use count_lines_core::{
@@ -22,6 +23,11 @@ fn base_options() -> ConfigOptions {
         hidden: false,
         follow: false,
         use_git: false,
+        respect_gitignore: true,
+        use_ignore_overrides: false,
+        case_insensitive_dedup: false,
+        max_depth: None,
+        enumerator_threads: None,
         jobs: None,
         no_default_prune: false,
         abs_path: false,
@@ -119,10 +125,67 @@ fn jobs_option_is_clamped_to_at_least_one() {
 }
 
 #[test]
+fn jobs_and_enumerator_threads_are_clamped_to_upper_bound() {
+    let mut options = base_options();
+    options.jobs = Some(10_000);
+    options.enumerator_threads = Some(2_000);
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert!(config.jobs <= 512);
+    assert_eq!(config.enumerator_threads, Some(512));
+}
+
+#[test]
+fn watch_interval_is_capped_to_24h() {
+    let mut options = base_options();
+    options.watch = true;
+    options.watch_interval = Some(1_000_000);
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert_eq!(config.watch_interval, std::time::Duration::from_secs(86_400));
+}
+
+#[test]
+fn force_exts_are_lowercased_and_deduped() {
+    let mut options = base_options();
+    options.filters.force_text_exts = vec!["MD".into(), "md".into()];
+    options.filters.force_binary_exts = vec!["DaT".into(), "dat".into()];
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert_eq!(config.filters.force_text_exts, vec!["md"]);
+    assert_eq!(config.filters.force_binary_exts, vec!["dat"]);
+}
+
+#[test]
+fn enumerator_controls_are_populated() {
+    let mut options = base_options();
+    options.case_insensitive_dedup = true;
+    options.respect_gitignore = false;
+    options.max_depth = Some(5);
+    options.enumerator_threads = Some(7);
+    options.use_ignore_overrides = true;
+    options.filters.overrides_include = vec!["dist/**".into()];
+    options.filters.overrides_exclude = vec!["build/**".into()];
+    options.filters.force_text_exts = vec!["Md".into()];
+    options.filters.force_binary_exts = vec!["DATA".into()];
+    options.filters.exclude_dir_only = vec!["**/generated/**".into()];
+
+    let config = ConfigQueryService::build(options).expect("config builds");
+    assert!(config.case_insensitive_dedup);
+    assert!(!config.respect_gitignore);
+    assert!(config.use_ignore_overrides);
+    assert_eq!(config.max_depth, Some(5));
+    assert_eq!(config.enumerator_threads, Some(7));
+    assert_eq!(config.filters.overrides_include, vec!["dist/**".to_string()]);
+    assert_eq!(config.filters.overrides_exclude, vec!["build/**".to_string()]);
+    assert_eq!(config.filters.force_text_exts, vec!["md".to_string()]);
+    assert_eq!(config.filters.force_binary_exts, vec!["data".to_string()]);
+    let dir_only: Vec<_> = config.filters.exclude_dirs_only.iter().map(|g| g.pattern().to_string()).collect();
+    assert_eq!(dir_only, vec!["**/generated/**".to_string()]);
+}
+
+#[test]
 fn cache_dir_is_normalised_and_extensions_are_lowercased() {
     let mut options = base_options();
     options.cache_dir = Some(PathBuf::from("tmp/cache"));
-    options.filters.ext = Some("rs,  JS ,, ".into());
+    options.filters.ext = Some(".rs,  .JS ,, ".into());
 
     let config = ConfigQueryService::build(options).expect("config builds");
     let ext_filters: std::collections::HashSet<_> = config.filters.ext_filters.iter().cloned().collect();

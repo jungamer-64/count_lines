@@ -1,3 +1,4 @@
+// tests/integration/output_formats.rs
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -29,6 +30,11 @@ fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOp
         hidden: true,
         follow: false,
         use_git: false,
+        respect_gitignore: true,
+        use_ignore_overrides: false,
+        case_insensitive_dedup: false,
+        max_depth: None,
+        enumerator_threads: None,
         jobs: Some(1),
         no_default_prune: true,
         abs_path: false,

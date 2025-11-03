@@ -1,4 +1,9 @@
+// crates/core/src/application/queries/config/queries/config_query_service.rs
 use std::{collections::HashSet, time::Duration};
+use std::thread;
+
+const MAX_THREADS: usize = 512;
+const MAX_WATCH_SECS: u64 = 86_400; // 24h safety cap
 
 use crate::{
     application::queries::config::commands::{ConfigOptions, FilterOptions},
@@ -30,6 +35,8 @@ impl ConfigQueryService {
         let paths = Self::normalize_paths(query.paths);
         let by_modes = Self::convert_by_modes(&query.by);
         let incremental = query.incremental || query.watch;
+        let enumerator_threads =
+            query.enumerator_threads.map(|n| n.clamp(1, MAX_THREADS));
 
         Ok(Config {
             format: query.format,
@@ -43,8 +50,13 @@ impl ConfigQueryService {
             hidden: query.hidden,
             follow: query.follow,
             use_git: query.use_git,
+            case_insensitive_dedup: query.case_insensitive_dedup,
+            respect_gitignore: query.respect_gitignore,
+            use_ignore_overrides: query.use_ignore_overrides,
             jobs,
             no_default_prune: query.no_default_prune,
+            max_depth: query.max_depth,
+            enumerator_threads,
             abs_path,
             abs_canonical: query.abs_canonical,
             trim_root,
@@ -74,7 +86,9 @@ impl ConfigQueryService {
     }
 
     fn determine_jobs(query: &ConfigOptions) -> usize {
-        query.jobs.unwrap_or_else(num_cpus::get).max(1)
+        let detected = thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        let wanted = query.jobs.unwrap_or(detected);
+        wanted.clamp(1, MAX_THREADS)
     }
 
     fn abs_and_trim(query: &ConfigOptions) -> (bool, Option<std::path::PathBuf>) {
@@ -84,7 +98,7 @@ impl ConfigQueryService {
     }
 
     fn watch_interval(query: &ConfigOptions) -> Duration {
-        let secs = query.watch_interval.unwrap_or(1).max(1);
+        let secs = query.watch_interval.unwrap_or(1).max(1).min(MAX_WATCH_SECS);
         Duration::from_secs(secs)
     }
 
@@ -101,7 +115,13 @@ impl ConfigQueryService {
             include_paths: parse_patterns(&options.include_path)?,
             exclude_paths: parse_patterns(&options.exclude_path)?,
             exclude_dirs: parse_patterns(&options.exclude_dir)?,
+            exclude_dirs_only: parse_patterns(&options.exclude_dir_only)?,
             ext_filters: Self::parse_extensions(options.ext.as_deref()),
+            overrides_include: options.overrides_include.clone(),
+            overrides_exclude: options.overrides_exclude.clone(),
+            // 小文字化＋重複排除で安定化
+            force_text_exts: Self::dedup_lower(&options.force_text_exts),
+            force_binary_exts: Self::dedup_lower(&options.force_binary_exts),
             size_range: SizeRange::new(options.min_size, options.max_size),
             lines_range: Range::new(options.min_lines, options.max_lines),
             chars_range: Range::new(options.min_chars, options.max_chars),
@@ -110,9 +130,27 @@ impl ConfigQueryService {
         })
     }
 
+    fn dedup_lower(list: &[String]) -> Vec<String> {
+        let mut seen = std::collections::HashSet::with_capacity(list.len());
+        let mut out = Vec::with_capacity(list.len());
+        for s in list {
+            let k = s.to_ascii_lowercase();
+            if seen.insert(k.clone()) {
+                out.push(k);
+            }
+        }
+        out
+    }
+
     fn parse_extensions(ext_arg: Option<&str>) -> HashSet<String> {
         ext_arg
-            .map(|s| s.split(',').map(str::trim).filter(|e| !e.is_empty()).map(str::to_lowercase).collect())
+            .map(|s| {
+                s.split(',')
+                    .map(str::trim)
+                    .filter(|e| !e.is_empty())
+                    .map(|ext| ext.trim_start_matches('.').to_ascii_lowercase())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 
@@ -122,6 +160,7 @@ impl ConfigQueryService {
             || filters.words_range.max.is_some()
             || Self::filter_uses_words(filters)
             || Self::sort_uses_words(&query.sort_specs)
+            || Self::filter_expr_mentions_words(query.filters.filter.as_deref())
     }
 
     #[cfg(feature = "eval")]
@@ -136,6 +175,13 @@ impl ConfigQueryService {
 
     fn sort_uses_words(sort_specs: &[(crate::domain::options::SortKey, bool)]) -> bool {
         sort_specs.iter().any(|(key, _)| matches!(key, crate::domain::options::SortKey::Words))
+    }
+
+    /// Lightweight detection for builds without the `eval` feature: look for `words` tokens.
+    fn filter_expr_mentions_words(expr: Option<&str>) -> bool {
+        let Some(expr) = expr else { return false };
+        expr.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .any(|tok| tok.eq_ignore_ascii_case("words"))
     }
 
     fn normalize_paths(paths: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {

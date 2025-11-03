@@ -30,6 +30,8 @@ fn linecount_mixed_arithmetic() {
     assert_eq!(next, 5usize);
     lines += 4usize;
     assert_eq!(lines, LineCount::from(6));
+    lines += &LineCount::from(3);
+    assert_eq!(lines, LineCount::from(9));
 }
 
 #[test]
@@ -48,4 +50,12 @@ fn sum_usize_into_counts() {
 
     let chars: CharCount = [4usize, 5].into_iter().sum();
     assert_eq!(usize::from(chars), 9);
+}
+
+#[test]
+fn from_nonzero_usize() {
+    use std::num::NonZeroUsize;
+    let nz = NonZeroUsize::new(7).unwrap();
+    let lines = LineCount::from(nz);
+    assert_eq!(usize::from(lines), 7);
 }

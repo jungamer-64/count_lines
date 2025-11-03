@@ -1,3 +1,4 @@
+// crates/core/src/application/queries/config/commands/config_options.rs
 use std::path::PathBuf;
 
 use chrono::{DateTime, Local};
@@ -23,6 +24,11 @@ pub struct ConfigOptions {
     pub hidden: bool,
     pub follow: bool,
     pub use_git: bool,
+    pub respect_gitignore: bool,
+    pub use_ignore_overrides: bool,
+    pub case_insensitive_dedup: bool,
+    pub max_depth: Option<usize>,
+    pub enumerator_threads: Option<usize>,
     pub jobs: Option<usize>,
     pub no_default_prune: bool,
     pub abs_path: bool,

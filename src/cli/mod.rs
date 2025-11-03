@@ -1,3 +1,4 @@
+// src/cli/mod.rs
 mod args;
 mod parsers;
 mod value_enum;
@@ -15,11 +16,15 @@ fn validate_numeric_args(
     by_limit: Option<usize>,
     jobs: Option<usize>,
     watch_interval: Option<u64>,
+    walk_threads: Option<usize>,
+    max_depth: Option<usize>,
 ) -> Result<()> {
     validate_at_least_one("--top", top)?;
     validate_at_least_one("--by-limit", by_limit)?;
     validate_jobs("--jobs", jobs)?;
+    validate_jobs("--walk-threads", walk_threads)?;
     validate_watch_interval("--watch-interval", watch_interval)?;
+    validate_at_least_one("--max-depth", max_depth)?;
     Ok(())
 }
 
@@ -67,13 +72,21 @@ fn validate_watch_interval(flag: &str, interval: Option<u64>) -> Result<()> {
 
 /// Build `FilterOptions` from parsed CLI args without taking ownership of `args`.
 fn make_filter_options(args: &Args) -> FilterOptions {
+    // CLI では `--ext rs,js --ext ts` のような指定を許容する。
+    // 旧来の構造（Option<String>）との互換のためにカンマ連結で保持する。
+    let ext_joined = if args.ext.is_empty() { None } else { Some(args.ext.join(",")) };
     FilterOptions {
         include: args.include.clone(),
         exclude: args.exclude.clone(),
         include_path: args.include_path.clone(),
         exclude_path: args.exclude_path.clone(),
         exclude_dir: args.exclude_dir.clone(),
-        ext: args.ext.clone(),
+        exclude_dir_only: args.exclude_dir_only.clone(),
+        overrides_include: args.override_include.clone(),
+        overrides_exclude: args.override_exclude.clone(),
+        force_text_exts: args.force_text_ext.clone(),
+        force_binary_exts: args.force_binary_ext.clone(),
+        ext: ext_joined,
         min_size: args.min_size.map(|s| s.0),
         max_size: args.max_size.map(|s| s.0),
         min_lines: args.min_lines,
@@ -96,6 +109,7 @@ fn make_config_options(
     compare_tuple: Option<(std::path::PathBuf, std::path::PathBuf)>,
     filters: FilterOptions,
 ) -> ConfigOptions {
+    let use_ignore_overrides = !filters.overrides_include.is_empty() || !filters.overrides_exclude.is_empty();
     ConfigOptions {
         format: args.format.into(),
         sort_specs: args.sort.0.clone(),
@@ -108,6 +122,11 @@ fn make_config_options(
         hidden: args.hidden,
         follow: args.follow,
         use_git: args.git,
+        respect_gitignore: !args.no_gitignore,
+        use_ignore_overrides,
+        case_insensitive_dedup: args.case_insensitive_dedup,
+        max_depth: args.max_depth,
+        enumerator_threads: args.walk_threads,
         jobs: args.jobs,
         no_default_prune: args.no_default_prune,
         abs_path: args.abs_path,
@@ -157,7 +176,14 @@ pub fn load_config() -> Result<Config> {
 /// Returns `Err` when argument validation fails or when `ConfigQueryService`
 /// cannot build a `Config` from the provided options.
 pub fn build_config(args: &Args) -> Result<Config> {
-    validate_numeric_args(args.top, args.by_limit, args.jobs, args.watch_interval)?;
+    validate_numeric_args(
+        args.top,
+        args.by_limit,
+        args.jobs,
+        args.watch_interval,
+        args.walk_threads,
+        args.max_depth,
+    )?;
 
     let filter_options = make_filter_options(args);
     let compare_tuple = make_compare_tuple(args);
@@ -230,6 +256,55 @@ mod tests {
     }
 
     #[test]
+    fn ext_flag_accepts_multiple_forms() {
+        let args = Args::parse_from(["count_lines", "--ext", "rs,JS", "--ext", ".ts"]);
+        let config = build_config(&args).expect("config builds");
+        let exts: std::collections::HashSet<_> = config.filters.ext_filters.iter().cloned().collect();
+        let expected = ["rs", "js", "ts"]
+            .into_iter()
+            .map(std::string::String::from)
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(exts, expected);
+    }
+
+    #[test]
+    fn cli_maps_enumerator_controls() {
+        let args = Args::parse_from([
+            "count_lines",
+            "--no-gitignore",
+            "--case-insensitive-dedup",
+            "--max-depth",
+            "3",
+            "--walk-threads",
+            "4",
+            "--override-include",
+            "dist/**",
+            "--override-exclude",
+            "build/**",
+            "--force-text-ext",
+            "LOG",
+            "--force-binary-ext",
+            "Dat",
+            "--exclude-dir-only",
+            "generated/**",
+        ]);
+        let config = build_config(&args).expect("config builds");
+
+        assert!(!config.respect_gitignore, "--no-gitignore should disable respect_gitignore");
+        assert!(config.case_insensitive_dedup, "case insensitive dedup flag should propagate");
+        assert_eq!(config.max_depth, Some(3));
+        assert_eq!(config.enumerator_threads, Some(4));
+        assert!(config.use_ignore_overrides, "override patterns should enable overrides");
+        assert_eq!(config.filters.overrides_include, vec!["dist/**".to_string()]);
+        assert_eq!(config.filters.overrides_exclude, vec!["build/**".to_string()]);
+        assert_eq!(config.filters.force_text_exts, vec!["log".to_string()]);
+        assert_eq!(config.filters.force_binary_exts, vec!["dat".to_string()]);
+        let dir_only: Vec<_> =
+            config.filters.exclude_dirs_only.iter().map(|g| g.pattern().to_string()).collect();
+        assert_eq!(dir_only, vec!["generated/**".to_string()]);
+    }
+
+    #[test]
     fn watch_flag_enables_incremental_and_defaults_interval() {
         let args = Args::parse_from(["count_lines", "--watch"]);
         let config = build_config(&args).expect("config builds");
@@ -240,7 +315,7 @@ mod tests {
 
     #[test]
     fn validate_numeric_args_rejects_zero_top() {
-        let err = validate_numeric_args(Some(0), None, None, None).unwrap_err();
+        let err = validate_numeric_args(Some(0), None, None, None, None, None).unwrap_err();
         if let CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) = err {
             assert_eq!(flag, "--top");
             assert_eq!(value, "0");
@@ -251,7 +326,7 @@ mod tests {
 
     #[test]
     fn validate_numeric_args_rejects_jobs_outside_range() {
-        let err_zero = validate_numeric_args(None, None, Some(0), None).unwrap_err();
+        let err_zero = validate_numeric_args(None, None, Some(0), None, None, None).unwrap_err();
         if let CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) = err_zero {
             assert_eq!(flag, "--jobs");
             assert_eq!(value, "0");
@@ -259,7 +334,7 @@ mod tests {
             panic!("unexpected error variant: {err_zero:?}");
         }
 
-        let err_high = validate_numeric_args(None, None, Some(600), None).unwrap_err();
+        let err_high = validate_numeric_args(None, None, Some(600), None, None, None).unwrap_err();
         if let CountLinesError::Presentation(PresentationError::InvalidValue { flag, value, .. }) = err_high {
             assert_eq!(flag, "--jobs");
             assert_eq!(value, "600");

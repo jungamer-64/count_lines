@@ -1,3 +1,4 @@
+// tests/unit/application/commands_test.rs
 use std::{
     error::Error,
     path::PathBuf,
@@ -31,8 +32,13 @@ fn base_config() -> Config {
         hidden: false,
         follow: false,
         use_git: false,
+        case_insensitive_dedup: false,
+        respect_gitignore: true,
+        use_ignore_overrides: false,
         jobs: 2,
         no_default_prune: false,
+        max_depth: None,
+        enumerator_threads: None,
         abs_path: false,
         abs_canonical: false,
         trim_root: None,

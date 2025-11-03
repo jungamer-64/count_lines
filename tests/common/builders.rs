@@ -1,5 +1,5 @@
-//! テストデータ構築用ビルダー
-
+/// tests/common/builders.rs
+// テストデータ構築用ビルダー
 use std::{path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Local};
@@ -162,8 +162,13 @@ impl ConfigBuilder {
                 hidden: false,
                 follow: false,
                 use_git: false,
+                case_insensitive_dedup: false,
+                respect_gitignore: true,
+                use_ignore_overrides: false,
                 jobs: 1,
                 no_default_prune: false,
+                max_depth: None,
+                enumerator_threads: None,
                 abs_path: false,
                 abs_canonical: false,
                 trim_root: None,

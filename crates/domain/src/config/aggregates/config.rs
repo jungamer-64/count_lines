@@ -1,3 +1,4 @@
+// crates/domain/src/config/aggregates/config.rs
 use std::{
     path::{Path, PathBuf},
     time::Duration,
@@ -25,6 +26,9 @@ pub struct Config {
     pub hidden: bool,
     pub follow: bool,
     pub use_git: bool,
+    pub case_insensitive_dedup: bool,
+    pub respect_gitignore: bool,
+    pub use_ignore_overrides: bool,
     pub jobs: usize,
     pub no_default_prune: bool,
     pub abs_path: bool,
@@ -52,6 +56,8 @@ pub struct Config {
     pub watch_interval: Duration,
     pub watch_output: WatchOutput,
     pub compare: Option<(PathBuf, PathBuf)>,
+    pub max_depth: Option<usize>,
+    pub enumerator_threads: Option<usize>,
 }
 
 impl Config {
@@ -142,8 +148,13 @@ mod tests {
             hidden: false,
             follow: false,
             use_git: false,
+            case_insensitive_dedup: false,
+            respect_gitignore: true,
+            use_ignore_overrides: false,
             jobs: 1,
             no_default_prune: false,
+            max_depth: None,
+            enumerator_threads: None,
             abs_path: false,
             abs_canonical: false,
             trim_root: None,

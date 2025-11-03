@@ -1,3 +1,4 @@
+// crates/usecase/src/orchestrator.rs
 use count_lines_domain::model::FileEntry;
 use count_lines_ports::filesystem::{FileEntryDto as PortFileEntry, FileEnumerationPlan, FileEnumerator};
 use count_lines_shared_kernel::{Result, value_objects::FileMeta};
@@ -50,14 +51,8 @@ mod tests {
 
     impl StubEnumerator {
         fn with_entry(path: &str) -> Self {
-            let dto = PortFileEntry {
-                path: path.into(),
-                is_text: true,
-                size: 42,
-                ext: "txt".into(),
-                name: "sample".into(),
-                mtime: Some(Local::now()),
-            };
+            let dto =
+                PortFileEntry::new(path.into(), true, 42, "txt".into(), "sample".into(), Some(Local::now()));
             Self { entries: Mutex::new(vec![dto]) }
         }
     }
@@ -72,25 +67,8 @@ mod tests {
     fn run_returns_entries() {
         let stub = StubEnumerator::with_entry("sample.txt");
         let usecase = CountPaths::new(&stub);
-        let plan = FileEnumerationPlan {
-            roots: vec![],
-            follow_links: false,
-            include_hidden: false,
-            no_default_prune: false,
-            fast_text_detect: true,
-            include_patterns: vec![],
-            exclude_patterns: vec![],
-            include_paths: vec![],
-            exclude_paths: vec![],
-            exclude_dirs: vec![],
-            ext_filters: vec![],
-            size_range: (None, None),
-            mtime_since: None,
-            mtime_until: None,
-            files_from: None,
-            files_from0: None,
-            use_git: false,
-        };
+        let mut plan = FileEnumerationPlan::new();
+        plan.fast_text_detect = true;
         let output = usecase.run(&plan).expect("run succeeds");
         assert_eq!(output.files.len(), 1);
         assert_eq!(output.files[0].path, std::path::PathBuf::from("sample.txt"));

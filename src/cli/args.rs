@@ -1,3 +1,4 @@
+// src/cli/args.rs
 use std::path::PathBuf;
 
 use clap::{Parser, ValueHint};
@@ -76,9 +77,29 @@ pub struct Args {
     #[arg(long, value_delimiter = ',', help_heading = "フィルタ")]
     pub exclude_dir: Vec<String>,
 
-    /// 拡張子フィルタ (カンマ区切り)
-    #[arg(long, help_heading = "フィルタ")]
-    pub ext: Option<String>,
+    /// ディレクトリへの降下のみを抑制（ファイルが直接指定された場合は許可）
+    #[arg(long = "exclude-dir-only", value_delimiter = ',', help_heading = "フィルタ")]
+    pub exclude_dir_only: Vec<String>,
+
+    /// 無視リストで再包含するパターン（gitignore 互換、カンマ区切り/複数指定可）
+    #[arg(long = "override-include", value_delimiter = ',', help_heading = "走査/入力")]
+    pub override_include: Vec<String>,
+
+    /// 無視リストで追加除外するパターン（gitignore 互換、カンマ区切り/複数指定可）
+    #[arg(long = "override-exclude", value_delimiter = ',', help_heading = "走査/入力")]
+    pub override_exclude: Vec<String>,
+
+    /// 拡張子フィルタ（カンマ区切り/複数指定可, 例: --ext rs,js --ext ts）
+    #[arg(long, value_delimiter = ',', help_heading = "フィルタ")]
+    pub ext: Vec<String>,
+
+    /// テキスト扱いを強制する拡張子（カンマ区切り/複数指定可）
+    #[arg(long = "force-text-ext", value_delimiter = ',', help_heading = "フィルタ")]
+    pub force_text_ext: Vec<String>,
+
+    /// バイナリ扱いを強制する拡張子（カンマ区切り/複数指定可）
+    #[arg(long = "force-binary-ext", value_delimiter = ',', help_heading = "フィルタ")]
+    pub force_binary_ext: Vec<String>,
 
     /// 最大ファイルサイズ (例: 10K, 5MiB)
     #[arg(long, help_heading = "フィルタ")]
@@ -136,17 +157,33 @@ pub struct Args {
     #[arg(long, help_heading = "走査/入力")]
     pub hidden: bool,
 
+    /// パスの大小文字を区別せず巡回結果を重複排除
+    #[arg(long, help_heading = "走査/入力")]
+    pub case_insensitive_dedup: bool,
+
     /// シンボリックリンクを辿る
     #[arg(long, help_heading = "走査/入力")]
     pub follow: bool,
 
     /// .gitignore を尊重 (git ls-files ベース)
-    #[arg(long, help_heading = "走査/入力")]
+    #[arg(long, help_heading = "走査/入力", conflicts_with = "no_gitignore")]
     pub git: bool,
 
+    /// .gitignore を無視して巡回
+    #[arg(long, help_heading = "走査/入力", conflicts_with = "git")]
+    pub no_gitignore: bool,
+
     /// 並列数（1..=512）
-    #[arg(long, help_heading = "走査/入力")]
+    #[arg(long, value_parser = clap::value_parser!(usize), help_heading = "走査/入力")]
     pub jobs: Option<usize>,
+
+    /// ディレクトリ探索の最大深さ
+    #[arg(long = "max-depth", help_heading = "走査/入力")]
+    pub max_depth: Option<usize>,
+
+    /// ファイル探索に使うスレッド数（1..=512）
+    #[arg(long = "walk-threads", value_parser = clap::value_parser!(usize), help_heading = "走査/入力")]
+    pub walk_threads: Option<usize>,
 
     /// 既定の剪定を無効化
     #[arg(long, help_heading = "走査/入力")]
@@ -220,7 +257,7 @@ pub struct Args {
     #[arg(short = 'w', long, help_heading = "動作")]
     pub watch: bool,
 
-    /// 監視イベントのデバウンス/ポーリング間隔 (秒)
+    /// 監視イベントのデバウンス/ポーリング間隔 (秒)（1..=86400）
     #[arg(long, help_heading = "動作")]
     pub watch_interval: Option<u64>,
 

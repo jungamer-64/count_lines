@@ -1,3 +1,4 @@
+// crates/core/src/infrastructure/cache.rs
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
@@ -395,6 +396,11 @@ mod tests {
             hidden: false,
             follow: false,
             use_git: false,
+            respect_gitignore: true,
+            use_ignore_overrides: false,
+            case_insensitive_dedup: false,
+            max_depth: None,
+            enumerator_threads: None,
             jobs: None,
             no_default_prune: false,
             abs_path: false,
