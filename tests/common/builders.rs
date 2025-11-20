@@ -3,10 +3,15 @@
 use std::{path::PathBuf, time::Duration};
 
 use chrono::{DateTime, Local};
-use count_lines_core::domain::{
-    model::{FileEntry, FileMeta, FileStats, FileStatsV2},
-    value_objects::{
-        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+use count_lines_core::{
+    application::{ConfigOptions, FilterOptions},
+    domain::{
+        grouping::ByMode,
+        model::{FileEntry, FileMeta, FileStats, FileStatsV2},
+        options::{OutputFormat, SortKey, WatchOutput},
+        value_objects::{
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+        },
     },
 };
 
@@ -249,6 +254,290 @@ impl ConfigBuilder {
 }
 
 impl Default for ConfigBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// ConfigOptionsのテストビルダー
+#[allow(dead_code)]
+pub struct ConfigOptionsBuilder {
+    options: ConfigOptions,
+}
+
+#[allow(dead_code)]
+impl ConfigOptionsBuilder {
+    pub fn new() -> Self {
+        Self {
+            options: ConfigOptions {
+                format: OutputFormat::Json,
+                sort_specs: vec![],
+                top_n: None,
+                by: vec![],
+                summary_only: false,
+                total_only: false,
+                by_limit: None,
+                filters: FilterOptions::default(),
+                hidden: false,
+                follow: false,
+                use_git: false,
+                respect_gitignore: true,
+                use_ignore_overrides: false,
+                case_insensitive_dedup: false,
+                max_depth: None,
+                enumerator_threads: None,
+                jobs: Some(1),
+                no_default_prune: false,
+                abs_path: false,
+                abs_canonical: false,
+                trim_root: None,
+                words: false,
+                count_newlines_in_chars: false,
+                text_only: false,
+                fast_text_detect: false,
+                files_from: None,
+                files_from0: None,
+                paths: vec![PathBuf::from(".")],
+                mtime_since: None,
+                mtime_until: None,
+                total_row: false,
+                progress: false,
+                ratio: false,
+                output: None,
+                strict: false,
+                incremental: false,
+                cache_dir: None,
+                cache_verify: false,
+                clear_cache: false,
+                watch: false,
+                watch_interval: None,
+                watch_output: WatchOutput::Full,
+                compare: None,
+            },
+        }
+    }
+
+    pub fn format(mut self, format: OutputFormat) -> Self {
+        self.options.format = format;
+        self
+    }
+
+    pub fn sort_specs(mut self, specs: Vec<(SortKey, bool)>) -> Self {
+        self.options.sort_specs = specs;
+        self
+    }
+
+    pub fn top_n(mut self, n: usize) -> Self {
+        self.options.top_n = Some(n);
+        self
+    }
+
+    pub fn by(mut self, by: Vec<ByMode>) -> Self {
+        self.options.by = by;
+        self
+    }
+
+    pub fn summary_only(mut self) -> Self {
+        self.options.summary_only = true;
+        self
+    }
+
+    pub fn total_only(mut self) -> Self {
+        self.options.total_only = true;
+        self
+    }
+
+    pub fn by_limit(mut self, limit: usize) -> Self {
+        self.options.by_limit = Some(limit);
+        self
+    }
+
+    pub fn filters(mut self, filters: FilterOptions) -> Self {
+        self.options.filters = filters;
+        self
+    }
+
+    pub fn hidden(mut self, hidden: bool) -> Self {
+        self.options.hidden = hidden;
+        self
+    }
+
+    pub fn follow(mut self) -> Self {
+        self.options.follow = true;
+        self
+    }
+
+    pub fn use_git(mut self) -> Self {
+        self.options.use_git = true;
+        self
+    }
+
+    pub fn respect_gitignore(mut self, respect: bool) -> Self {
+        self.options.respect_gitignore = respect;
+        self
+    }
+
+    pub fn use_ignore_overrides(mut self) -> Self {
+        self.options.use_ignore_overrides = true;
+        self
+    }
+
+    pub fn case_insensitive_dedup(mut self) -> Self {
+        self.options.case_insensitive_dedup = true;
+        self
+    }
+
+    pub fn max_depth(mut self, depth: usize) -> Self {
+        self.options.max_depth = Some(depth);
+        self
+    }
+
+    pub fn enumerator_threads(mut self, threads: usize) -> Self {
+        self.options.enumerator_threads = Some(threads);
+        self
+    }
+
+    pub fn jobs(mut self, jobs: usize) -> Self {
+        self.options.jobs = Some(jobs);
+        self
+    }
+
+    pub fn no_default_prune(mut self, no_prune: bool) -> Self {
+        self.options.no_default_prune = no_prune;
+        self
+    }
+
+    pub fn abs_path(mut self) -> Self {
+        self.options.abs_path = true;
+        self
+    }
+
+    pub fn abs_canonical(mut self) -> Self {
+        self.options.abs_canonical = true;
+        self
+    }
+
+    pub fn trim_root(mut self, root: PathBuf) -> Self {
+        self.options.trim_root = Some(root);
+        self
+    }
+
+    pub fn words(mut self, words: bool) -> Self {
+        self.options.words = words;
+        self
+    }
+
+    pub fn count_newlines_in_chars(mut self) -> Self {
+        self.options.count_newlines_in_chars = true;
+        self
+    }
+
+    pub fn text_only(mut self) -> Self {
+        self.options.text_only = true;
+        self
+    }
+
+    pub fn fast_text_detect(mut self) -> Self {
+        self.options.fast_text_detect = true;
+        self
+    }
+
+    pub fn files_from(mut self, path: PathBuf) -> Self {
+        self.options.files_from = Some(path);
+        self
+    }
+
+    pub fn files_from0(mut self, path: PathBuf) -> Self {
+        self.options.files_from0 = Some(path);
+        self
+    }
+
+    pub fn paths(mut self, paths: Vec<PathBuf>) -> Self {
+        self.options.paths = paths;
+        self
+    }
+
+    pub fn mtime_since(mut self, since: DateTime<Local>) -> Self {
+        self.options.mtime_since = Some(since);
+        self
+    }
+
+    pub fn mtime_until(mut self, until: DateTime<Local>) -> Self {
+        self.options.mtime_until = Some(until);
+        self
+    }
+
+    pub fn total_row(mut self, total_row: bool) -> Self {
+        self.options.total_row = total_row;
+        self
+    }
+
+    pub fn progress(mut self) -> Self {
+        self.options.progress = true;
+        self
+    }
+
+    pub fn ratio(mut self) -> Self {
+        self.options.ratio = true;
+        self
+    }
+
+    pub fn output(mut self, path: PathBuf) -> Self {
+        self.options.output = Some(path);
+        self
+    }
+
+    pub fn strict(mut self, strict: bool) -> Self {
+        self.options.strict = strict;
+        self
+    }
+
+    pub fn incremental(mut self) -> Self {
+        self.options.incremental = true;
+        self
+    }
+
+    pub fn cache_dir(mut self, dir: PathBuf) -> Self {
+        self.options.cache_dir = Some(dir);
+        self
+    }
+
+    pub fn cache_verify(mut self) -> Self {
+        self.options.cache_verify = true;
+        self
+    }
+
+    pub fn clear_cache(mut self) -> Self {
+        self.options.clear_cache = true;
+        self
+    }
+
+    pub fn watch(mut self, watch: bool) -> Self {
+        self.options.watch = watch;
+        self
+    }
+
+    pub fn watch_interval(mut self, seconds: u64) -> Self {
+        self.options.watch_interval = Some(seconds);
+        self
+    }
+
+    pub fn watch_output(mut self, output: WatchOutput) -> Self {
+        self.options.watch_output = output;
+        self
+    }
+
+    pub fn compare(mut self, old: PathBuf, new: PathBuf) -> Self {
+        self.options.compare = Some((old, new));
+        self
+    }
+
+    pub fn build(self) -> ConfigOptions {
+        self.options
+    }
+}
+
+impl Default for ConfigOptionsBuilder {
     fn default() -> Self {
         Self::new()
     }
