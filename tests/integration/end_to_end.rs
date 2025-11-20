@@ -2,7 +2,7 @@
 use std::{fs, path::Path};
 
 use count_lines_core::{
-    application::{ConfigOptions, ConfigQueryService, FilterOptions},
+    application::ConfigQueryService,
     domain::{
         grouping::ByMode,
         options::{OutputFormat, SortKey},
@@ -13,55 +13,7 @@ use serde_json::Value;
 
 #[path = "../common/mod.rs"]
 mod common;
-use common::{FileStatsBuilder, TempDir, TempWorkspace, assert_stats};
-
-fn base_options(root: &Path) -> ConfigOptions {
-    ConfigOptions {
-        format: OutputFormat::Json,
-        sort_specs: vec![],
-        top_n: None,
-        by: vec![],
-        summary_only: false,
-        total_only: false,
-        by_limit: None,
-        filters: FilterOptions::default(),
-        hidden: false,
-        follow: false,
-        use_git: false,
-        respect_gitignore: true,
-        use_ignore_overrides: false,
-        case_insensitive_dedup: false,
-        max_depth: None,
-        enumerator_threads: None,
-        jobs: Some(1),
-        no_default_prune: true,
-        abs_path: false,
-        abs_canonical: false,
-        trim_root: None,
-        words: false,
-        count_newlines_in_chars: false,
-        text_only: false,
-        fast_text_detect: false,
-        files_from: None,
-        files_from0: None,
-        paths: vec![root.to_path_buf()],
-        mtime_since: None,
-        mtime_until: None,
-        total_row: false,
-        progress: false,
-        ratio: false,
-        output: None,
-        strict: false,
-        incremental: false,
-        cache_dir: None,
-        cache_verify: false,
-        clear_cache: false,
-        watch: false,
-        watch_interval: None,
-        watch_output: count_lines_core::domain::options::WatchOutput::Full,
-        compare: None,
-    }
-}
+use common::{ConfigOptionsBuilder, FileStatsBuilder, TempDir, TempWorkspace, assert_stats};
 
 fn read_json(path: &Path) -> Value {
     let contents = fs::read_to_string(path).expect("output exists");
@@ -75,14 +27,17 @@ fn end_to_end_generates_expected_json() {
     temp.write_file("README.md", "# Count Lines\nMore text\n");
 
     let output_path = temp.path().join("result.json");
-    let mut options = base_options(temp.path());
-    options.format = OutputFormat::Json;
-    options.sort_specs = vec![(SortKey::Lines, true)];
-    options.by = vec![ByMode::Ext];
-    options.hidden = true;
-    options.words = true;
-    options.output = Some(output_path.clone());
-    options.strict = true;
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![temp.path().to_path_buf()])
+        .no_default_prune(true)
+        .format(OutputFormat::Json)
+        .sort_specs(vec![(SortKey::Lines, true)])
+        .by(vec![ByMode::Ext])
+        .hidden(true)
+        .words(true)
+        .output(output_path.clone())
+        .strict(true)
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     run_with_config(config).expect("run succeeds");
@@ -113,14 +68,17 @@ fn end_to_end_with_value_objects() {
 
     let output_path = workspace.path().join("output.json");
 
-    let mut options = base_options(workspace.path());
-    options.format = OutputFormat::Json;
-    options.sort_specs = vec![(SortKey::Lines, true)];
-    options.by = vec![ByMode::Ext];
-    options.hidden = false;
-    options.words = true;
-    options.output = Some(output_path.clone());
-    options.strict = true;
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![workspace.path().to_path_buf()])
+        .no_default_prune(true)
+        .format(OutputFormat::Json)
+        .sort_specs(vec![(SortKey::Lines, true)])
+        .by(vec![ByMode::Ext])
+        .hidden(false)
+        .words(true)
+        .output(output_path.clone())
+        .strict(true)
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config should build");
     run_with_config(config).expect("analysis should succeed");
@@ -162,8 +120,11 @@ fn strict_mode_behavior_on_error() {
         temp.write_file("valid.txt", "content");
     }
 
-    let mut options = base_options(temp.path());
-    options.strict = true;
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![temp.path().to_path_buf()])
+        .no_default_prune(true)
+        .strict(true)
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     let result = run_with_config(config);
@@ -184,13 +145,15 @@ fn filtering_by_lines_range() {
 
     let output_path = temp.path().join("output.json");
 
-    let mut filters = FilterOptions::default();
-    filters.min_lines = Some(3);
-    filters.max_lines = Some(7);
+    use count_lines_core::application::FilterOptions;
+    let filters = FilterOptions { min_lines: Some(3), max_lines: Some(7), ..Default::default() };
 
-    let mut options = base_options(temp.path());
-    options.filters = filters;
-    options.output = Some(output_path.clone());
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![temp.path().to_path_buf()])
+        .no_default_prune(true)
+        .filters(filters)
+        .output(output_path.clone())
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     run_with_config(config).expect("analysis succeeds");
@@ -211,9 +174,12 @@ fn sorting_with_multiple_keys() {
 
     let output_path = temp.path().join("sorted.json");
 
-    let mut options = base_options(temp.path());
-    options.sort_specs = vec![(SortKey::Lines, true), (SortKey::Name, false)];
-    options.output = Some(output_path.clone());
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![temp.path().to_path_buf()])
+        .no_default_prune(true)
+        .sort_specs(vec![(SortKey::Lines, true), (SortKey::Name, false)])
+        .output(output_path.clone())
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     run_with_config(config).expect("analysis succeeds");
@@ -251,11 +217,13 @@ fn performance_large_file_set() {
         temp.create_file(&format!("file_{:03}.txt", i), &content);
     }
 
-    let mut options = base_options(temp.path());
-    options.format = OutputFormat::Json;
-    options.sort_specs = vec![(SortKey::Lines, true)];
-    options.top_n = Some(10);
-    options.output = None;
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![temp.path().to_path_buf()])
+        .no_default_prune(true)
+        .format(OutputFormat::Json)
+        .sort_specs(vec![(SortKey::Lines, true)])
+        .top_n(10)
+        .build();
 
     let start = Instant::now();
     let config = ConfigQueryService::build(options).unwrap();

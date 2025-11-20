@@ -1,11 +1,8 @@
 // tests/integration/output_formats.rs
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
+use std::fs;
 
 use count_lines_core::{
-    application::{ConfigOptions, ConfigQueryService, FilterOptions},
+    application::ConfigQueryService,
     domain::{
         grouping::ByMode,
         options::{OutputFormat, SortKey},
@@ -15,55 +12,7 @@ use count_lines_core::{
 
 #[path = "../common/mod.rs"]
 mod common;
-use common::TempDir;
-
-fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOptions {
-    ConfigOptions {
-        format,
-        sort_specs: vec![(SortKey::Lines, true)],
-        top_n: None,
-        by: vec![ByMode::Ext],
-        summary_only: false,
-        total_only: false,
-        by_limit: None,
-        filters: FilterOptions::default(),
-        hidden: true,
-        follow: false,
-        use_git: false,
-        respect_gitignore: true,
-        use_ignore_overrides: false,
-        case_insensitive_dedup: false,
-        max_depth: None,
-        enumerator_threads: None,
-        jobs: Some(1),
-        no_default_prune: true,
-        abs_path: false,
-        abs_canonical: false,
-        trim_root: None,
-        words: true,
-        count_newlines_in_chars: false,
-        text_only: false,
-        fast_text_detect: false,
-        files_from: None,
-        files_from0: None,
-        paths: vec![root.to_path_buf()],
-        mtime_since: None,
-        mtime_until: None,
-        total_row: true,
-        progress: false,
-        ratio: false,
-        output: Some(output),
-        strict: true,
-        incremental: false,
-        cache_dir: None,
-        cache_verify: false,
-        clear_cache: false,
-        watch: false,
-        watch_interval: None,
-        watch_output: count_lines_core::domain::options::WatchOutput::Full,
-        compare: None,
-    }
-}
+use common::{ConfigOptionsBuilder, TempDir};
 
 fn setup_fixture(temp: &TempDir) {
     temp.write_file("src/lib.rs", "fn main() {\n    println!(\"hello\");\n}\n");
@@ -75,7 +24,18 @@ fn csv_output_contains_header_and_total_row() {
     let temp = TempDir::new("csv", "count_lines_output_formats");
     setup_fixture(&temp);
     let output_path = temp.path().join("report.csv");
-    let options = build_options(temp.path(), output_path.clone(), OutputFormat::Csv);
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![temp.path().to_path_buf()])
+        .no_default_prune(true)
+        .format(OutputFormat::Csv)
+        .sort_specs(vec![(SortKey::Lines, true)])
+        .by(vec![ByMode::Ext])
+        .hidden(true)
+        .words(true)
+        .total_row(true)
+        .output(output_path.clone())
+        .strict(true)
+        .build();
     let config = ConfigQueryService::build(options).expect("config builds");
 
     run_with_config(config).expect("run succeeds");
@@ -91,7 +51,18 @@ fn markdown_output_renders_table_and_group() {
     let temp = TempDir::new("markdown", "count_lines_output_formats");
     setup_fixture(&temp);
     let output_path = temp.path().join("report.md");
-    let options = build_options(temp.path(), output_path.clone(), OutputFormat::Md);
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![temp.path().to_path_buf()])
+        .no_default_prune(true)
+        .format(OutputFormat::Md)
+        .sort_specs(vec![(SortKey::Lines, true)])
+        .by(vec![ByMode::Ext])
+        .hidden(true)
+        .words(true)
+        .total_row(true)
+        .output(output_path.clone())
+        .strict(true)
+        .build();
     let config = ConfigQueryService::build(options).expect("config builds");
 
     run_with_config(config).expect("run succeeds");

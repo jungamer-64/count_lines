@@ -1,6 +1,6 @@
 // crates/core/src/application/queries/config/queries/config_query_service.rs
-use std::{collections::HashSet, time::Duration};
 use std::thread;
+use std::{collections::HashSet, time::Duration};
 
 const MAX_THREADS: usize = 512;
 const MAX_WATCH_SECS: u64 = 86_400; // 24h safety cap
@@ -35,8 +35,7 @@ impl ConfigQueryService {
         let paths = Self::normalize_paths(query.paths);
         let by_modes = Self::convert_by_modes(&query.by);
         let incremental = query.incremental || query.watch;
-        let enumerator_threads =
-            query.enumerator_threads.map(|n| n.clamp(1, MAX_THREADS));
+        let enumerator_threads = query.enumerator_threads.map(|n| n.clamp(1, MAX_THREADS));
 
         Ok(Config {
             format: query.format,

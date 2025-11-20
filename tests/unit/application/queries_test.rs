@@ -2,69 +2,31 @@
 use std::path::PathBuf;
 
 use count_lines_core::{
-    application::{ConfigOptions, ConfigQueryService, FilterOptions},
+    application::{ConfigQueryService, FilterOptions},
     domain::{
         config::ByKey,
         grouping::ByMode,
-        options::{OutputFormat, SortKey},
+        options::SortKey,
     },
 };
 
-fn base_options() -> ConfigOptions {
-    ConfigOptions {
-        format: OutputFormat::Json,
-        sort_specs: Vec::new(),
-        top_n: None,
-        by: vec![],
-        summary_only: false,
-        total_only: false,
-        by_limit: None,
-        filters: FilterOptions::default(),
-        hidden: false,
-        follow: false,
-        use_git: false,
-        respect_gitignore: true,
-        use_ignore_overrides: false,
-        case_insensitive_dedup: false,
-        max_depth: None,
-        enumerator_threads: None,
-        jobs: None,
-        no_default_prune: false,
-        abs_path: false,
-        abs_canonical: false,
-        trim_root: None,
-        words: false,
-        count_newlines_in_chars: false,
-        text_only: false,
-        fast_text_detect: false,
-        files_from: None,
-        files_from0: None,
-        paths: Vec::new(),
-        mtime_since: None,
-        mtime_until: None,
-        total_row: false,
-        progress: false,
-        ratio: false,
-        output: None,
-        strict: false,
-        incremental: false,
-        cache_dir: None,
-        cache_verify: false,
-        clear_cache: false,
-        watch: false,
-        watch_interval: None,
-        watch_output: count_lines_core::domain::options::WatchOutput::Full,
-        compare: None,
-    }
-}
+#[path = "../../common/mod.rs"]
+mod common;
+use common::ConfigOptionsBuilder;
 
 #[test]
 fn build_sets_defaults_and_enables_words_when_required() {
-    let mut options = base_options();
-    options.by = vec![ByMode::Ext, ByMode::None];
-    options.filters.min_words = Some(5);
-    options.abs_canonical = true;
-    options.sort_specs = vec![(SortKey::Lines, true)];
+    let filters = FilterOptions { min_words: Some(5), ..Default::default() };
+
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(0)
+        .no_default_prune(false)
+        .by(vec![ByMode::Ext, ByMode::None])
+        .filters(filters)
+        .abs_canonical()
+        .sort_specs(vec![(SortKey::Lines, true)])
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(config.words, "word counting should activate for min_words filter");
@@ -76,9 +38,14 @@ fn build_sets_defaults_and_enables_words_when_required() {
 
 #[test]
 fn build_errors_on_invalid_filter_expression() {
-    let mut options = base_options();
-    options.paths = vec![PathBuf::from("src")];
-    options.filters.include.push("[".into());
+    let filters = FilterOptions { include: vec!["[".into()], ..Default::default() };
+
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![PathBuf::from("src")])
+        .jobs(0)
+        .no_default_prune(false)
+        .filters(filters)
+        .build();
 
     let err = ConfigQueryService::build(options).expect_err("invalid filter should error");
     assert!(err.to_string().contains("Invalid pattern"));
@@ -86,8 +53,12 @@ fn build_errors_on_invalid_filter_expression() {
 
 #[test]
 fn size_sort_does_not_enable_word_counting() {
-    let mut options = base_options();
-    options.sort_specs = vec![(SortKey::Size, true)];
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(0)
+        .no_default_prune(false)
+        .sort_specs(vec![(SortKey::Size, true)])
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(!config.words, "size sorting should not enable word counting");
@@ -96,9 +67,13 @@ fn size_sort_does_not_enable_word_counting() {
 
 #[test]
 fn watch_enables_incremental_and_defaults_interval() {
-    let mut options = base_options();
-    options.watch = true;
-    options.watch_interval = Some(3);
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(0)
+        .no_default_prune(false)
+        .watch(true)
+        .watch_interval(3)
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(config.watch, "watch should be enabled");
@@ -108,8 +83,8 @@ fn watch_enables_incremental_and_defaults_interval() {
 
 #[test]
 fn watch_interval_clamps_to_minimum() {
-    let mut options = base_options();
-    options.watch_interval = Some(0);
+    let options =
+        ConfigOptionsBuilder::new().paths(vec![]).jobs(0).no_default_prune(false).watch_interval(0).build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert_eq!(config.watch_interval, std::time::Duration::from_secs(1));
@@ -117,8 +92,7 @@ fn watch_interval_clamps_to_minimum() {
 
 #[test]
 fn jobs_option_is_clamped_to_at_least_one() {
-    let mut options = base_options();
-    options.jobs = Some(0);
+    let options = ConfigOptionsBuilder::new().paths(vec![]).jobs(0).no_default_prune(false).build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert_eq!(config.jobs, 1);
@@ -126,9 +100,13 @@ fn jobs_option_is_clamped_to_at_least_one() {
 
 #[test]
 fn jobs_and_enumerator_threads_are_clamped_to_upper_bound() {
-    let mut options = base_options();
-    options.jobs = Some(10_000);
-    options.enumerator_threads = Some(2_000);
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(10_000)
+        .enumerator_threads(2_000)
+        .no_default_prune(false)
+        .build();
+
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(config.jobs <= 512);
     assert_eq!(config.enumerator_threads, Some(512));
@@ -136,18 +114,29 @@ fn jobs_and_enumerator_threads_are_clamped_to_upper_bound() {
 
 #[test]
 fn watch_interval_is_capped_to_24h() {
-    let mut options = base_options();
-    options.watch = true;
-    options.watch_interval = Some(1_000_000);
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(0)
+        .no_default_prune(false)
+        .watch(true)
+        .watch_interval(1_000_000)
+        .build();
+
     let config = ConfigQueryService::build(options).expect("config builds");
     assert_eq!(config.watch_interval, std::time::Duration::from_secs(86_400));
 }
 
 #[test]
 fn force_exts_are_lowercased_and_deduped() {
-    let mut options = base_options();
-    options.filters.force_text_exts = vec!["MD".into(), "md".into()];
-    options.filters.force_binary_exts = vec!["DaT".into(), "dat".into()];
+    let filters = FilterOptions {
+        force_text_exts: vec!["MD".into(), "md".into()],
+        force_binary_exts: vec!["DaT".into(), "dat".into()],
+        ..Default::default()
+    };
+
+    let options =
+        ConfigOptionsBuilder::new().paths(vec![]).jobs(0).no_default_prune(false).filters(filters).build();
+
     let config = ConfigQueryService::build(options).expect("config builds");
     assert_eq!(config.filters.force_text_exts, vec!["md"]);
     assert_eq!(config.filters.force_binary_exts, vec!["dat"]);
@@ -155,17 +144,26 @@ fn force_exts_are_lowercased_and_deduped() {
 
 #[test]
 fn enumerator_controls_are_populated() {
-    let mut options = base_options();
-    options.case_insensitive_dedup = true;
-    options.respect_gitignore = false;
-    options.max_depth = Some(5);
-    options.enumerator_threads = Some(7);
-    options.use_ignore_overrides = true;
-    options.filters.overrides_include = vec!["dist/**".into()];
-    options.filters.overrides_exclude = vec!["build/**".into()];
-    options.filters.force_text_exts = vec!["Md".into()];
-    options.filters.force_binary_exts = vec!["DATA".into()];
-    options.filters.exclude_dir_only = vec!["**/generated/**".into()];
+    let filters = FilterOptions {
+        overrides_include: vec!["dist/**".into()],
+        overrides_exclude: vec!["build/**".into()],
+        force_text_exts: vec!["Md".into()],
+        force_binary_exts: vec!["DATA".into()],
+        exclude_dir_only: vec!["**/generated/**".into()],
+        ..Default::default()
+    };
+
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(0)
+        .no_default_prune(false)
+        .case_insensitive_dedup()
+        .respect_gitignore(false)
+        .max_depth(5)
+        .enumerator_threads(7)
+        .use_ignore_overrides()
+        .filters(filters)
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(config.case_insensitive_dedup);
@@ -183,9 +181,15 @@ fn enumerator_controls_are_populated() {
 
 #[test]
 fn cache_dir_is_normalised_and_extensions_are_lowercased() {
-    let mut options = base_options();
-    options.cache_dir = Some(PathBuf::from("tmp/cache"));
-    options.filters.ext = Some(".rs,  .JS ,, ".into());
+    let filters = FilterOptions { ext: Some(".rs,  .JS ,, ".into()), ..Default::default() };
+
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(0)
+        .no_default_prune(false)
+        .cache_dir(PathBuf::from("tmp/cache"))
+        .filters(filters)
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     let ext_filters: std::collections::HashSet<_> = config.filters.ext_filters.iter().cloned().collect();
@@ -197,8 +201,11 @@ fn cache_dir_is_normalised_and_extensions_are_lowercased() {
 
 #[test]
 fn paths_are_preserved_when_provided() {
-    let mut options = base_options();
-    options.paths = vec![PathBuf::from("src"), PathBuf::from("tests")];
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![PathBuf::from("src"), PathBuf::from("tests")])
+        .jobs(0)
+        .no_default_prune(false)
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert_eq!(config.paths, vec![PathBuf::from("src"), PathBuf::from("tests")]);
@@ -206,8 +213,12 @@ fn paths_are_preserved_when_provided() {
 
 #[test]
 fn sorting_by_words_enables_word_counting() {
-    let mut options = base_options();
-    options.sort_specs = vec![(SortKey::Words, false)];
+    let options = ConfigOptionsBuilder::new()
+        .paths(vec![])
+        .jobs(0)
+        .no_default_prune(false)
+        .sort_specs(vec![(SortKey::Words, false)])
+        .build();
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(config.words, "sorting by words should enable word counting");
