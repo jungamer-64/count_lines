@@ -24,7 +24,6 @@ fn base_options() -> ConfigOptions {
         follow: false,
         use_git: false,
         respect_gitignore: true,
-        use_ignore_overrides: false,
         case_insensitive_dedup: false,
         max_depth: None,
         enumerator_threads: None,
@@ -160,7 +159,6 @@ fn enumerator_controls_are_populated() {
     options.respect_gitignore = false;
     options.max_depth = Some(5);
     options.enumerator_threads = Some(7);
-    options.use_ignore_overrides = true;
     options.filters.overrides_include = vec!["dist/**".into()];
     options.filters.overrides_exclude = vec!["build/**".into()];
     options.filters.force_text_exts = vec!["Md".into()];
@@ -185,7 +183,7 @@ fn enumerator_controls_are_populated() {
 fn cache_dir_is_normalised_and_extensions_are_lowercased() {
     let mut options = base_options();
     options.cache_dir = Some(PathBuf::from("tmp/cache"));
-    options.filters.ext = Some(".rs,  .JS ,, ".into());
+    options.filters.ext = vec![".rs,  .JS ,, ".into()];
 
     let config = ConfigQueryService::build(options).expect("config builds");
     let ext_filters: std::collections::HashSet<_> = config.filters.ext_filters.iter().cloned().collect();

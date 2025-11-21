@@ -93,7 +93,6 @@ fn patterns_to_strings(patterns: &[crate::domain::config::value_objects::GlobPat
 mod tests {
     use count_lines_domain::options::OutputFormat;
 
-    use super::*;
     use crate::application::queries::config::{
         commands::{ConfigOptions, FilterOptions},
         queries::ConfigQueryService,
@@ -109,12 +108,11 @@ mod tests {
             total_only: false,
             by_limit: None,
             filters: FilterOptions::default(),
-            hidden: false,
-            follow: false,
-            use_git: false,
-            respect_gitignore: true,
-            use_ignore_overrides: false,
-            case_insensitive_dedup: false,
+        hidden: false,
+        follow: false,
+        use_git: false,
+        respect_gitignore: true,
+        case_insensitive_dedup: false,
             max_depth: None,
             enumerator_threads: None,
             jobs: Some(1),
@@ -154,7 +152,6 @@ mod tests {
         options.respect_gitignore = false;
         options.max_depth = Some(4);
         options.enumerator_threads = Some(6);
-        options.use_ignore_overrides = true;
         options.filters.overrides_include = vec!["dist/**".into()];
         options.filters.overrides_exclude = vec!["build/**".into()];
         options.filters.force_text_exts = vec!["md".into()];

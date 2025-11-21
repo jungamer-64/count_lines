@@ -25,7 +25,6 @@ pub struct ConfigOptions {
     pub follow: bool,
     pub use_git: bool,
     pub respect_gitignore: bool,
-    pub use_ignore_overrides: bool,
     pub case_insensitive_dedup: bool,
     pub max_depth: Option<usize>,
     pub enumerator_threads: Option<usize>,

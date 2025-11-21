@@ -13,20 +13,41 @@ use crate::{
 
 /// 行単位でファイルを計測
 pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option<FileStatsV2> {
-    let reader = FileReader::open_buffered(path).ok()?;
+    let mut reader = FileReader::open_buffered(path).ok()?;
 
     let mut line_count = 0;
     let mut char_count = 0;
     let mut word_count = 0;
 
-    for line_result in reader.lines() {
-        let line = line_result.ok()?;
-
+    let mut line = String::new();
+    loop {
+        line.clear();
+        match reader.read_line(&mut line) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(_) => return None,
+        }
+        if config.text_only && line.contains('\0') {
+            return None;
+        }
         line_count += 1;
-        char_count += line.chars().count();
+        let total_chars = line.chars().count();
+        let mut without_newline = line.as_str();
+        if without_newline.ends_with('\n') {
+            without_newline = &without_newline[..without_newline.len() - 1];
+            if without_newline.ends_with('\r') {
+                without_newline = &without_newline[..without_newline.len() - 1];
+            }
+        }
+        let base_chars = without_newline.chars().count();
+        if config.count_newlines_in_chars {
+            char_count += total_chars;
+        } else {
+            char_count += base_chars;
+        }
 
         if config.words {
-            word_count += line.split_whitespace().count();
+            word_count += without_newline.split_whitespace().count();
         }
     }
 

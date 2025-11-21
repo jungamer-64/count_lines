@@ -1,6 +1,6 @@
 [package]
 name = "count_lines"
-version = "0.7.0"
+version = "0.8.0"
 edition = "2024"
 description = "ファイル行数/文字数/単語数の集計ツール (拡張版)"
 license = "MIT OR Apache-2.0"

@@ -31,7 +31,6 @@ fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOp
         follow: false,
         use_git: false,
         respect_gitignore: true,
-        use_ignore_overrides: false,
         case_insensitive_dedup: false,
         max_depth: None,
         enumerator_threads: None,

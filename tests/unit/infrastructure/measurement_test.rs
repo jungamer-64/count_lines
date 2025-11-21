@@ -13,10 +13,7 @@ use count_lines_core::{
     },
     infrastructure::{
         filesystem::services::metadata_loader::FileMetadataLoader,
-        measurement::{
-            measure_entries,
-            strategies::{measure_by_lines, measure_entire_file},
-        },
+        measurement::{measure_entries, strategies::measure_by_lines},
     },
 };
 use serde_json::Value;
@@ -136,27 +133,27 @@ fn line_based_measurement_counts_crlf_and_words() {
 }
 
 #[test]
-fn byte_based_measurement_counts_newlines() {
+fn line_based_measurement_counts_newlines_when_requested() {
     let file = TempFile::new("measurement_byte", b"one\ntwo");
     let mut config = base_config();
     config.count_newlines_in_chars = true;
     config.words = true;
 
     let stats =
-        measure_entire_file(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
+        measure_by_lines(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
     assert_eq!(stats.lines().value(), 2);
     assert_eq!(stats.chars().value(), 7);
     assert_eq!(stats.words().map(|w| w.value()), Some(2));
 }
 
 #[test]
-fn byte_based_measurement_respects_text_only_flag() {
+fn line_based_measurement_respects_text_only_flag() {
     let file = TempFile::new("measurement_binary", b"text\0binary");
     let mut config = base_config();
     config.count_newlines_in_chars = true;
     config.text_only = true;
 
-    let result = measure_entire_file(&file.path, &make_meta(&file.path), &config);
+    let result = measure_by_lines(&file.path, &make_meta(&file.path), &config);
     assert!(result.is_none());
 }
 

@@ -12,7 +12,7 @@ pub struct FilterOptions {
     pub overrides_exclude: Vec<String>,
     pub force_text_exts: Vec<String>,
     pub force_binary_exts: Vec<String>,
-    pub ext: Option<String>,
+    pub ext: Vec<String>,
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
     pub min_lines: Option<usize>,

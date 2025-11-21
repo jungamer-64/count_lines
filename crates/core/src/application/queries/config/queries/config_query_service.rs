@@ -27,6 +27,7 @@ impl ConfigQueryService {
     /// options are invalid and cannot be materialised into a domain `Config`.
     pub fn build(query: ConfigOptions) -> Result<Config> {
         let filters = Self::build_filters(&query.filters)?;
+        let use_ignore_overrides = Self::has_ignore_overrides(&filters);
         let jobs = Self::determine_jobs(&query);
         let words = Self::should_enable_words(&query, &filters);
         let (abs_path, trim_root) = Self::abs_and_trim(&query);
@@ -52,7 +53,7 @@ impl ConfigQueryService {
             use_git: query.use_git,
             case_insensitive_dedup: query.case_insensitive_dedup,
             respect_gitignore: query.respect_gitignore,
-            use_ignore_overrides: query.use_ignore_overrides,
+            use_ignore_overrides,
             jobs,
             no_default_prune: query.no_default_prune,
             max_depth: query.max_depth,
@@ -116,7 +117,7 @@ impl ConfigQueryService {
             exclude_paths: parse_patterns(&options.exclude_path)?,
             exclude_dirs: parse_patterns(&options.exclude_dir)?,
             exclude_dirs_only: parse_patterns(&options.exclude_dir_only)?,
-            ext_filters: Self::parse_extensions(options.ext.as_deref()),
+            ext_filters: Self::parse_extensions(&options.ext),
             overrides_include: options.overrides_include.clone(),
             overrides_exclude: options.overrides_exclude.clone(),
             // 小文字化＋重複排除で安定化
@@ -128,6 +129,10 @@ impl ConfigQueryService {
             words_range: Range::new(options.min_words, options.max_words),
             filter_ast,
         })
+    }
+
+    fn has_ignore_overrides(filters: &Filters) -> bool {
+        !filters.overrides_include.is_empty() || !filters.overrides_exclude.is_empty()
     }
 
     fn dedup_lower(list: &[String]) -> Vec<String> {
@@ -142,16 +147,21 @@ impl ConfigQueryService {
         out
     }
 
-    fn parse_extensions(ext_arg: Option<&str>) -> HashSet<String> {
-        ext_arg
-            .map(|s| {
-                s.split(',')
-                    .map(str::trim)
-                    .filter(|e| !e.is_empty())
-                    .map(|ext| ext.trim_start_matches('.').to_ascii_lowercase())
-                    .collect()
-            })
-            .unwrap_or_default()
+    fn parse_extensions(exts: &[String]) -> HashSet<String> {
+        let mut set = HashSet::with_capacity(exts.len());
+        for ext in exts {
+            for token in ext.split(',') {
+                let trimmed = token.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                let normalized = trimmed.trim_start_matches('.').to_ascii_lowercase();
+                if !normalized.is_empty() {
+                    set.insert(normalized);
+                }
+            }
+        }
+        set
     }
 
     fn should_enable_words(query: &ConfigOptions, filters: &Filters) -> bool {

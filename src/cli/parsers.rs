@@ -1,4 +1,5 @@
 use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, TimeZone};
+use std::{fmt::Display, str::FromStr};
 
 /// Wrapper type to parse sizes with optional suffixes (e.g. 10K, 5MiB).
 #[derive(Debug, Clone, Copy)]
@@ -71,6 +72,38 @@ fn try_date_format(s: &str) -> Option<DateTimeArg> {
         .map(DateTimeArg)
 }
 
+fn parse_bounded_number<T>(s: &str, min: T, max: Option<T>) -> Result<T, String>
+where
+    T: Copy + PartialOrd + Display + FromStr,
+    <T as FromStr>::Err: Display,
+{
+    let value = s.parse::<T>().map_err(|err| format!("invalid number '{s}': {err}"))?;
+    if value < min {
+        return Err(format!("value must be at least {min}"));
+    }
+    if let Some(max_bound) = max {
+        if value > max_bound {
+            return Err(format!("value must be at most {max_bound}"));
+        }
+    }
+    Ok(value)
+}
+
+/// Parse a positive `usize` (>= 1) from CLI input.
+pub fn parse_positive_usize(s: &str) -> Result<usize, String> {
+    parse_bounded_number(s, 1, None)
+}
+
+/// Parse a `usize` constrained to the inclusive range [1, 512].
+pub fn parse_usize_1_to_512(s: &str) -> Result<usize, String> {
+    parse_bounded_number(s, 1, Some(512))
+}
+
+/// Parse a positive `u64` (>= 1) from CLI input.
+pub fn parse_positive_u64(s: &str) -> Result<u64, String> {
+    parse_bounded_number(s, 1, None)
+}
+
 #[cfg(test)]
 mod tests {
     use chrono::{NaiveDate, NaiveTime, Utc};
@@ -127,5 +160,18 @@ mod tests {
     fn datetime_arg_rejects_nonsense() {
         let err = "nonsense".parse::<DateTimeArg>().expect_err("invalid datetime should fail");
         assert!(err.contains("Cannot parse datetime"));
+    }
+
+    #[test]
+    fn bounded_parser_enforces_minimum_and_maximum() {
+        assert_eq!(parse_positive_usize("3").unwrap(), 3);
+        assert!(parse_positive_usize("0").is_err());
+
+        assert_eq!(parse_usize_1_to_512("512").unwrap(), 512);
+        assert!(parse_usize_1_to_512("0").is_err());
+        assert!(parse_usize_1_to_512("700").is_err());
+
+        assert_eq!(parse_positive_u64("42").unwrap(), 42);
+        assert!(parse_positive_u64("0").is_err());
     }
 }

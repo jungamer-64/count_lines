@@ -101,6 +101,13 @@ struct CacheFile {
     entries: HashMap<String, CacheEntry>,
 }
 
+#[derive(Serialize)]
+struct CacheFileRef<'a> {
+    version: u32,
+    signature: &'a CacheSignature,
+    entries: &'a HashMap<String, CacheEntry>,
+}
+
 pub struct CacheStore {
     path: Option<PathBuf>,
     signature: CacheSignature,
@@ -175,12 +182,7 @@ impl CacheStore {
             return Ok(());
         };
 
-        let file = CacheFile {
-            version: CACHE_VERSION,
-            signature: self.signature.clone(),
-            entries: self.entries.clone(),
-        };
-        let data = serde_json::to_vec_pretty(&file)?;
+        let file = CacheFileRef { version: CACHE_VERSION, signature: &self.signature, entries: &self.entries };
         let tmp_path = path.with_extension("tmp");
         if let Some(parent) = path.parent()
             && let Err(err) = fs::create_dir_all(parent)
@@ -200,9 +202,25 @@ impl CacheStore {
             .lock_exclusive()
             .map_err(|err| InfrastructureError::FileWrite { path: lock_path.clone(), source: err })?;
 
-        // Write atomically while holding the lock
-        write_tmp_and_rename(&tmp_path, path, &data)
+        let mut tmp_file = fs::File::create(&tmp_path)
             .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
+        {
+            let mut writer = io::BufWriter::new(&mut tmp_file);
+            serde_json::to_writer_pretty(&mut writer, &file).map_err(|err| {
+                InfrastructureError::FileWrite {
+                    path: tmp_path.clone(),
+                    source: io::Error::new(io::ErrorKind::Other, err),
+                }
+            })?;
+            writer
+                .flush()
+                .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
+        }
+        tmp_file
+            .sync_all()
+            .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
+        fs::rename(&tmp_path, path)
+            .map_err(|err| InfrastructureError::FileWrite { path: path.clone(), source: err })?;
 
         // release lock and remove lock file if possible
         let _ = lock_file.unlock();
@@ -297,17 +315,6 @@ fn ensure_dir(path: &Path) -> io::Result<()> {
     fs::create_dir_all(path)
 }
 
-fn write_tmp_and_rename(tmp_path: &Path, final_path: &Path, data: &[u8]) -> std::io::Result<()> {
-    if let Some(parent) = final_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let mut file = fs::File::create(tmp_path)?;
-    file.write_all(data)?;
-    file.flush()?;
-    fs::rename(tmp_path, final_path)?;
-    Ok(())
-}
-
 fn cache_file_name(config: &Config) -> String {
     let hash = workspace_hash(config);
     format!("count_lines-cache-{hash:016x}.json")
@@ -393,12 +400,11 @@ mod tests {
             total_only: false,
             by_limit: None,
             filters: FilterOptions::default(),
-            hidden: false,
-            follow: false,
-            use_git: false,
-            respect_gitignore: true,
-            use_ignore_overrides: false,
-            case_insensitive_dedup: false,
+        hidden: false,
+        follow: false,
+        use_git: false,
+        respect_gitignore: true,
+        case_insensitive_dedup: false,
             max_depth: None,
             enumerator_threads: None,
             jobs: None,

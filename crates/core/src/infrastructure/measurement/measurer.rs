@@ -26,7 +26,7 @@ use crate::{
     error::{InfrastructureError, Result},
     infrastructure::{
         cache::CacheStore,
-        measurement::strategies::{measure_by_lines, measure_entire_file},
+        measurement::strategies::measure_by_lines,
     },
 };
 
@@ -220,13 +220,7 @@ impl FileMeasurer {
     }
 
     fn compute_stats(entry: &FileEntry, config: &Config) -> Result<FileStatsV2> {
-        let result = if config.count_newlines_in_chars {
-            measure_entire_file(&entry.path, &entry.meta, config)
-        } else {
-            measure_by_lines(&entry.path, &entry.meta, config)
-        };
-
-        result.ok_or_else(|| {
+        measure_by_lines(&entry.path, &entry.meta, config).ok_or_else(|| {
             InfrastructureError::MeasurementError {
                 path: entry.path.clone(),
                 reason: "failed to measure file".to_string(),
@@ -431,10 +425,7 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use super::*;
-    use crate::{
-        domain::model::FileMeta,
-        infrastructure::measurement::strategies::{measure_by_lines, measure_entire_file},
-    };
+    use crate::{domain::model::FileMeta, infrastructure::measurement::strategies::measure_by_lines};
 
     struct TempFile {
         pub path: std::path::PathBuf,
@@ -521,25 +512,25 @@ mod tests {
     }
 
     #[test]
-    fn measure_entire_file_handles_newlines() {
+    fn line_measurement_counts_newlines_when_enabled() {
         let file = TempFile::new("a\nb\n");
         let mut config = make_config();
         config.count_newlines_in_chars = true;
 
-        let stats = measure_entire_file(&file.path, &make_meta(&file.path), &config).unwrap();
+        let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config).unwrap();
 
         assert_eq!(stats.lines().value(), 2);
         assert_eq!(stats.chars().value(), 4); // 'a' + '\n' + 'b' + '\n'
     }
 
     #[test]
-    fn text_only_filters_binary() {
+    fn line_measurement_respects_text_only_flag() {
         let file = TempFile::new("text\0binary");
         let mut config = make_config();
         config.text_only = true;
         config.count_newlines_in_chars = true;
 
-        let result = measure_entire_file(&file.path, &make_meta(&file.path), &config);
+        let result = measure_by_lines(&file.path, &make_meta(&file.path), &config);
         assert!(result.is_none());
     }
 
