@@ -1,5 +1,5 @@
 // src/infrastructure/io/output/utils.rs
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
     domain::{config::Config, model::FileStats},
@@ -23,7 +23,7 @@ pub(crate) fn escape_field(s: &str, sep: char) -> String {
     if sep == ',' {
         // Only quote/escape if necessary (contains separator, quote or newline)
         if s.contains(sep) || s.contains('"') || s.contains('\n') || s.contains('\r') {
-            let escaped = s.replace('"', "\"\"");
+            let escaped = s.replace('"', "\\\"");
             format!("\"{escaped}\"")
         } else {
             s.to_string()
@@ -44,7 +44,8 @@ pub(crate) fn safe_key_label(key: &str) -> String {
 }
 
 fn format_entry_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root: Option<&Path>) -> String {
-    let mut path = if abs_path {
+    // Resolve the path according to configuration flags.
+    let mut path_buf = if abs_path {
         if abs_canonical {
             path.canonicalize().unwrap_or_else(|_| logical_absolute(path))
         } else {
@@ -53,12 +54,24 @@ fn format_entry_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root
     } else {
         path.to_path_buf()
     };
-    if let Some(root) = trim_root
-        && let Ok(stripped) = path.strip_prefix(root)
-    {
-        path = stripped.to_path_buf();
+
+    // If a root prefix should be trimmed, resolve the root similarly and strip it.
+    if let Some(root) = trim_root {
+        let root_buf = if abs_path {
+            if abs_canonical {
+                root.canonicalize().unwrap_or_else(|_| root.to_path_buf())
+            } else {
+                logical_absolute(root)
+            }
+        } else {
+            root.to_path_buf()
+        };
+        if let Ok(stripped) = path_buf.strip_prefix(&root_buf) {
+            path_buf = stripped.to_path_buf();
+        }
     }
-    path.display().to_string()
+
+    path_buf.display().to_string()
 }
 
 #[cfg(test)]
@@ -104,7 +117,7 @@ mod tests {
             follow: false,
             use_git: false,
             case_insensitive_dedup: false,
-            respect_gitignore: true,
+            respect_git_ignore: true,
             use_ignore_overrides: false,
             jobs: 1,
             no_default_prune: false,
@@ -175,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn escape_field_leaves_tsv_untouched() {
+    fn escape_field_leaves_tsv_untainted() {
         let input = "a\tb";
         assert_eq!(escape_field(input, '\t'), input);
     }

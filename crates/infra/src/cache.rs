@@ -2,7 +2,7 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::TryFrom,
-    env, fs,
+    fs,
     io::{self, Read, Write},
     path::{Path, PathBuf},
 };
@@ -273,6 +273,7 @@ impl CacheSignature {
 }
 
 fn resolve_cache_path(config: &Config) -> Option<PathBuf> {
+    // If user explicitly specified a cache directory, use it
     if let Some(dir) = config.cache_dir.clone() {
         if ensure_dir(&dir).is_ok() {
             return Some(dir.join(cache_file_name(config)));
@@ -281,23 +282,10 @@ fn resolve_cache_path(config: &Config) -> Option<PathBuf> {
         return None;
     }
 
-    if let Some(cache_home) = env::var_os("XDG_CACHE_HOME") {
-        let mut dir = PathBuf::from(cache_home);
-        dir.push("count_lines");
-        if ensure_dir(&dir).is_ok() {
-            return Some(dir.join(cache_file_name(config)));
-        }
-    } else if let Some(home) = env::var_os("HOME") {
-        let mut dir = PathBuf::from(home);
-        dir.push(".cache/count_lines");
-        if ensure_dir(&dir).is_ok() {
-            return Some(dir.join(cache_file_name(config)));
-        }
-    }
-
-    let fallback = logical_absolute(Path::new(".cache/count_lines"));
-    if ensure_dir(&fallback).is_ok() {
-        return Some(fallback.join(cache_file_name(config)));
+    // Otherwise, use platform-appropriate default cache directory
+    use crate::platform::CacheDirectoryResolver;
+    if let Some(cache_dir) = CacheDirectoryResolver::resolve() {
+        return Some(cache_dir.join(cache_file_name(config)));
     }
 
     None

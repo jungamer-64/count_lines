@@ -84,5 +84,5 @@ lto = true
 codegen-units = 1
 
 [[bench]]
-name = "benchmark"
+name = "end_to_end"
 harness = false

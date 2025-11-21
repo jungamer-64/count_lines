@@ -277,31 +277,17 @@ fn enumerate_plan(plan: &FileEnumerationPlan) -> Result<Vec<FileEntryDto>> {
         // For walk-based collection (multiple roots, git lists, etc.) ensure a
         // deterministic order and remove duplicates from overlapping roots.
         let mut walk_entries = walk_roots(plan, matcher)?;
-        // Platform-aware normalization for sorting and deduplication. On
-        // Windows/NTFS we compare case-insensitively to avoid duplicates due
-        // to case differences.
-        // 事前計算されたキーで安定ソート（キー生成は各要素1回）
-        #[cfg(windows)]
-        fn norm_key(p: &Path) -> String {
-            // lossy変換はここ1回。以後はcloneせず参照
-            let s = p.to_string_lossy();
-            s.to_lowercase()
-        }
-        #[cfg(unix)]
-        fn norm_key(p: &Path) -> Vec<u8> {
-            use std::os::unix::ffi::OsStrExt;
-            p.as_os_str().as_bytes().to_vec()
-        }
-        #[cfg(all(not(windows), not(unix)))]
-        fn norm_key(p: &Path) -> String {
-            p.to_string_lossy().into_owned()
-        }
-
+        
+        // Platform-aware normalization for sorting and deduplication.
+        // Use the platform abstraction to handle case sensitivity differences.
+        use crate::platform::{default_path_normalizer, PathNormalizer};
+        let normalizer = default_path_normalizer();
+        
         #[cfg(windows)]
         {
-            // Build key once, sort by it, then dedup by adjacent equal keys.
-            let mut keyed: Vec<(String, FileEntryDto)> =
-                walk_entries.into_iter().map(|e| (norm_key(&e.path), e)).collect();
+            // Windows: always case-insensitive
+            let mut keyed: Vec<(_, FileEntryDto)> =
+                walk_entries.into_iter().map(|e| (normalizer.normalize(&e.path), e)).collect();
             keyed.sort_by(|a, b| a.0.cmp(&b.0));
             keyed.dedup_by(|a, b| a.0 == b.0);
             walk_entries = keyed.into_iter().map(|(_, e)| e).collect();
@@ -309,14 +295,15 @@ fn enumerate_plan(plan: &FileEnumerationPlan) -> Result<Vec<FileEntryDto>> {
         #[cfg(not(windows))]
         {
             if plan.case_insensitive_dedup {
+                // User requested case-insensitive dedup on case-sensitive filesystem
                 let mut keyed: Vec<(String, FileEntryDto)> =
                     walk_entries.into_iter().map(|e| (e.path.to_string_lossy().to_lowercase(), e)).collect();
                 keyed.sort_by(|a, b| a.0.cmp(&b.0));
                 keyed.dedup_by(|a, b| a.0 == b.0);
                 walk_entries = keyed.into_iter().map(|(_, e)| e).collect();
             } else {
-                // Use cached-key sort so we only create the normalization key once
-                walk_entries.sort_by_cached_key(|e| norm_key(&e.path));
+                // Use platform-appropriate normalization
+                walk_entries.sort_by_cached_key(|e| normalizer.normalize(&e.path));
                 walk_entries.dedup_by(|a, b| a.path == b.path);
             }
         }
@@ -348,31 +335,23 @@ fn materialise_paths(
     // duplicates. This keeps user-supplied ordering stable while removing
     // redundant work.
     {
-        // Avoid cloning PathBuf repeatedly: use a lightweight key.
-        #[cfg(unix)]
-        {
-            use std::os::unix::ffi::OsStrExt;
-            if plan.case_insensitive_dedup {
-                let mut seen: HashSet<String> = HashSet::new();
-                paths.retain(|p| seen.insert(p.to_string_lossy().to_lowercase()));
-            } else {
-                let mut seen: HashSet<Vec<u8>> = HashSet::new();
-                paths.retain(|p| seen.insert(p.as_os_str().as_bytes().to_vec()));
-            }
-        }
+        use crate::platform::{default_path_normalizer, PathNormalizer};
+        let normalizer = default_path_normalizer();
+        
         #[cfg(windows)]
         {
-            let mut seen: HashSet<String> = HashSet::new();
-            paths.retain(|p| seen.insert(p.to_string_lossy().to_lowercase()));
+            // Windows: always case-insensitive
+            let mut seen: HashSet<_> = HashSet::new();
+            paths.retain(|p| seen.insert(normalizer.normalize(p)));
         }
-        #[cfg(all(not(unix), not(windows)))]
+        #[cfg(not(windows))]
         {
             if plan.case_insensitive_dedup {
                 let mut seen: HashSet<String> = HashSet::new();
                 paths.retain(|p| seen.insert(p.to_string_lossy().to_lowercase()));
             } else {
-                let mut seen: HashSet<String> = HashSet::new();
-                paths.retain(|p| seen.insert(p.to_string_lossy().into_owned()));
+                let mut seen: HashSet<_> = HashSet::new();
+                paths.retain(|p| seen.insert(normalizer.normalize(p)));
             }
         }
     }
@@ -518,22 +497,13 @@ fn collect_entries_from_root(
     let include_hidden = plan.include_hidden;
     let no_default_prune = plan.no_default_prune;
     let follow_links = plan.follow_links;
+    
     // Lightweight visited set to avoid following directory symlink loops when
-    // follow_links is enabled. On Unix use (dev, ino) pairs which are cheap to
-    // obtain. On non-Unix platforms fall back to canonicalized path tracking
-    // but only for symlinked directories (to limit canonicalize calls).
-    #[cfg(unix)]
-    use std::os::unix::fs::MetadataExt;
-
-    #[cfg(unix)]
-    let visited_dirs: Arc<Mutex<HashSet<(u64, u64)>>> = Arc::new(Mutex::new(HashSet::new()));
-    #[cfg(unix)]
+    // follow_links is enabled. Use platform-appropriate tracking.
+    use crate::platform::DirectoryLoopDetector;
+    let visited_dirs: Arc<Mutex<DirectoryLoopDetector>> = Arc::new(Mutex::new(DirectoryLoopDetector::new()));
     let visited_dirs_cloned = Arc::clone(&visited_dirs);
-
-    #[cfg(not(unix))]
-    let visited_dirs: Arc<Mutex<HashSet<PathBuf>>> = Arc::new(Mutex::new(HashSet::new()));
-    #[cfg(not(unix))]
-    let visited_dirs_cloned = Arc::clone(&visited_dirs);
+    
     builder.filter_entry(move |entry| {
         if let Some(ft) = entry.file_type() {
             // Prepare to optionally fetch metadata once and reuse it to
@@ -558,33 +528,12 @@ fn collect_entries_from_root(
 
             if is_dir_like {
                 // Loop prevention: if following links, try to detect whether
-                // we've already visited the same directory (by inode on Unix
-                // or by canonical path on other platforms). If so, skip
-                // descending into it.
-                #[cfg(unix)]
+                // we've already visited the same directory using the platform-
+                // appropriate detector (inode on Unix, canonical path elsewhere).
                 if follow_links {
-                    if let Some(md) = maybe_md.as_ref() {
-                        let key = (md.dev(), md.ino());
-                        let mut set = visited_dirs_cloned.lock().unwrap();
-                        if !set.insert(key) {
-                            return false; // already visited
-                        }
-                    } else if let Ok(md) = std::fs::metadata(entry.path()) {
-                        let key = (md.dev(), md.ino());
-                        let mut set = visited_dirs_cloned.lock().unwrap();
-                        if !set.insert(key) {
-                            return false; // already visited
-                        }
-                    }
-                }
-
-                #[cfg(not(unix))]
-                if follow_links && entry.path_is_symlink() {
-                    if let Ok(canon) = std::fs::canonicalize(entry.path()) {
-                        let mut set = visited_dirs_cloned.lock().unwrap();
-                        if !set.insert(canon) {
-                            return false; // already visited
-                        }
+                    let mut detector = visited_dirs_cloned.lock().unwrap();
+                    if !detector.visit(entry.path(), maybe_md.as_ref()) {
+                        return false; // already visited
                     }
                 }
 
@@ -744,18 +693,8 @@ fn collect_git_files(roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
 // Convert raw bytes to a PathBuf with platform-aware handling. This avoids
 // lossy conversions for non-UTF-8 paths on Unix while providing a reasonable
 // fallback on Windows (git on Windows typically emits UTF-8).
-#[cfg(unix)]
 fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    use std::os::unix::ffi::OsStrExt;
-    PathBuf::from(std::ffi::OsStr::from_bytes(bytes))
-}
-
-#[cfg(windows)]
-fn path_from_bytes(bytes: &[u8]) -> PathBuf {
-    match std::str::from_utf8(bytes) {
-        Ok(s) => PathBuf::from(s),
-        Err(_) => PathBuf::from(String::from_utf8_lossy(bytes).into_owned()),
-    }
+    crate::platform::path_from_bytes(bytes)
 }
 
 #[derive(Debug)]

@@ -5,4 +5,5 @@ pub mod cache;
 pub mod filesystem;
 pub mod measurement;
 pub mod persistence;
+pub mod platform;
 pub mod watch;

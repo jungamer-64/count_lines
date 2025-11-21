@@ -99,6 +99,13 @@ impl AddAssign for LineCount {
         self.0 += rhs.0;
     }
 }
+
+impl AddAssign<&LineCount> for LineCount {
+    #[inline]
+    fn add_assign(&mut self, rhs: &LineCount) {
+        self.0 += rhs.0;
+    }
+}
 impl PartialEq<usize> for LineCount {
     fn eq(&self, other: &usize) -> bool {
         self.0 == *other
@@ -132,6 +139,12 @@ impl From<usize> for LineCount {
 impl From<LineCount> for usize {
     fn from(value: LineCount) -> Self {
         value.value()
+    }
+}
+
+impl From<std::num::NonZeroUsize> for LineCount {
+    fn from(value: std::num::NonZeroUsize) -> Self {
+        Self::new(value.get())
     }
 }
 impl FromIterator<LineCount> for LineCount {
