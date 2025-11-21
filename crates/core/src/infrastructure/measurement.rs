@@ -1,4 +1,1 @@
-mod measurer;
-pub mod strategies;
-
-pub use measurer::measure_entries;
+pub use count_lines_infra::measurement::measurer::measure_entries;

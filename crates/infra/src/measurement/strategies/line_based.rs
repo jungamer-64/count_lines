@@ -1,14 +1,12 @@
 use std::{io::BufRead, path::Path};
 
-use crate::{
-    domain::{
-        config::Config,
-        model::{FileMeta, FileStatsV2},
-        value_objects::{
-            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
-        },
+use crate::persistence::FileReader;
+use count_lines_domain::{
+    config::Config,
+    model::{FileMeta, FileStatsV2},
+    value_objects::{
+        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
     },
-    infrastructure::persistence::FileReader,
 };
 
 /// 行単位でファイルを計測

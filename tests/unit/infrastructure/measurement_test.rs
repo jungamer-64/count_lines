@@ -12,10 +12,10 @@ use count_lines_core::{
         options::OutputFormat,
     },
     infrastructure::{
-        filesystem::services::metadata_loader::FileMetadataLoader,
-        measurement::{measure_entries, strategies::measure_by_lines},
+        filesystem::services::metadata_loader::FileMetadataLoader, measurement::measure_entries,
     },
 };
+use count_lines_infra::measurement::strategies::measure_by_lines;
 use serde_json::Value;
 use tempfile::{Builder as TempBuilder, TempDir as TempfileTempDir};
 
@@ -139,8 +139,7 @@ fn line_based_measurement_counts_newlines_when_requested() {
     config.count_newlines_in_chars = true;
     config.words = true;
 
-    let stats =
-        measure_by_lines(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
+    let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
     assert_eq!(stats.lines().value(), 2);
     assert_eq!(stats.chars().value(), 7);
     assert_eq!(stats.words().map(|w| w.value()), Some(2));

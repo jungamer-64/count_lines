@@ -1,4 +1,4 @@
-// crates/core/src/infrastructure/measurement/measurer.rs
+// crates/infra/src/measurement/measurer.rs
 //! ファイル計測のリファクタリング版
 
 #[cfg(feature = "parallel")]
@@ -14,26 +14,19 @@ use evalexpr::{ContextWithMutableVariables, HashMapContext, Value};
 use rayon::prelude::*;
 
 #[cfg(feature = "eval")]
-use crate::domain::config::FilterAst;
-#[cfg(feature = "eval")]
-use crate::error::DomainError;
-use crate::{
-    application::commands::MeasurementOutcome,
-    domain::{
-        config::Config,
-        model::{FileEntry, FileStats, FileStatsV2},
-    },
-    error::{InfrastructureError, Result},
-    infrastructure::{
-        cache::CacheStore,
-        measurement::strategies::measure_by_lines,
-    },
+use count_lines_domain::config::FilterAst;
+use count_lines_domain::{
+    config::Config,
+    model::{FileEntry, FileStats, FileStatsV2, MeasurementOutcome},
 };
+#[cfg(feature = "eval")]
+use count_lines_shared_kernel::DomainError;
+use count_lines_shared_kernel::{InfrastructureError, Result};
+
+use crate::{cache::CacheStore, measurement::strategies::measure_by_lines};
 
 // Helper type aliases to simplify signatures
 type PendingEntry = (usize, String, FileEntry);
-
-/// ファイル計測の主要エントリポイント（改善版）
 ///
 /// # Errors
 ///
@@ -335,7 +328,7 @@ impl FileMeasurer {
         Self::set_int_from_usize(ctx, "lines", stats.lines().value())?;
         Self::set_int_from_usize(ctx, "chars", stats.chars().value())?;
 
-        let words_val = stats.words().map_or(0usize, crate::domain::value_objects::WordCount::value);
+        let words_val = stats.words().map_or(0usize, count_lines_domain::value_objects::WordCount::value);
         Self::set_int_from_usize(ctx, "words", words_val)?;
 
         Self::set_int_from_u64(ctx, "size", stats.size().bytes())?;
@@ -425,7 +418,8 @@ mod tests {
     use tempfile::NamedTempFile;
 
     use super::*;
-    use crate::{domain::model::FileMeta, infrastructure::measurement::strategies::measure_by_lines};
+    use crate::measurement::strategies::measure_by_lines;
+    use count_lines_domain::model::FileMeta;
 
     struct TempFile {
         pub path: std::path::PathBuf,
@@ -449,7 +443,7 @@ mod tests {
     }
 
     fn make_config() -> Config {
-        use crate::domain::{config::Filters, options::OutputFormat};
+        use count_lines_domain::{config::Filters, options::OutputFormat};
 
         Config {
             format: OutputFormat::Table,
@@ -493,7 +487,7 @@ mod tests {
             clear_cache: false,
             watch: false,
             watch_interval: Duration::from_secs(1),
-            watch_output: crate::domain::options::WatchOutput::Full,
+            watch_output: count_lines_domain::options::WatchOutput::Full,
             compare: None,
         }
     }

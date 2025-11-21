@@ -1,8 +1,8 @@
 // tests/common/helpers.rs
 //! Test helper functions to reduce unwrap() calls and provide better error messages.
 
-use std::path::Path;
 use std::fs;
+use std::path::Path;
 
 /// Create a test file with the given contents.
 ///
@@ -10,8 +10,7 @@ use std::fs;
 ///
 /// Panics with a descriptive message if file creation fails.
 pub fn create_test_file(path: &Path, contents: &[u8]) {
-    fs::write(path, contents)
-        .unwrap_or_else(|e| panic!("Failed to create test file at {:?}: {}", path, e));
+    fs::write(path, contents).unwrap_or_else(|e| panic!("Failed to create test file at {:?}: {}", path, e));
 }
 
 /// Create all parent directories for the given path.
@@ -30,9 +29,7 @@ pub fn create_test_dir(path: &Path) {
 ///
 /// Panics with a descriptive message if metadata retrieval fails.
 pub fn get_file_size(path: &Path) -> u64 {
-    fs::metadata(path)
-        .unwrap_or_else(|e| panic!("Failed to get metadata for {:?}: {}", path, e))
-        .len()
+    fs::metadata(path).unwrap_or_else(|e| panic!("Failed to get metadata for {:?}: {}", path, e)).len()
 }
 
 /// Get file metadata.
@@ -41,8 +38,7 @@ pub fn get_file_size(path: &Path) -> u64 {
 ///
 /// Panics with a descriptive message if metadata retrieval fails.
 pub fn get_metadata(path: &Path) -> fs::Metadata {
-    fs::metadata(path)
-        .unwrap_or_else(|e| panic!("Failed to get metadata for {:?}: {}", path, e))
+    fs::metadata(path).unwrap_or_else(|e| panic!("Failed to get metadata for {:?}: {}", path, e))
 }
 
 /// Extract file name from path as a String.
@@ -51,10 +47,7 @@ pub fn get_metadata(path: &Path) -> fs::Metadata {
 ///
 /// Panics with a descriptive message if the path has no file name.
 pub fn get_file_name(path: &Path) -> String {
-    path.file_name()
-        .unwrap_or_else(|| panic!("Path {:?} has no file name", path))
-        .to_string_lossy()
-        .into()
+    path.file_name().unwrap_or_else(|| panic!("Path {:?} has no file name", path)).to_string_lossy().into()
 }
 
 /// Get a string value from a JSON object by key.
@@ -65,12 +58,7 @@ pub fn get_file_name(path: &Path) -> String {
 pub fn get_json_str<'a>(value: &'a serde_json::Value, key: &str) -> &'a str {
     value[key]
         .as_str()
-        .unwrap_or_else(|| {
-            panic!(
-                "Expected string value for key '{}', got: {:?}",
-                key, value[key]
-            )
-        })
+        .unwrap_or_else(|| panic!("Expected string value for key '{}', got: {:?}", key, value[key]))
 }
 
 /// Get a u64 value from a JSON object by key.
@@ -81,12 +69,7 @@ pub fn get_json_str<'a>(value: &'a serde_json::Value, key: &str) -> &'a str {
 pub fn get_json_u64(value: &serde_json::Value, key: &str) -> u64 {
     value[key]
         .as_u64()
-        .unwrap_or_else(|| {
-            panic!(
-                "Expected u64 value for key '{}', got: {:?}",
-                key, value[key]
-            )
-        })
+        .unwrap_or_else(|| panic!("Expected u64 value for key '{}', got: {:?}", key, value[key]))
 }
 
 /// Get an array value from a JSON object by key.
@@ -97,12 +80,7 @@ pub fn get_json_u64(value: &serde_json::Value, key: &str) -> u64 {
 pub fn get_json_array<'a>(value: &'a serde_json::Value, key: &str) -> &'a Vec<serde_json::Value> {
     value[key]
         .as_array()
-        .unwrap_or_else(|| {
-            panic!(
-                "Expected array value for key '{}', got: {:?}",
-                key, value[key]
-            )
-        })
+        .unwrap_or_else(|| panic!("Expected array value for key '{}', got: {:?}", key, value[key]))
 }
 
 /// Lock a Mutex and return the guard.
@@ -111,9 +89,7 @@ pub fn get_json_array<'a>(value: &'a serde_json::Value, key: &str) -> &'a Vec<se
 ///
 /// Panics with a descriptive message if the mutex is poisoned.
 pub fn lock_mutex<T>(mutex: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    mutex
-        .lock()
-        .unwrap_or_else(|e| panic!("Failed to lock mutex: {}", e))
+    mutex.lock().unwrap_or_else(|e| panic!("Failed to lock mutex: {}", e))
 }
 
 #[cfg(test)]

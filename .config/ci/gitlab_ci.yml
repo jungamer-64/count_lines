@@ -1,0 +1,9 @@
+stages:
+  - validate
+
+validate:
+  stage: validate
+  image: rust:latest
+  script:
+    - apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev
+    - scripts/ci/validate.sh

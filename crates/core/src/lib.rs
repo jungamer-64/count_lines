@@ -7,7 +7,7 @@
 
 pub mod application;
 pub mod bootstrap;
-pub mod domain;
+pub use count_lines_domain as domain;
 pub mod error;
 pub mod infrastructure;
 pub mod shared;

@@ -11,7 +11,7 @@ use count_lines_ports::filesystem::{FileEntryDto, FileEnumerationPlan, FileEnume
 use count_lines_shared_kernel::{InfrastructureError, Result};
 #[cfg(windows)]
 use globset::GlobBuilder;
-use globset::{Glob, GlobMatcher};
+use globset::GlobMatcher;
 use ignore::{WalkBuilder, overrides::OverrideBuilder};
 
 use crate::persistence::FileReader;

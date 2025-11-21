@@ -1,6 +1,5 @@
 use std::{io::IsTerminal, time::Instant};
 
-use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use serde_json::json;
 
@@ -11,6 +10,7 @@ use crate::{
         model::Summary,
         options::{OutputFormat, WatchOutput},
     },
+    error::{DomainError, ErrorContext, Result},
     infrastructure::{
         adapters::{
             ConsoleNotifier, FileSystemEntryProvider, JsonlWatchEmitter, OutputEmitter,
@@ -115,7 +115,10 @@ fn should_exit_after_clearing_cache(config: &Config) -> Result<bool> {
 
 fn validate_config(config: &Config) -> Result<()> {
     if config.watch && config.compare.is_some() {
-        Err(anyhow!("--compare cannot be used together with --watch"))
+        Err(DomainError::InvalidConfiguration {
+            reason: "--compare cannot be used together with --watch".to_string(),
+        }
+        .into())
     } else {
         Ok(())
     }

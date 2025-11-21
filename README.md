@@ -49,6 +49,8 @@ count_lines --ext rs --format json
 count_lines --git --top 30
 ```
 
+詳細は [使用方法ドキュメント](docs/user/USAGE.md) を参照してください。
+
 ## 🌟 主な機能
 
 - ⚡ **高速並列処理** - Rayon による並列化で大規模プロジェクトも高速集計
@@ -70,48 +72,17 @@ fn main() -> anyhow::Result<()> {
 }
 ```
 
-詳細は [docs/user/README.md](docs/user/README.md) を参照してください。
+詳細は [ユーザードキュメント](docs/user/README.md) を参照してください。
 
 ## 📄 License
 
 This project is dual-licensed under:
 
-- MIT License ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
+- MIT License ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
 
 at your option.
 
-## 🛠️ 開発・CI/CD
-
-このプロジェクトは GitHub Actions を使用した自動化された CI/CD パイプラインを備えています：
-
-### CI パイプライン
-- **フォーマットチェック**: `cargo fmt` による自動フォーマット検証
-- **静的解析**: `cargo clippy` による品質チェック
-- **テスト**: 複数プラットフォーム (Ubuntu, macOS, Windows) でのテスト実行
-- **ビルド**: リリースバイナリのクロスプラットフォームビルド
-
-### 開発者向けスクリプト
-```bash
-# すべてのチェックを実行
-./scripts/development/test.sh
-
-# パフォーマンスベンチマーク
-./scripts/performance/benchmark.sh
-
-# リリースビルド
-./scripts/build/release.sh
-```
-
-プロジェクト固有の linter / formatter / CI テンプレートは `config/` ディレクトリに集約しています。
-
-### リリースプロセス
-タグをプッシュすることで自動リリースが実行されます：
-```bash
-git tag v0.5.1
-git push origin v0.5.1
-```
-
 ## 🙏 Contributing
 
-Contributions are welcome! Please see [docs/developer/CONTRIBUTING.md](docs/developer/CONTRIBUTING.md) for details.
+Contributions are welcome! Please see [CONTRIBUTING.md](docs/developer/CONTRIBUTING.md) for details.

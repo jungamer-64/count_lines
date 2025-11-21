@@ -42,7 +42,10 @@ fn make_filter_options(args: &Args) -> FilterOptions {
 }
 
 fn make_compare_tuple(args: &Args) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
-    args.comparison.compare.as_ref().and_then(|v| if v.len() == 2 { Some((v[0].clone(), v[1].clone())) } else { None })
+    args.comparison
+        .compare
+        .as_ref()
+        .and_then(|v| if v.len() == 2 { Some((v[0].clone(), v[1].clone())) } else { None })
 }
 
 /// Build `ConfigOptions` from CLI args and precomputed pieces.

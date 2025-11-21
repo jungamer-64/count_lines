@@ -1,14 +1,12 @@
 use std::path::Path;
 
-use crate::{
-    domain::{
-        config::Config,
-        model::{FileMeta, FileStatsV2},
-        value_objects::{
-            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
-        },
+use crate::persistence::FileReader;
+use count_lines_domain::{
+    config::Config,
+    model::{FileMeta, FileStatsV2},
+    value_objects::{
+        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
     },
-    infrastructure::persistence::FileReader,
 };
 
 /// Measure a file by reading it into memory and counting bytes/lines/words.

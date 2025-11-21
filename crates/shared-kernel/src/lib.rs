@@ -15,6 +15,7 @@ pub use error::{
 };
 
 pub mod error;
+pub mod path;
 pub mod value_objects;
 
 pub use value_objects::{
