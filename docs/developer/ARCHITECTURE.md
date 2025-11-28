@@ -180,60 +180,65 @@ count_lines/
 
 ### 典型的な実行フロー
 
-```
-1. CLI 入力 (presentation/cli)
+```text
+1. CLI 入力 (src/cli/)
    ↓
-2. Config クエリサービスでドメイン設定構築 (application/queries)
+2. Config クエリサービスでドメイン設定構築 (core/application/queries)
    ↓
-3. エントリポイントでユースケース実行 (bootstrap)
+3. ブートストラップでユースケース実行 (core/bootstrap)
    ↓
-4. ファイル列挙 (infrastructure/filesystem via FileEntryProvider ポート)
+4. ファイル列挙 (infra/filesystem via ports/filesystem trait)
    ↓
-5. 計測・統計値算出 (infrastructure/measurement via FileStatisticsProcessor)
+5. 計測・統計値算出 (infra/measurement)
    ↓
 6. ドメインサービスでソート・集計 (domain/analytics)
    ↓
-7. 出力アダプターでフォーマット & 出力 (infrastructure/io/output via FileStatisticsPresenter)
+7. 出力アダプターでフォーマット & 出力 (core/infrastructure/io)
 ```
 
 スナップショット比較などのクエリ系ユースケースは、CQRS の考え方に基づき `SnapshotComparator` ポートを経由して処理されます。
 
 ## 主要コンポーネント
 
-### ユースケース (`application/commands`)
+### ユースケース (`core/application/commands`)
 
 - `RunAnalysisCommand`: 実行要求を表すシンプルなコマンド DTO（ドメイン `Config` への参照のみ保持）
 - `RunAnalysisHandler`: 上記コマンドを処理し、ファイル収集→統計計算→出力までをオーケストレーション
 - ポート経由で副作用を注入することで、テストではモックを差し替え可能
 
-### クエリ (`application/queries`)
+### クエリ (`core/application/queries`)
 
 - `ConfigQueryService`: CLI DTO (`ConfigOptions`) からドメイン `Config` を構築
 - フィルタ／ソート指定の検証と正規化を担当
 
-### ドメインサービス (`domain/analytics` など)
+### ドメインサービス (`domain/analytics` 等)
 
 - `Aggregator`: 拡張子やディレクトリごとの集計
 - `apply_sort`: 複数ソートキーに基づいた安定ソート
 
-### インフラアダプター (`infrastructure/`)
+### インフラ基盤 (`infra/`)
 
 - `filesystem::collect_entries`: Git 連携を含むファイル列挙
 - `measurement::measure_entries`: Rayon を用いた並列計測
-- `io::output::emit`: 表形式、CSV/TSV、JSON/JSONL、Markdown など多様な出力
-- `comparison::run`: JSON スナップショットの差分計算
-- `adapters::*`: アプリケーション層ポートの具象実装
+- `cache::CacheStore`: インクリメンタルキャッシュ管理
+- `watch::WatchService`: ファイル変更監視
 
-### プレゼンテーション (`presentation/cli`)
+### CLI 固有アダプター (`core/infrastructure/`)
+
+- `adapters::OutputEmitter`: 表形式、CSV/TSV、JSON/JSONL、Markdown など多様な出力
+- `adapters::ConsoleNotifier`: 進捗通知
+- `comparison::SnapshotDiffAdapter`: JSON スナップショットの差分計算
+
+### プレゼンテーション (`src/cli/`)
 
 - `Args`: `clap` による CLI 引数定義
 - `build_config`: DTO からユースケース入力を生成
 
-### ブートストラップ (`bootstrap`)
+### ブートストラップ (`core/bootstrap`)
 
-- CLI ユースケースの起動 (`run`, `run_with_config`)
+- CLI ユースケースの起動 (`run_with_config`)
 - ポート実装を束ねて `RunAnalysisHandler` を生成し、`RunAnalysisCommand` を発行
-- 依存関係グラフの構築とヘッダー表示／進捗通知の制御
+- TTY 判定、バナー表示、ウォッチモード制御
 
 ## 設計原則
 
