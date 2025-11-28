@@ -57,84 +57,124 @@
 
 ```
 count_lines/
-├── crates/
-│   └── core/                       # コアライブラリクレート
+├── crates/                         # ワークスペースメンバー（レイヤー別クレート）
+│   ├── shared-kernel/              # 共有カーネル（エラー型・値オブジェクト）
+│   ├── domain/                     # ドメインモデル・ビジネスルール
+│   ├── ports/                      # ポート定義（インターフェース trait）
+│   ├── usecase/                    # ユースケース・オーケストレーション
+│   ├── infra/                      # インフラ基盤実装
+│   └── core/                       # 統合レイヤー + アプリケーション固有実装
 │       ├── src/
-│       │   ├── application/        # CQRS ユースケース (commands/queries)
-│       │   ├── application.rs      # アプリケーション層のルートモジュール
-│       │   ├── bootstrap.rs        # 構成ルート
-│       │   ├── domain/             # ドメインモデル (analytics/config/model 等)
-│       │   ├── domain.rs           # ドメイン層のルートモジュール
-│       │   ├── infrastructure/     # 外部アダプター (filesystem/io/measurement/persistence…)
-│       │   ├── infrastructure.rs   # インフラ層のルートモジュール
-│       │   ├── presentation/       # CLI などの境界 (cli/)
-│       │   ├── presentation.rs     # プレゼンテーション層ルート
+│       │   ├── application/        # CQRS (commands/queries) - CLI 固有
+│       │   ├── bootstrap.rs        # DI 構築・アプリケーション起動
+│       │   ├── infrastructure/     # CLI 固有アダプター (出力フォーマッタ等)
 │       │   ├── shared/             # 共通ユーティリティ
-│       │   ├── shared.rs           # 共有モジュールルート
-│       │   ├── lib.rs              # ライブラリルート
+│       │   ├── lib.rs              # 各クレートの re-export
 │       │   └── version.rs          # バージョン情報
 │       └── Cargo.toml
-├── src/
-│   ├── lib.rs                     # count_lines_core の再エクスポート
-│   └── main.rs                    # CLI バイナリエントリポイント
+├── src/                            # メインクレート（CLI バイナリ）
+│   ├── lib.rs                      # core の再エクスポート + CLI モジュール公開
+│   ├── main.rs                     # CLI エントリポイント
+│   └── cli/                        # clap 引数定義・パーサー
 ├── tests/
-│   ├── cli.rs                     # CLI スモークテスト
-│   ├── integration/               # 統合テスト (モジュール別)
-│   └── unit/                      # ユニットテスト (レイヤー別)
-├── scripts/
-│   ├── build/                     # ビルド系スクリプト
-│   ├── ci/                        # CI 用フロー
-│   ├── deployment/                # 配布・インストーラ
-│   ├── development/               # 開発支援ツール
-│   └── performance/               # ベンチ／プロファイル
-├── docs/                          # ドキュメント (user/developer/project)
-├── config/                        # ツール構成 (rustfmt/clippy/CI)
-└── Cargo.toml                     # ワークスペース設定
+│   ├── common/                     # テストユーティリティ
+│   ├── unit/                       # ユニットテスト（レイヤー別）
+│   ├── integration/                # 統合テスト
+│   └── e2e/                        # エンドツーエンドテスト
+├── benches/                        # ベンチマーク
+├── scripts/                        # 開発・CI スクリプト
+├── docs/                           # ドキュメント (user/developer/project)
+├── .config/                        # ツール構成 (rustfmt/clippy/CI/codacy)
+└── Cargo.toml                      # ワークスペース設定
 ```
 
 ### ワークスペース構成
 
-- **メインクレート** (`count_lines`): CLI バイナリを提供
-- **コアライブラリ** (`count_lines_core`): ドメイン、ユースケース、アダプターを集約
+プロジェクトは**マルチクレート構成**を採用し、クリーンアーキテクチャのレイヤーを物理的に分離しています。
+
+| クレート | 役割 | 依存先 |
+|----------|------|--------|
+| `count_lines_shared_kernel` | 共有エラー型・値オブジェクト | なし（最内層）|
+| `count_lines_domain` | ドメインモデル・ビジネスルール | shared-kernel |
+| `count_lines_ports` | インターフェース定義（trait） | shared-kernel |
+| `count_lines_usecase` | 汎用ユースケース・オーケストレーション | domain, ports |
+| `count_lines_infra` | インフラ基盤実装（ファイルシステム等）| domain, ports |
+| `count_lines_core` | **統合レイヤー** + CLI 固有実装 | 全クレート |
+| `count_lines` | CLI バイナリ | core |
+
+#### `core` クレートの役割
+
+`core` は単なる再エクスポートではなく、**CLI アプリケーション固有の実装**も含むハイブリッドクレートです：
+
+- **bootstrap**: DI コンテナの構築とアプリケーション起動
+- **application/commands**: `RunAnalysisCommand`, `RunAnalysisHandler`（CQRS コマンド）
+- **application/queries**: `ConfigQueryService`（設定構築クエリ）
+- **infrastructure/adapters**: CLI 固有のアダプター（出力フォーマッタ、通知等）
+
+#### `infra` vs `core/infrastructure` の使い分け
+
+| 場所 | 内容 | 目的 |
+|------|------|------|
+| `crates/infra/` | ファイルシステム、キャッシュ、計測など | **再利用可能な汎用基盤** |
+| `crates/core/infrastructure/` | 出力フォーマッタ、比較、シリアライゼーション | **CLI アプリケーション固有** |
 
 ## レイヤー構成
 
-### Shared Kernel (`shared/`)
+### Shared Kernel (`crates/shared-kernel/`)
 
-- ドメイン全体で共有されるパス操作やパターン解析などのユーティリティ
-- ドメイン値オブジェクトが依存する最小限の機能のみを配置
+- 全レイヤーで共有されるエラー型階層 (`CountLinesError`, `DomainError`, `InfrastructureError` 等)
+- 基本的な値オブジェクト (`LineCount`, `CharCount`, `FileSize`, `FilePath` 等)
+- パス操作ユーティリティ
 
-### Domain Layer (`domain/`)
+### Domain Layer (`crates/domain/`)
 
-- DDD のエンティティ、値オブジェクト、ドメインサービスを保持
-- `model/` に `FileEntry` や `FileStats` などの値オブジェクトを集約
-- `analytics/` で集計・ソートといった純粋なドメインロジックを提供
-- `config/` で設定関連のドメインモデルを管理
+- DDD のエンティティ、値オブジェクト、ドメインサービス
+- `model/`: `FileEntry`, `FileStats` などのドメインモデル
+- `analytics/`: 集計・ソートといった純粋なドメインロジック
+- `config/`: 設定関連のドメインモデル
+- `options/`: 出力形式、ソートキーなどのオプション型
 
-### Application Layer (`application/`)
+### Ports Layer (`crates/ports/`)
 
-- コマンド／クエリをユースケースとして実装
-- `commands/` 内でポート (インターフェース) を定義し、`RunAnalysisCommand` などを提供
-- `queries/` 内で `ConfigQueryService` などの読み取りユースケースを実装
-- ドメインに依存するが、インフラ詳細には依存しない
+- インターフェース定義（trait）のみを配置
+- `filesystem`: ファイルシステムアクセスの抽象化
+- `hashing`: ファイルハッシュ計算の抽象化
+- `progress`: 進捗通知の抽象化
 
-### Presentation Layer (`presentation/`)
+### Use Case Layer (`crates/usecase/`)
 
-- CLI や今後追加される可能性のある UI を担当
-- `cli/` モジュールで `clap` を用いた引数パースを実装し、アプリケーション層へ DTO を渡す
+- 汎用的なユースケース・オーケストレーションロジック
+- `orchestrator`: ファイルカウントの主要オーケストレーション
+- `dto`: ユースケース境界のデータ転送オブジェクト
 
-### Infrastructure Layer (`infrastructure/`)
+### Infrastructure Layer (`crates/infra/`)
 
-- ファイルシステム、出力、シリアライゼーションなどの外部依存を実装
-- アプリケーション層のポート (`FileEntryProvider`, `FileStatisticsProcessor`, `FileStatisticsPresenter`, `SnapshotComparator` など) を実装したアダプターを `adapters/` に配置
-- `filesystem/` や `measurement/`, `io/output/`, `comparison/`, `serialization/` などで詳細な I/O ロジックを提供
-- `persistence/` に共通のファイル読み書きヘルパー (`FileReader`, `FileWriter`) を集約し、他モジュールの重複処理を排除
+- 汎用的なインフラ実装（再利用可能）
+- `filesystem/`: ファイル列挙、Git 連携
+- `measurement/`: ファイル計測（行数・文字数・単語数）
+- `cache/`: インクリメンタルキャッシュ
+- `persistence/`: ファイル読み書きヘルパー
+- `watch/`: ファイル監視サービス
 
-### Bootstrap Layer (`bootstrap/`)
+### Core Layer (`crates/core/`)
 
-- 依存関係の組み立てとエントリポイント
-- CLI から受け取った設定でポート実装を組み合わせ、アプリケーション層のコマンドを実行
-- TTY 判定など環境依存の処理もここで完結させる
+統合レイヤー + CLI 固有実装を担当します。
+
+- `bootstrap.rs`: DI 構築・アプリケーション起動
+- `application/commands/`: CLI 固有の CQRS コマンド
+  - `RunAnalysisCommand`, `RunAnalysisHandler`
+- `application/queries/`: 設定構築クエリ
+  - `ConfigQueryService`
+- `infrastructure/adapters/`: CLI 固有アダプター
+  - `OutputEmitter`, `ConsoleNotifier`, `JsonlWatchEmitter` 等
+- `infrastructure/comparison/`: スナップショット比較
+- `infrastructure/io/`: 出力フォーマット処理
+
+### Presentation Layer (`src/cli/`)
+
+- CLI 引数定義（`clap` ベース）
+- `Args`: 引数構造体
+- `build_config`: 引数から `Config` への変換
 
 ## データフロー
 

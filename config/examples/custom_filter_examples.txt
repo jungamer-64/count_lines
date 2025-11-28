@@ -1,4 +1,0 @@
-# Sample filter expressions for count_lines configuration
-lines > 100 && ext == "rs"
-chars > 10_000 && name =~ "^mod_"
-words > 500 && size < 128_000
