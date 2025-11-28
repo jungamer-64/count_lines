@@ -152,7 +152,6 @@ jobs:
       MATRIX_TARGET: ${{ matrix.target }}
       MATRIX_NAME: ${{ matrix.name }}
       MATRIX_ARCHIVE: ${{ matrix.archive }}
-      RUNNER_OS: ${{ runner.os }}
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
@@ -210,6 +209,7 @@ jobs:
           VERSION: ${{ env.VERSION }}
           MATRIX_TARGET: ${{ matrix.target }}
           MATRIX_NAME: ${{ matrix.name }}
+          RUNNER_OS: ${{ runner.os }}
         run: |
           set -eux
           ASSET_NAME="$BIN_NAME-$VERSION-$MATRIX_NAME"
