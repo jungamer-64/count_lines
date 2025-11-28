@@ -1,5 +1,5 @@
 // src/infrastructure/io/output/utils.rs
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::{
     domain::{config::Config, model::FileStats},

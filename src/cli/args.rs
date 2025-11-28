@@ -13,7 +13,7 @@ use super::args_groups::{
     name = "count_lines",
     version = crate::VERSION,
     about = "ファイル行数/文字数/単語数の集計ツール",
-    long_about = Some(include_str!("../../usage.txt")),
+    long_about = Some(include_str!("../../docs/user/CLI_REFERENCE.md")),
     group(
         clap::ArgGroup::new("input_source")
             .args(&["paths", "files_from", "files_from0"])
