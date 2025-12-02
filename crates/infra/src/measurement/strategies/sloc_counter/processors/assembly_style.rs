@@ -129,3 +129,139 @@ pub fn process_vhdl_style(line: &str, count: &mut usize) {
 
     *count += 1;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== Assembly (NASM/MASM) テスト ====================
+
+    #[test]
+    fn test_assembly_nasm_line_comment() {
+        let mut count = 0;
+        process_assembly_style("; This is a NASM comment", &mut count);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_assembly_code() {
+        let mut count = 0;
+        process_assembly_style("mov eax, 1", &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_assembly_inline_comment() {
+        let mut count = 0;
+        process_assembly_style("mov eax, ebx ; copy ebx to eax", &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_assembly_multiple_lines() {
+        let mut count = 0;
+        process_assembly_style("; Function prologue", &mut count);
+        process_assembly_style("push ebp", &mut count);
+        process_assembly_style("mov ebp, esp", &mut count);
+        process_assembly_style("; Save registers", &mut count);
+        process_assembly_style("push ebx", &mut count);
+        assert_eq!(count, 3);
+    }
+
+    // ==================== GAS Assembly テスト ====================
+
+    #[test]
+    fn test_gas_assembly_hash_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_gas_assembly_style("# GAS comment", &mut in_block, &mut count);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_gas_assembly_code() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_gas_assembly_style("movl $1, %eax", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_gas_assembly_inline_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_gas_assembly_style("movl %ebx, %eax # copy", &mut in_block, &mut count);
+        process_gas_assembly_style("ret", &mut in_block, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_gas_assembly_block_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_gas_assembly_style("/* block comment */", &mut in_block, &mut count);
+        process_gas_assembly_style("movl $0, %eax", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_gas_assembly_multiline_block_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_gas_assembly_style("/*", &mut in_block, &mut count);
+        assert!(in_block);
+        process_gas_assembly_style("  multiline comment", &mut in_block, &mut count);
+        process_gas_assembly_style("*/", &mut in_block, &mut count);
+        assert!(!in_block);
+        process_gas_assembly_style("ret", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_gas_assembly_at_comment() {
+        // ARM GAS では @ がコメント
+        let mut in_block = false;
+        let mut count = 0;
+        process_gas_assembly_style("@ ARM comment", &mut in_block, &mut count);
+        process_gas_assembly_style("mov r0, #1", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    // ==================== VHDL テスト ====================
+
+    #[test]
+    fn test_vhdl_line_comment() {
+        let mut count = 0;
+        process_vhdl_style("-- VHDL comment", &mut count);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_vhdl_code() {
+        let mut count = 0;
+        process_vhdl_style("signal clk : std_logic;", &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_vhdl_inline_comment() {
+        let mut count = 0;
+        process_vhdl_style("signal rst : std_logic; -- reset signal", &mut count);
+        process_vhdl_style("signal data : std_logic_vector(7 downto 0);", &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_vhdl_entity() {
+        let mut count = 0;
+        process_vhdl_style("-- Entity declaration", &mut count);
+        process_vhdl_style("entity counter is", &mut count);
+        process_vhdl_style("port (", &mut count);
+        process_vhdl_style("    clk : in std_logic; -- clock input", &mut count);
+        process_vhdl_style("    -- rst : in std_logic;", &mut count);
+        process_vhdl_style("    count : out std_logic_vector(7 downto 0)", &mut count);
+        process_vhdl_style(");", &mut count);
+        process_vhdl_style("end entity;", &mut count);
+        assert_eq!(count, 6);
+    }
+}

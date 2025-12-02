@@ -103,3 +103,68 @@ fn check_ocaml_block_nesting(
         i += 1;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ocaml_block_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_ocaml_style("(* comment *)", &mut in_block, &mut depth, &mut count);
+        process_ocaml_style("let x = 1", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_ocaml_nested_block_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_ocaml_style("(* outer (* inner *) still outer *)", &mut in_block, &mut depth, &mut count);
+        process_ocaml_style("let y = 2", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+        assert!(!in_block);
+    }
+
+    #[test]
+    fn test_ocaml_multiline_block_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_ocaml_style("(*", &mut in_block, &mut depth, &mut count);
+        assert!(in_block);
+        process_ocaml_style("  multiline", &mut in_block, &mut depth, &mut count);
+        process_ocaml_style("*)", &mut in_block, &mut depth, &mut count);
+        assert!(!in_block);
+        process_ocaml_style("let z = 3", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_fsharp_line_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_ocaml_style("// F# comment", &mut in_block, &mut depth, &mut count);
+        process_ocaml_style("let a = 1", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_pascal_block_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_ocaml_style("(* Pascal comment *)", &mut in_block, &mut depth, &mut count);
+        process_ocaml_style("var x: Integer;", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+    }
+}

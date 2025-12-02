@@ -1,71 +1,13 @@
 // crates/infra/src/measurement/strategies/sloc_counter/processors/hash_style.rs
 //! Hash系言語のコメント処理
 //!
-//! Python/Ruby/Perl/Shell等の `#` コメントを処理します。
-//! - Python: Docstring（三重クォート `"""` / `'''`）, f-string等
+//! Ruby/Perl/Shell等の `#` コメントを処理します。
 //! - Ruby: 埋め込みドキュメント（`=begin` ～ `=end`）
 //! - Perl: POD（`=pod` / `=head1` 等 ～ `=cut`）
 //! - Shell/YAML/Config: 単純な # コメント（複雑な文字列処理不要）
-
-use super::super::string_utils::{check_docstring_start, find_hash_outside_string};
-
-/// Python スタイル (#) の処理
-/// 
-/// Python固有の対応:
-/// - Docstring: `"""..."""` / `'''...'''`
-/// - f-string: `f"..."`, `F"..."` 等の文字列プレフィックス
-/// - 複合プレフィックス: `fr"..."`, `rf"..."` 等
-pub fn process_python_style(
-    line: &str,
-    docstring_quote: &mut Option<u8>,
-    in_block_comment: &mut bool,
-    count: &mut usize,
-) {
-    let trimmed = line.trim();
-
-    // Docstring内の場合
-    if let Some(quote) = *docstring_quote {
-        let closing = if quote == b'"' { "\"\"\"" } else { "'''" };
-        if line.contains(closing) {
-            *docstring_quote = None;
-            *in_block_comment = false;
-        }
-        return;
-    }
-
-    // shebang行を除外
-    if trimmed.starts_with("#!") && *count == 0 {
-        return;
-    }
-    
-    // #で始まる行はコメント
-    if trimmed.starts_with('#') {
-        return;
-    }
-
-    // Python Docstring開始判定（行頭または代入の右辺として現れる三重クォート）
-    if let Some(quote_type) = check_docstring_start(trimmed) {
-        let closing = if quote_type == b'"' { "\"\"\"" } else { "'''" };
-        // 同じ行で閉じているか確認
-        if trimmed.len() > 3 && trimmed[3..].contains(closing) {
-            // 1行Docstring -> コメント扱い
-            return;
-        }
-        *docstring_quote = Some(quote_type);
-        *in_block_comment = true;
-        return;
-    }
-
-    // # より前にコードがあるか (f-string等を考慮)
-    if let Some(hash_pos) = find_hash_outside_string(line) {
-        let before = &line[..hash_pos];
-        if !before.trim().is_empty() {
-            *count += 1;
-        }
-    } else {
-        *count += 1;
-    }
-}
+//!
+//! Note: Python は複雑な文字列処理（Docstring, f-string）があるため
+//! python_style.rs に分離されています。
 
 /// Ruby スタイル (#) の処理
 /// 
@@ -281,4 +223,205 @@ fn find_hash_outside_simple_string(line: &str) -> Option<usize> {
     }
     
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ==================== Ruby テスト ====================
+
+    #[test]
+    fn test_ruby_line_comment() {
+        let mut in_doc = false;
+        let mut count = 0;
+        process_ruby_style("# comment", &mut in_doc, &mut count);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_ruby_code() {
+        let mut in_doc = false;
+        let mut count = 0;
+        process_ruby_style("x = 1", &mut in_doc, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_ruby_embedded_document() {
+        let mut in_doc = false;
+        let mut count = 0;
+
+        process_ruby_style("x = 1", &mut in_doc, &mut count);
+        process_ruby_style("=begin", &mut in_doc, &mut count);
+        assert!(in_doc);
+        process_ruby_style("This is embedded documentation.", &mut in_doc, &mut count);
+        process_ruby_style("It can span multiple lines.", &mut in_doc, &mut count);
+        process_ruby_style("=end", &mut in_doc, &mut count);
+        assert!(!in_doc);
+        process_ruby_style("y = 2", &mut in_doc, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_ruby_embedded_document_with_comments() {
+        let mut in_doc = false;
+        let mut count = 0;
+
+        process_ruby_style("# regular comment", &mut in_doc, &mut count);
+        process_ruby_style("def foo", &mut in_doc, &mut count);
+        process_ruby_style("=begin", &mut in_doc, &mut count);
+        process_ruby_style("  embedded doc", &mut in_doc, &mut count);
+        process_ruby_style("=end", &mut in_doc, &mut count);
+        process_ruby_style("  puts 'hello'", &mut in_doc, &mut count);
+        process_ruby_style("end", &mut in_doc, &mut count);
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn test_ruby_embedded_doc_must_start_at_line_beginning() {
+        let mut in_doc = false;
+        let mut count = 0;
+
+        process_ruby_style("x = 1  # =begin is not at line start", &mut in_doc, &mut count);
+        process_ruby_style("y = 2", &mut in_doc, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    // ==================== Perl テスト ====================
+
+    #[test]
+    fn test_perl_pod_basic() {
+        let mut in_doc = false;
+        let mut count = 0;
+
+        process_perl_style("use strict;", &mut in_doc, &mut count);
+        process_perl_style("=pod", &mut in_doc, &mut count);
+        assert!(in_doc);
+        process_perl_style("This is POD documentation.", &mut in_doc, &mut count);
+        process_perl_style("=cut", &mut in_doc, &mut count);
+        assert!(!in_doc);
+        process_perl_style("print \"Hello\";", &mut in_doc, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_perl_pod_with_head() {
+        let mut in_doc = false;
+        let mut count = 0;
+
+        process_perl_style("my $x = 1;", &mut in_doc, &mut count);
+        process_perl_style("=head1 NAME", &mut in_doc, &mut count);
+        assert!(in_doc);
+        process_perl_style("", &mut in_doc, &mut count);
+        process_perl_style("MyModule - A sample module", &mut in_doc, &mut count);
+        process_perl_style("", &mut in_doc, &mut count);
+        process_perl_style("=head2 DESCRIPTION", &mut in_doc, &mut count);
+        process_perl_style("", &mut in_doc, &mut count);
+        process_perl_style("This module does something.", &mut in_doc, &mut count);
+        process_perl_style("", &mut in_doc, &mut count);
+        process_perl_style("=cut", &mut in_doc, &mut count);
+        assert!(!in_doc);
+        process_perl_style("my $y = 2;", &mut in_doc, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_perl_pod_over_item() {
+        let mut in_doc = false;
+        let mut count = 0;
+
+        process_perl_style("sub foo { 1 }", &mut in_doc, &mut count);
+        process_perl_style("=over 4", &mut in_doc, &mut count);
+        assert!(in_doc);
+        process_perl_style("=item * First item", &mut in_doc, &mut count);
+        process_perl_style("=item * Second item", &mut in_doc, &mut count);
+        process_perl_style("=back", &mut in_doc, &mut count);
+        process_perl_style("=cut", &mut in_doc, &mut count);
+        assert!(!in_doc);
+        process_perl_style("sub bar { 2 }", &mut in_doc, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_perl_shebang_not_counted() {
+        let mut in_doc = false;
+        let mut count = 0;
+
+        process_perl_style("#!/usr/bin/perl", &mut in_doc, &mut count);
+        process_perl_style("use warnings;", &mut in_doc, &mut count);
+        process_perl_style("print 1;", &mut in_doc, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    // ==================== Simple Hash Style テスト ====================
+
+    #[test]
+    fn test_simple_hash_line_comment() {
+        let mut count = 0;
+        process_simple_hash_style("# comment", &mut count);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_simple_hash_code() {
+        let mut count = 0;
+        process_simple_hash_style("x = 1", &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_simple_hash_code_with_inline_comment() {
+        let mut count = 0;
+        process_simple_hash_style("x = 1  # comment", &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_simple_hash_string_with_hash() {
+        let mut count = 0;
+        process_simple_hash_style(r#"s = "hello # world""#, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    // ==================== INI/Config テスト ====================
+
+    #[test]
+    fn test_ini_hash_comment() {
+        let mut count = 0;
+        process_simple_hash_style("# INI comment", &mut count);
+        process_simple_hash_style("[section]", &mut count);
+        process_simple_hash_style("key = value", &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_conf_file() {
+        let mut count = 0;
+        process_simple_hash_style("# Configuration", &mut count);
+        process_simple_hash_style("server = localhost", &mut count);
+        process_simple_hash_style("port = 8080", &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_properties_file() {
+        let mut count = 0;
+        process_simple_hash_style("# Java properties", &mut count);
+        process_simple_hash_style("app.name=MyApp", &mut count);
+        process_simple_hash_style("app.version=1.0", &mut count);
+        assert_eq!(count, 2);
+    }
+
+    // ==================== GraphQL テスト ====================
+
+    #[test]
+    fn test_graphql_hash_comment() {
+        let mut count = 0;
+        process_simple_hash_style("# GraphQL schema", &mut count);
+        process_simple_hash_style("type Query {", &mut count);
+        process_simple_hash_style("  users: [User]", &mut count);
+        process_simple_hash_style("}", &mut count);
+        assert_eq!(count, 3);
+    }
 }

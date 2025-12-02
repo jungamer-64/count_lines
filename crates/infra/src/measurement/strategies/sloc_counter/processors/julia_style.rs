@@ -126,3 +126,60 @@ fn check_julia_block_nesting<'a>(
     
     None
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_julia_line_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_julia_style("# comment", &mut in_block, &mut depth, &mut count);
+        process_julia_style("x = 1", &mut in_block, &mut depth, &mut count);
+        process_julia_style("y = 2 # inline comment", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_julia_block_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_julia_style("#=", &mut in_block, &mut depth, &mut count);
+        assert!(in_block);
+        process_julia_style("  block comment", &mut in_block, &mut depth, &mut count);
+        process_julia_style("=#", &mut in_block, &mut depth, &mut count);
+        assert!(!in_block);
+        process_julia_style("z = 3", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_julia_nested_block_comment() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_julia_style("#= outer", &mut in_block, &mut depth, &mut count);
+        process_julia_style("#= inner =#", &mut in_block, &mut depth, &mut count);
+        process_julia_style("still in outer =#", &mut in_block, &mut depth, &mut count);
+        process_julia_style("a = 1", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+        assert!(!in_block);
+    }
+
+    #[test]
+    fn test_julia_block_comment_single_line() {
+        let mut in_block = false;
+        let mut depth = 0;
+        let mut count = 0;
+
+        process_julia_style("#= comment =# b = 2", &mut in_block, &mut depth, &mut count);
+        assert_eq!(count, 1);
+        assert!(!in_block);
+    }
+}

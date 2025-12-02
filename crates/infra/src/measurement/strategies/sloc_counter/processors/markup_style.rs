@@ -39,3 +39,58 @@ pub fn process_html_style(line: &str, in_block_comment: &mut bool, count: &mut u
 
     *count += 1;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_html_comment_single_line() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_html_style("<!-- comment -->", &mut in_block, &mut count);
+        assert_eq!(count, 0);
+        assert!(!in_block);
+    }
+
+    #[test]
+    fn test_html_code() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_html_style("<div>content</div>", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_html_multiline_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+
+        process_html_style("<!-- multi", &mut in_block, &mut count);
+        assert!(in_block);
+        assert_eq!(count, 0);
+
+        process_html_style("line -->", &mut in_block, &mut count);
+        assert!(!in_block);
+        assert_eq!(count, 0);
+
+        process_html_style("<p>text</p>", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_html_code_before_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_html_style("<div>content</div> <!-- comment -->", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_html_code_after_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_html_style("<!-- comment --> <div>content</div>", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+}

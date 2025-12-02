@@ -76,3 +76,85 @@ fn process_sql_block_comment(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sql_line_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_sql_style("-- comment", &mut in_block, &mut count);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_sql_code_with_line_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_sql_style("SELECT * FROM t; -- comment", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_sql_string_with_block_comment_marker() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_sql_style("SELECT '/* これはコメントではありません */' FROM users;", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_sql_string_with_line_comment_marker() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_sql_style("SELECT '-- これもコメントではない' FROM users;", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_sql_escaped_quote() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_sql_style("SELECT 'It''s a test /* not comment */' FROM t;", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_sql_double_quote_identifier() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_sql_style(r#"SELECT "column /* name */" FROM t;"#, &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_sql_real_block_comment() {
+        let mut in_block = false;
+        let mut count = 0;
+        process_sql_style("SELECT * /* comment */ FROM t;", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_sql_block_comment_multiline() {
+        let mut in_block = false;
+        let mut count = 0;
+
+        process_sql_style("/*", &mut in_block, &mut count);
+        assert!(in_block);
+        assert_eq!(count, 0);
+
+        process_sql_style("  comment", &mut in_block, &mut count);
+        assert!(in_block);
+        assert_eq!(count, 0);
+
+        process_sql_style("*/", &mut in_block, &mut count);
+        assert!(!in_block);
+        assert_eq!(count, 0);
+
+        process_sql_style("SELECT 1;", &mut in_block, &mut count);
+        assert_eq!(count, 1);
+    }
+}
