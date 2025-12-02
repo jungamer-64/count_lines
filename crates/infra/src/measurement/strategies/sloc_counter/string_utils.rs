@@ -43,7 +43,7 @@ impl StringSkipOptions {
         }
     }
 
-    /// C/C++ 用オプション
+    /// C/C++ 用オプション (Raw String対応)
     pub fn cpp() -> Self {
         Self {
             cpp_raw_string: true,
@@ -62,10 +62,19 @@ impl StringSkipOptions {
         }
     }
 
-    /// C#/Java/Kotlin 用オプション
-    pub fn csharp_java() -> Self {
+    /// C# 用オプション (Verbatim String @"..." 対応)
+    pub fn csharp() -> Self {
         Self {
             csharp_verbatim: true,
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// Java/Kotlin/Scala 用オプション (Text Block """...""" 対応)
+    pub fn java_kotlin() -> Self {
+        Self {
             text_block: true,
             double_quote: true,
             single_quote: true,
@@ -73,10 +82,61 @@ impl StringSkipOptions {
         }
     }
 
-    /// Go/JavaScript/TypeScript 用オプション
+    /// Go/JavaScript/TypeScript 用オプション (バッククォート `...` 対応)
     pub fn go_js() -> Self {
         Self {
             backtick_string: true,
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// Swift 用オプション (拡張デリミタ #"..."# 対応)
+    /// 
+    /// Swift固有の文字列:
+    /// - 通常: `"..."`
+    /// - 多重引用符: `"""..."""`
+    /// - 拡張デリミタ: `#"..."#`, `##"..."##`
+    pub fn swift() -> Self {
+        Self {
+            double_quote: true,
+            single_quote: true,
+            // Swift専用の処理は find_outside_string_swift で行う
+            ..Default::default()
+        }
+    }
+
+    /// Verilog/SystemVerilog 用オプション
+    /// 
+    /// Verilog は C風の文字列のみ (Raw String なし)
+    pub fn verilog() -> Self {
+        Self {
+            double_quote: true,
+            // Verilog では ' は ビット幅指定 (4'b0001) などに使われるため除外
+            single_quote: false,
+            ..Default::default()
+        }
+    }
+
+    /// Dart 用オプション
+    /// 
+    /// Dart はバッククォートなし、三重クォートあり
+    pub fn dart() -> Self {
+        Self {
+            text_block: true,
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// Objective-C 用オプション
+    /// 
+    /// @"..." 形式の NSString リテラルがあるが、
+    /// C# Verbatim String とは異なりエスケープ可能
+    pub fn objc() -> Self {
+        Self {
             double_quote: true,
             single_quote: true,
             ..Default::default()
@@ -89,6 +149,64 @@ impl StringSkipOptions {
             double_quote: true,
             single_quote: true,
             ..Default::default()
+        }
+    }
+
+    /// 拡張子から適切なオプションを取得
+    pub fn from_extension(ext: &str) -> Self {
+        match ext.to_lowercase().as_str() {
+            // Rust
+            "rs" => Self::rust(),
+            
+            // C/C++
+            "cpp" | "cc" | "cxx" | "c++" | "hpp" | "hh" | "hxx" | "h++" => Self::cpp(),
+            "c" | "h" => Self::c(),
+            
+            // C#
+            "cs" => Self::csharp(),
+            
+            // Java/Kotlin/Scala
+            "java" => Self::java_kotlin(),
+            "kt" | "kts" => Self::java_kotlin(),
+            "scala" | "sc" => Self::java_kotlin(),
+            
+            // Go/JavaScript/TypeScript (バッククォート対応)
+            "go" => Self::go_js(),
+            "js" | "mjs" | "cjs" | "jsx" => Self::go_js(),
+            "ts" | "tsx" | "mts" | "cts" => Self::go_js(),
+            
+            // Swift
+            "swift" => Self::swift(),
+            
+            // Dart
+            "dart" => Self::dart(),
+            
+            // Objective-C
+            "m" | "mm" => Self::objc(),
+            
+            // Verilog/SystemVerilog
+            "v" | "sv" | "svh" => Self::verilog(),
+            
+            // Groovy (Java-like)
+            "groovy" | "gradle" => Self::java_kotlin(),
+            
+            // D言語
+            "d" => Self::basic(), // D言語は Raw String あるが専用処理で対応
+            
+            // Protocol Buffers, Thrift, Solidity, etc.
+            "proto" | "thrift" | "sol" => Self::basic(),
+            
+            // Linker Script
+            "ld" | "lds" => Self::basic(),
+            
+            // Zig
+            "zig" => Self::basic(),
+            
+            // CSS系
+            "css" | "scss" | "sass" | "less" => Self::basic(),
+            
+            // デフォルト
+            _ => Self::basic(),
         }
     }
 }

@@ -10,17 +10,21 @@ mod string_utils;
 pub use comment_style::CommentStyle;
 
 use processors::{
-    process_assembly_style, process_batch_style, process_c_style, process_cpp_style,
+    process_assembly_style, process_batch_style, process_c_style_with_options, process_cpp_style,
     process_dlang_style, process_erlang_style, process_fortran_style, process_gas_assembly_style,
-    process_hash_style, process_haskell_style, process_html_style, process_julia_style,
-    process_lisp_style, process_lua_style, process_matlab_style, process_nesting_c_style,
-    process_ocaml_style, process_php_style, process_powershell_style, process_sql_style,
+    process_haskell_style, process_html_style, process_julia_style, process_lisp_style,
+    process_lua_style, process_matlab_style, process_nesting_c_style_with_options,
+    process_ocaml_style, process_perl_style, process_php_style, process_powershell_style,
+    process_python_style, process_ruby_style, process_simple_hash_style, process_sql_style,
     process_swift_style, process_vhdl_style, process_visual_basic_style,
 };
+use string_utils::StringSkipOptions;
 
 /// SLOCカウンターの状態
 pub struct SlocCounter {
     style: CommentStyle,
+    /// 言語に応じた文字列スキップオプション
+    string_opts: StringSkipOptions,
     in_block_comment: bool,
     /// Rust/Swift/Kotlin/Haskellのネストされたブロックコメント用の深さカウンター
     block_comment_depth: usize,
@@ -49,6 +53,9 @@ impl SlocCounter {
         let style = CommentStyle::from_extension(extension);
         let ext_lower = extension.to_lowercase();
 
+        // 言語に応じた文字列スキップオプションを設定
+        let string_opts = StringSkipOptions::from_extension(extension);
+
         // ネストコメントをサポートする言語 (D言語は別処理)
         let supports_nesting = matches!(
             ext_lower.as_str(),
@@ -66,6 +73,7 @@ impl SlocCounter {
 
         Self {
             style,
+            string_opts,
             in_block_comment: false,
             block_comment_depth: 0,
             supports_nesting,
@@ -100,9 +108,10 @@ impl SlocCounter {
                         &mut self.count,
                     );
                 } else if self.supports_nesting {
-                    // Rust/Kotlin/Scala/D などのネストコメント対応
-                    process_nesting_c_style(
+                    // Rust/Kotlin/Scala などのネストコメント対応
+                    process_nesting_c_style_with_options(
                         trimmed,
+                        &self.string_opts,
                         &mut self.block_comment_depth,
                         &mut self.in_block_comment,
                         &mut self.count,
@@ -110,16 +119,44 @@ impl SlocCounter {
                 } else if self.supports_cpp_raw_string {
                     process_cpp_style(trimmed, &mut self.in_block_comment, &mut self.count);
                 } else {
-                    process_c_style(trimmed, &mut self.in_block_comment, &mut self.count);
+                    // C, Java, Go, JS/TS など - 言語別の文字列オプションを使用
+                    process_c_style_with_options(
+                        trimmed,
+                        &self.string_opts,
+                        &mut self.in_block_comment,
+                        &mut self.count,
+                    );
                 }
             }
-            CommentStyle::Hash => process_hash_style(
-                line, // 埋め込みドキュメントは行頭判定が必要なため trim 前の line を渡す
-                &mut self.docstring_quote,
-                &mut self.in_embedded_doc,
-                &mut self.in_block_comment,
-                &mut self.count,
-            ),
+            CommentStyle::Python => {
+                // Python: Docstring ("""/''') と f-string 対応
+                process_python_style(
+                    line, // Docstringは行頭判定が必要なため trim 前の line を渡す
+                    &mut self.docstring_quote,
+                    &mut self.in_block_comment,
+                    &mut self.count,
+                );
+            }
+            CommentStyle::Ruby => {
+                // Ruby: =begin/=end 埋め込みドキュメント対応
+                process_ruby_style(
+                    line, // 埋め込みドキュメントは行頭判定が必要
+                    &mut self.in_embedded_doc,
+                    &mut self.count,
+                );
+            }
+            CommentStyle::Perl => {
+                // Perl: POD (=pod/=head/=cut) 対応
+                process_perl_style(
+                    line, // PODは行頭判定が必要
+                    &mut self.in_embedded_doc,
+                    &mut self.count,
+                );
+            }
+            CommentStyle::SimpleHash => {
+                // Shell, YAML, Config系など: 単純な # コメント
+                process_simple_hash_style(trimmed, &mut self.count);
+            }
             CommentStyle::Php => {
                 process_php_style(trimmed, &mut self.in_block_comment, &mut self.count)
             }

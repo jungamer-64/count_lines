@@ -8,8 +8,15 @@ pub enum CommentStyle {
     CStyle,
     /// PHP: //, /* */, # (全てサポート)
     Php,
-    /// Python/Ruby/Shell: #
-    Hash,
+    /// Python: # と """...""" / '''...''' Docstring
+    Python,
+    /// Ruby: # と =begin ～ =end 埋め込みドキュメント
+    Ruby,
+    /// Perl: # と =pod/=head 等 ～ =cut POD
+    Perl,
+    /// 単純な Hash スタイル (#) - Shell, YAML, Config系等
+    /// 複雑な文字列処理不要、# のみでコメント判定
+    SimpleHash,
     /// PowerShell: # と <# #>
     PowerShell,
     /// Lua: -- と --[[ ]]
@@ -84,35 +91,41 @@ impl CommentStyle {
             // PHP (//, /* */, #)
             "php" => Self::Php,
             
-            // Hash系 (#)
-            "py" | "pyw" | "pyi" => Self::Hash, // Python
-            "rb" | "rake" | "gemspec" => Self::Hash, // Ruby
-            "sh" | "bash" | "zsh" | "fish" => Self::Hash,
-            "pl" | "pm" | "perl" => Self::Hash, // Perl
-            "r" | "rmd" => Self::Hash, // R
-            "yml" | "yaml" => Self::Hash,
-            "toml" => Self::Hash,
-            "dockerfile" => Self::Hash,
-            "makefile" | "mk" => Self::Hash,
-            "cmake" => Self::Hash,
-            "nim" => Self::Hash, // Nim
-            "cr" => Self::Hash,  // Crystal
-            "ex" | "exs" => Self::Hash, // Elixir
-            "coffee" => Self::Hash, // CoffeeScript
-            "tcl" => Self::Hash,
-            "awk" => Self::Hash,
-            "sed" => Self::Hash,
-            "tf" | "tfvars" => Self::Hash, // Terraform
+            // Python: # と Docstring (複雑な文字列処理が必要)
+            "py" | "pyw" | "pyi" => Self::Python,
             
-            // 設定ファイル (#)
-            "ini" | "conf" | "cfg" | "properties" => Self::Hash,
+            // Ruby: # と =begin/=end
+            "rb" | "rake" | "gemspec" => Self::Ruby,
             
-            // GraphQL (#)
-            "graphql" | "gql" => Self::Hash,
+            // Perl: # と POD
+            "pl" | "pm" | "perl" => Self::Perl,
+            
+            // 単純な Hash スタイル (#) - 複雑な文字列処理不要
+            "sh" | "bash" | "zsh" | "fish" => Self::SimpleHash,
+            "yml" | "yaml" => Self::SimpleHash,
+            "toml" => Self::SimpleHash,
+            "dockerfile" => Self::SimpleHash,
+            "makefile" | "mk" => Self::SimpleHash,
+            "cmake" => Self::SimpleHash,
+            "nim" => Self::SimpleHash, // Nim (# と """ のみ)
+            "cr" => Self::Ruby,  // Crystal (Ruby風)
+            "ex" | "exs" => Self::SimpleHash, // Elixir (# と @doc/@moduledoc)
+            "coffee" => Self::SimpleHash, // CoffeeScript
+            "tcl" => Self::SimpleHash,
+            "awk" => Self::SimpleHash,
+            "sed" => Self::SimpleHash,
+            "tf" | "tfvars" => Self::SimpleHash, // Terraform
+            "r" | "rmd" => Self::SimpleHash, // R
+            
+            // 設定ファイル (#) - 単純処理
+            "ini" | "conf" | "cfg" | "properties" => Self::SimpleHash,
+            
+            // GraphQL (#) - 単純処理
+            "graphql" | "gql" => Self::SimpleHash,
             
             // PowerShell (# と <# #>)
             "ps1" | "psm1" | "psd1" => Self::PowerShell,
-            "nix" => Self::Hash, // Nix
+            "nix" => Self::SimpleHash, // Nix
             
             // Lua (-- と --[[ ]])
             "lua" => Self::Lua,

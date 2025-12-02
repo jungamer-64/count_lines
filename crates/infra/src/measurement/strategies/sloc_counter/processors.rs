@@ -9,11 +9,14 @@ mod other_styles;
 mod php_style;
 mod powershell_style;
 
+// 新しいオプション対応版のエクスポート
 pub use c_style::{
-    process_c_style, process_cpp_style, process_dlang_style, process_nesting_c_style,
-    process_swift_style,
+    process_c_style_with_options, process_cpp_style, process_dlang_style,
+    process_nesting_c_style_with_options, process_swift_style,
 };
-pub use hash_style::process_hash_style;
+pub use hash_style::{
+    process_perl_style, process_python_style, process_ruby_style, process_simple_hash_style,
+};
 pub use julia_style::process_julia_style;
 pub use ocaml_style::process_ocaml_style;
 pub use other_styles::{

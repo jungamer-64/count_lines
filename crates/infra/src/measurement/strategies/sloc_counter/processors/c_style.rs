@@ -4,11 +4,18 @@
 //! C/C++/Java/JavaScript/Rust/Go/Swift/Kotlin等の
 //! `//` 行コメントと `/* */` ブロックコメントを処理します。
 
-use super::super::string_utils::{find_outside_string, find_outside_string_cpp, find_outside_string_swift};
+use super::super::string_utils::{
+    find_outside_string, find_outside_string_cpp, find_outside_string_swift,
+    find_outside_string_with_options, StringSkipOptions,
+};
 
-/// C系スタイル (// と /* */) の処理 - ネスト非対応版
-pub fn process_c_style(
+/// C系スタイル (// と /* */) の処理 - StringSkipOptions対応版
+/// 
+/// 言語に応じたStringSkipOptionsを渡すことで、
+/// 各言語固有の文字列リテラル構文を正しくスキップできます。
+pub fn process_c_style_with_options(
     line: &str,
+    options: &StringSkipOptions,
     in_block_comment: &mut bool,
     count: &mut usize,
 ) {
@@ -26,7 +33,7 @@ pub fn process_c_style(
     }
 
     // 行コメント（文字列外）のみの行かチェック
-    if let Some(line_comment_pos) = find_outside_string(line, "//") {
+    if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", options) {
         // // より前にコードがあるか
         let before = &line[..line_comment_pos];
         if before.trim().is_empty() {
@@ -39,7 +46,7 @@ pub fn process_c_style(
     }
 
     // ブロックコメント開始をチェック（文字列外）
-    if let Some(block_start) = find_outside_string(line, "/*") {
+    if let Some(block_start) = find_outside_string_with_options(line, "/*", options) {
         // /* より前にコードがあるか
         let before = &line[..block_start];
         let has_code_before = !before.trim().is_empty();
@@ -48,7 +55,7 @@ pub fn process_c_style(
         if let Some(block_end) = line[block_start + 2..].find("*/") {
             let after = &line[block_start + 2 + block_end + 2..];
             let has_code_after = !after.trim().is_empty() 
-                && find_outside_string(after, "//").is_none_or(|p| p > 0);
+                && find_outside_string_with_options(after, "//", options).is_none_or(|p| p > 0);
             if has_code_before || has_code_after {
                 *count += 1;
             }
@@ -65,21 +72,31 @@ pub fn process_c_style(
     *count += 1;
 }
 
-/// ネストコメント対応 C系スタイル処理 (Rust/Swift/Kotlin/Scala/D)
-pub fn process_nesting_c_style(
+/// ネストコメント対応 C系スタイル処理 - StringSkipOptions対応版
+///
+/// 言語に応じたStringSkipOptionsを渡すことで、
+/// 各言語固有の文字列リテラル構文を正しくスキップできます。
+pub fn process_nesting_c_style_with_options(
     line: &str,
+    options: &StringSkipOptions,
     block_comment_depth: &mut usize,
     in_block_comment: &mut bool,
     count: &mut usize,
 ) {
     // ネストされたブロックコメント内
     if *block_comment_depth > 0 {
-        process_nesting_block_comment_line(line, block_comment_depth, in_block_comment, count);
+        process_nesting_block_comment_line_with_options(
+            line,
+            options,
+            block_comment_depth,
+            in_block_comment,
+            count,
+        );
         return;
     }
 
     // 行コメント（文字列外）のみの行かチェック
-    if let Some(line_comment_pos) = find_outside_string(line, "//") {
+    if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", options) {
         let before = &line[..line_comment_pos];
         if before.trim().is_empty() {
             return;
@@ -89,14 +106,20 @@ pub fn process_nesting_c_style(
     }
 
     // ブロックコメント開始をチェック（文字列外）
-    if let Some(block_start) = find_outside_string(line, "/*") {
+    if let Some(block_start) = find_outside_string_with_options(line, "/*", options) {
         let before = &line[..block_start];
         let has_code_before = !before.trim().is_empty();
         
         // ブロックコメント開始後の部分を処理
         *block_comment_depth = 1;
         let rest = &line[block_start + 2..];
-        process_nesting_block_comment_line(rest, block_comment_depth, in_block_comment, count);
+        process_nesting_block_comment_line_with_options(
+            rest,
+            options,
+            block_comment_depth,
+            in_block_comment,
+            count,
+        );
         
         if has_code_before {
             *count += 1;
@@ -111,6 +134,23 @@ pub fn process_nesting_c_style(
 /// ネストされたブロックコメント行を処理
 fn process_nesting_block_comment_line(
     line: &str,
+    block_comment_depth: &mut usize,
+    in_block_comment: &mut bool,
+    count: &mut usize,
+) {
+    process_nesting_block_comment_line_with_options(
+        line,
+        &StringSkipOptions::rust(),
+        block_comment_depth,
+        in_block_comment,
+        count,
+    )
+}
+
+/// ネストされたブロックコメント行を処理 - StringSkipOptions対応版
+fn process_nesting_block_comment_line_with_options(
+    line: &str,
+    options: &StringSkipOptions,
     block_comment_depth: &mut usize,
     in_block_comment: &mut bool,
     count: &mut usize,
@@ -136,7 +176,13 @@ fn process_nesting_block_comment_line(
                     let rest = &line[i..];
                     if !rest.trim().is_empty() {
                         // 残りの部分を再帰的に処理
-                        process_nesting_c_style(rest, block_comment_depth, in_block_comment, count);
+                        process_nesting_c_style_with_options(
+                            rest,
+                            options,
+                            block_comment_depth,
+                            in_block_comment,
+                            count,
+                        );
                     }
                     return;
                 }
