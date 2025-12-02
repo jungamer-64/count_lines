@@ -10,11 +10,12 @@ mod string_utils;
 pub use comment_style::CommentStyle;
 
 use processors::{
-    process_c_style, process_cpp_style, process_erlang_style, process_fortran_style,
+    process_assembly_style, process_batch_style, process_c_style, process_cpp_style,
+    process_dlang_style, process_erlang_style, process_fortran_style, process_gas_assembly_style,
     process_hash_style, process_haskell_style, process_html_style, process_julia_style,
     process_lisp_style, process_lua_style, process_matlab_style, process_nesting_c_style,
     process_ocaml_style, process_php_style, process_powershell_style, process_sql_style,
-    process_swift_style,
+    process_swift_style, process_vhdl_style,
 };
 
 /// SLOCカウンターの状態
@@ -35,6 +36,10 @@ pub struct SlocCounter {
     is_swift: bool,
     /// Lua ブロックコメントのレベル (等号の数)
     lua_block_level: usize,
+    /// D言語の /+ +/ ネストブロックコメント内か
+    in_dlang_nesting_block: bool,
+    /// D言語の /+ +/ ネストブロックコメントの深さ
+    dlang_nesting_depth: usize,
     count: usize,
 }
 
@@ -44,10 +49,10 @@ impl SlocCounter {
         let style = CommentStyle::from_extension(extension);
         let ext_lower = extension.to_lowercase();
 
-        // ネストコメントをサポートする言語
+        // ネストコメントをサポートする言語 (D言語は別処理)
         let supports_nesting = matches!(
             ext_lower.as_str(),
-            "rs" | "swift" | "kt" | "kts" | "scala" | "sc" | "d"
+            "rs" | "swift" | "kt" | "kts" | "scala" | "sc"
         );
 
         // C++ Raw Stringをサポートする言語
@@ -69,6 +74,8 @@ impl SlocCounter {
             supports_cpp_raw_string,
             is_swift,
             lua_block_level: 0,
+            in_dlang_nesting_block: false,
+            dlang_nesting_depth: 0,
             count: 0,
         }
     }
@@ -157,6 +164,21 @@ impl SlocCounter {
                     &mut self.count,
                 )
             }
+            CommentStyle::DLang => {
+                process_dlang_style(
+                    trimmed,
+                    &mut self.in_block_comment,
+                    &mut self.in_dlang_nesting_block,
+                    &mut self.dlang_nesting_depth,
+                    &mut self.count,
+                )
+            }
+            CommentStyle::Batch => process_batch_style(trimmed, &mut self.count),
+            CommentStyle::Assembly => process_assembly_style(trimmed, &mut self.count),
+            CommentStyle::GasAssembly => {
+                process_gas_assembly_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
+            CommentStyle::Vhdl => process_vhdl_style(trimmed, &mut self.count),
             CommentStyle::Lisp => process_lisp_style(trimmed, &mut self.count),
             CommentStyle::Erlang => process_erlang_style(trimmed, &mut self.count),
             CommentStyle::Fortran => process_fortran_style(trimmed, &mut self.count),
@@ -1340,5 +1362,404 @@ mod tests {
         counter.process_line("SELECT * FROM t; -- comment");
         // 1行がSLOC
         assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== D言語 テスト ====================
+
+    #[test]
+    fn test_dlang_line_comment() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("// comment");
+        counter.process_line("int x = 1;");
+        counter.process_line("int y = 2; // inline comment");
+        // x と y の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_dlang_block_comment() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("/* block comment */");
+        counter.process_line("int z = 3;");
+        // z の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_dlang_nesting_comment_basic() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("/+");
+        counter.process_line("  nesting comment");
+        counter.process_line("+/");
+        counter.process_line("int a = 1;");
+        // a の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_dlang_nesting_comment_nested() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("/+ outer");
+        counter.process_line("/+ inner +/");
+        counter.process_line("still in outer +/");
+        counter.process_line("int b = 2;");
+        // b の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_dlang_nesting_comment_single_line() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("/+ /+ nested +/ still in outer +/ int c = 3;");
+        // c の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_dlang_nesting_comment_deep() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("/+ level 1");
+        counter.process_line("/+ level 2");
+        counter.process_line("/+ level 3 +/");
+        counter.process_line("back to level 2 +/");
+        counter.process_line("back to level 1 +/");
+        counter.process_line("int d = 4;");
+        // d の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_dlang_mixed_comments() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("/* block */ /+ nesting +/ int x = 1;");
+        // x の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_dlang_code_before_nesting_comment() {
+        let mut counter = SlocCounter::new("d");
+        counter.process_line("int x = 1; /+ comment");
+        counter.process_line("/+ nested +/");
+        counter.process_line("+/");
+        counter.process_line("int y = 2;");
+        // x と y の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== Windows バッチファイル テスト ====================
+
+    #[test]
+    fn test_batch_rem_comment() {
+        let mut counter = SlocCounter::new("bat");
+        counter.process_line("REM This is a comment");
+        counter.process_line("echo Hello");
+        // echo の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_batch_rem_lowercase() {
+        let mut counter = SlocCounter::new("bat");
+        counter.process_line("rem lowercase comment");
+        counter.process_line("set x=1");
+        // set の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_batch_double_colon_comment() {
+        let mut counter = SlocCounter::new("bat");
+        counter.process_line(":: This is a label comment");
+        counter.process_line("echo World");
+        // echo の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_batch_at_rem() {
+        let mut counter = SlocCounter::new("bat");
+        counter.process_line("@REM Suppress output and comment");
+        counter.process_line("@echo off");
+        // @echo の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_batch_cmd_extension() {
+        let mut counter = SlocCounter::new("cmd");
+        counter.process_line(":: CMD file comment");
+        counter.process_line("dir /w");
+        // dir の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_batch_rem_only() {
+        let mut counter = SlocCounter::new("bat");
+        counter.process_line("REM");
+        counter.process_line("echo test");
+        // echo の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_batch_not_rem_if_no_space() {
+        let mut counter = SlocCounter::new("bat");
+        // "REMARK" は REM コメントではない
+        counter.process_line("echo REMARK");
+        // echo の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_batch_rem_with_tab() {
+        let mut counter = SlocCounter::new("bat");
+        counter.process_line("REM\tcomment with tab");
+        counter.process_line("set y=2");
+        // set の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== Assembly (NASM/MASM) テスト ====================
+
+    #[test]
+    fn test_assembly_nasm_line_comment() {
+        let mut counter = SlocCounter::new("asm");
+        counter.process_line("; This is a NASM comment");
+        counter.process_line("mov eax, 1");
+        // mov の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_assembly_inline_comment() {
+        let mut counter = SlocCounter::new("asm");
+        counter.process_line("mov eax, ebx ; copy ebx to eax");
+        counter.process_line("ret");
+        // mov と ret の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_assembly_multiple_lines() {
+        let mut counter = SlocCounter::new("asm");
+        counter.process_line("; Function prologue");
+        counter.process_line("push ebp");
+        counter.process_line("mov ebp, esp");
+        counter.process_line("; Save registers");
+        counter.process_line("push ebx");
+        // 3行がSLOC (push, mov, push)
+        assert_eq!(counter.count(), 3);
+    }
+
+    // ==================== GAS Assembly テスト ====================
+
+    #[test]
+    fn test_gas_assembly_hash_comment() {
+        let mut counter = SlocCounter::new("s");
+        counter.process_line("# GAS comment");
+        counter.process_line("movl $1, %eax");
+        // movl の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_gas_assembly_inline_comment() {
+        let mut counter = SlocCounter::new("s");
+        counter.process_line("movl %ebx, %eax # copy");
+        counter.process_line("ret");
+        // 2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_gas_assembly_block_comment() {
+        let mut counter = SlocCounter::new("s");
+        counter.process_line("/* block comment */");
+        counter.process_line("movl $0, %eax");
+        // movl の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_gas_assembly_multiline_block_comment() {
+        let mut counter = SlocCounter::new("s");
+        counter.process_line("/*");
+        counter.process_line("  multiline comment");
+        counter.process_line("*/");
+        counter.process_line("ret");
+        // ret の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_gas_assembly_at_comment() {
+        // ARM GAS では @ がコメント
+        let mut counter = SlocCounter::new("s");
+        counter.process_line("@ ARM comment");
+        counter.process_line("mov r0, #1");
+        // mov の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== VHDL テスト ====================
+
+    #[test]
+    fn test_vhdl_line_comment() {
+        let mut counter = SlocCounter::new("vhd");
+        counter.process_line("-- VHDL comment");
+        counter.process_line("signal clk : std_logic;");
+        // signal の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_vhdl_inline_comment() {
+        let mut counter = SlocCounter::new("vhdl");
+        counter.process_line("signal rst : std_logic; -- reset signal");
+        counter.process_line("signal data : std_logic_vector(7 downto 0);");
+        // 2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_vhdl_entity() {
+        let mut counter = SlocCounter::new("vhd");
+        counter.process_line("-- Entity declaration");
+        counter.process_line("entity counter is");
+        counter.process_line("port (");
+        counter.process_line("    clk : in std_logic; -- clock input");
+        counter.process_line("    -- rst : in std_logic;");
+        counter.process_line("    count : out std_logic_vector(7 downto 0)");
+        counter.process_line(");");
+        counter.process_line("end entity;");
+        // 5行がSLOC (entity, port, clk, count, ), end)
+        assert_eq!(counter.count(), 6);
+    }
+
+    // ==================== Verilog/SystemVerilog テスト ====================
+
+    #[test]
+    fn test_verilog_line_comment() {
+        let mut counter = SlocCounter::new("sv");
+        counter.process_line("// SystemVerilog comment");
+        counter.process_line("wire clk;");
+        // wire の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_verilog_block_comment() {
+        let mut counter = SlocCounter::new("sv");
+        counter.process_line("/* block comment */");
+        counter.process_line("reg [7:0] data;");
+        // reg の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_systemverilog_header() {
+        let mut counter = SlocCounter::new("svh");
+        counter.process_line("// Header file");
+        counter.process_line("`define WIDTH 8");
+        // `define の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== リンカスクリプト テスト ====================
+
+    #[test]
+    fn test_linker_script_comment() {
+        let mut counter = SlocCounter::new("ld");
+        counter.process_line("/* Linker script */");
+        counter.process_line("ENTRY(_start)");
+        // ENTRY の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_linker_script_multiline() {
+        let mut counter = SlocCounter::new("lds");
+        counter.process_line("/*");
+        counter.process_line(" * Memory layout");
+        counter.process_line(" */");
+        counter.process_line("MEMORY {");
+        counter.process_line("    ROM : ORIGIN = 0x0, LENGTH = 64K");
+        counter.process_line("}");
+        // MEMORY, ROM, } の3行がSLOC
+        assert_eq!(counter.count(), 3);
+    }
+
+    // ==================== LaTeX テスト ====================
+
+    #[test]
+    fn test_latex_percent_comment() {
+        let mut counter = SlocCounter::new("tex");
+        counter.process_line("% This is a LaTeX comment");
+        counter.process_line("\\documentclass{article}");
+        // \\documentclass の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_latex_inline_comment() {
+        let mut counter = SlocCounter::new("tex");
+        counter.process_line("\\begin{document} % Start document");
+        // % 以降はコメントだが、その前にコードがある → 現在の実装では starts_with('%') のみ
+        // LaTeX は Erlang スタイルで starts_with('%') のみチェックなので、この行はSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_latex_style_file() {
+        let mut counter = SlocCounter::new("sty");
+        counter.process_line("% Package definition");
+        counter.process_line("\\ProvidesPackage{mypackage}");
+        // \\ProvidesPackage の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_latex_bib_file() {
+        let mut counter = SlocCounter::new("bib");
+        counter.process_line("% Bibliography");
+        counter.process_line("@article{key,");
+        counter.process_line("  author = {Author},");
+        counter.process_line("}");
+        // @article, author, } の3行がSLOC
+        assert_eq!(counter.count(), 3);
+    }
+
+    // ==================== 設定ファイル テスト ====================
+
+    #[test]
+    fn test_ini_hash_comment() {
+        let mut counter = SlocCounter::new("ini");
+        counter.process_line("# INI comment");
+        counter.process_line("[section]");
+        counter.process_line("key = value");
+        // [section] と key の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_conf_file() {
+        let mut counter = SlocCounter::new("conf");
+        counter.process_line("# Configuration");
+        counter.process_line("server = localhost");
+        counter.process_line("port = 8080");
+        // server と port の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_properties_file() {
+        let mut counter = SlocCounter::new("properties");
+        counter.process_line("# Java properties");
+        counter.process_line("app.name=MyApp");
+        counter.process_line("app.version=1.0");
+        // 2行がSLOC
+        assert_eq!(counter.count(), 2);
     }
 }

@@ -32,6 +32,16 @@ pub enum CommentStyle {
     Julia,
     /// OCaml/F#/Pascal: (* *) (ネスト対応)
     OCaml,
+    /// D言語: //, /* */, /+ +/ (ネスト対応)
+    DLang,
+    /// Batch: REM と ::
+    Batch,
+    /// Assembly (NASM/MASM): ; のみ
+    Assembly,
+    /// GAS/AT&T Assembly: # と /* */ (C系に近い)
+    GasAssembly,
+    /// VHDL: -- のみ (ブロックコメントなし)
+    Vhdl,
     /// コメント構文なし（全ての非空行をカウント）
     None,
 }
@@ -53,13 +63,16 @@ impl CommentStyle {
             "kt" | "kts" => Self::CStyle, // Kotlin
             "scala" | "sc" => Self::CStyle,
             "dart" => Self::CStyle,
-            "v" => Self::CStyle,    // V言語
+            "v" | "sv" | "svh" => Self::CStyle, // V言語 / Verilog / SystemVerilog
             "zig" => Self::CStyle,  // Zig
-            "d" => Self::CStyle,    // D言語
+            "d" => Self::DLang,     // D言語 (//, /* */, /+ +/)
             "m" | "mm" => Self::CStyle, // Objective-C
             "groovy" | "gradle" => Self::CStyle,
             "css" | "scss" | "sass" | "less" => Self::CStyle,
             "json" | "jsonc" => Self::CStyle, // JSONCはコメント可
+            
+            // Linker Script (OS開発で必須)
+            "ld" | "lds" => Self::CStyle,
             
             // PHP (//, /* */, #)
             "php" => Self::Php,
@@ -83,6 +96,9 @@ impl CommentStyle {
             "awk" => Self::Hash,
             "sed" => Self::Hash,
             "tf" | "tfvars" => Self::Hash, // Terraform
+            
+            // 設定ファイル (#)
+            "ini" | "conf" | "cfg" | "properties" => Self::Hash,
             
             // PowerShell (# と <# #>)
             "ps1" | "psm1" | "psd1" => Self::PowerShell,
@@ -123,6 +139,9 @@ impl CommentStyle {
             // Erlang/Elixirのerlang (%)
             "erl" | "hrl" => Self::Erlang,
             
+            // LaTeX (論文・ドキュメント)
+            "tex" | "sty" | "cls" | "bib" => Self::Erlang,
+            
             // Fortran (!)
             "f" | "f90" | "f95" | "f03" | "f08" | "for" | "ftn" => Self::Fortran,
             
@@ -130,6 +149,18 @@ impl CommentStyle {
             // 注: ".m" はObjective-Cとして扱う（より一般的）
             "mat" | "mlx" => Self::Matlab,
             "oct" => Self::Matlab, // Octave
+            
+            // Batch (REM と ::)
+            "bat" | "cmd" => Self::Batch,
+            
+            // Assembly - NASM/MASM (; コメント)
+            "asm" | "nasm" | "masm" | "inc" => Self::Assembly,
+            
+            // Assembly - GAS/AT&T (# と /* */ コメント)
+            "s" => Self::GasAssembly,
+            
+            // VHDL (-- コメント)
+            "vhd" | "vhdl" => Self::Vhdl,
             
             // その他（コメント構文なし）
             _ => Self::None,

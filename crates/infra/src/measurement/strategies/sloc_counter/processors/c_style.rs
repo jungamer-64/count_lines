@@ -243,3 +243,137 @@ pub fn process_swift_style(
     // コードがある行
     *count += 1;
 }
+
+/// D言語スタイル処理 (//, /* */, /+ +/ ネスト対応)
+///
+/// D言語は3種類のコメントをサポート:
+/// - `//` 行コメント
+/// - `/* */` ブロックコメント（ネスト不可）
+/// - `/+ +/` ブロックコメント（ネスト可能）
+pub fn process_dlang_style(
+    line: &str,
+    in_block_comment: &mut bool,
+    in_nesting_block: &mut bool,
+    nesting_block_depth: &mut usize,
+    count: &mut usize,
+) {
+    // /+ +/ ネストブロックコメント内
+    if *nesting_block_depth > 0 {
+        process_dlang_nesting_block(line, in_nesting_block, nesting_block_depth, in_block_comment, count);
+        return;
+    }
+    
+    // 通常の /* */ ブロックコメント内
+    if *in_block_comment {
+        if let Some(pos) = line.find("*/") {
+            *in_block_comment = false;
+            let rest = &line[pos + 2..];
+            if !rest.trim().is_empty() && !rest.trim().starts_with("//") {
+                // 残りを再帰処理
+                process_dlang_style(rest, in_block_comment, in_nesting_block, nesting_block_depth, count);
+            }
+        }
+        return;
+    }
+
+    // 行コメント（文字列外）のみの行かチェック
+    if let Some(line_comment_pos) = find_outside_string(line, "//") {
+        let before = &line[..line_comment_pos];
+        if before.trim().is_empty() {
+            return;
+        }
+        *count += 1;
+        return;
+    }
+
+    // /+ ネストブロックコメント開始をチェック（文字列外）
+    if let Some(nesting_start) = find_outside_string(line, "/+") {
+        // /* より前に /+ があるかチェック
+        let block_start = find_outside_string(line, "/*");
+        
+        if block_start.is_none() || nesting_start < block_start.unwrap() {
+            // /+ が先
+            let before = &line[..nesting_start];
+            let has_code_before = !before.trim().is_empty();
+            
+            *nesting_block_depth = 1;
+            *in_nesting_block = true;
+            let rest = &line[nesting_start + 2..];
+            process_dlang_nesting_block(rest, in_nesting_block, nesting_block_depth, in_block_comment, count);
+            
+            if has_code_before {
+                *count += 1;
+            }
+            return;
+        }
+    }
+
+    // /* ブロックコメント開始をチェック（文字列外）
+    if let Some(block_start) = find_outside_string(line, "/*") {
+        let before = &line[..block_start];
+        let has_code_before = !before.trim().is_empty();
+        
+        if let Some(block_end) = line[block_start + 2..].find("*/") {
+            let after = &line[block_start + 2 + block_end + 2..];
+            if has_code_before {
+                *count += 1;
+            } else if !after.trim().is_empty() {
+                // 残りを再帰処理
+                process_dlang_style(after, in_block_comment, in_nesting_block, nesting_block_depth, count);
+            }
+        } else {
+            *in_block_comment = true;
+            if has_code_before {
+                *count += 1;
+            }
+        }
+        return;
+    }
+
+    // コードがある行
+    *count += 1;
+}
+
+/// D言語の /+ +/ ネストブロックコメント行を処理
+fn process_dlang_nesting_block(
+    line: &str,
+    in_nesting_block: &mut bool,
+    nesting_block_depth: &mut usize,
+    in_block_comment: &mut bool,
+    count: &mut usize,
+) {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    
+    while i < bytes.len() {
+        if i + 1 < bytes.len() {
+            // /+ を見つけたらネスト深度を増やす
+            if bytes[i] == b'/' && bytes[i + 1] == b'+' {
+                *nesting_block_depth += 1;
+                i += 2;
+                continue;
+            }
+            // +/ を見つけたらネスト深度を減らす
+            if bytes[i] == b'+' && bytes[i + 1] == b'/' {
+                *nesting_block_depth -= 1;
+                i += 2;
+                
+                // 全てのコメントが閉じた
+                if *nesting_block_depth == 0 {
+                    *in_nesting_block = false;
+                    let rest = &line[i..];
+                    if !rest.trim().is_empty() {
+                        // 残りの部分を再帰的に処理
+                        process_dlang_style(rest, in_block_comment, in_nesting_block, nesting_block_depth, count);
+                    }
+                    return;
+                }
+                continue;
+            }
+        }
+        i += 1;
+    }
+    
+    // まだコメント内
+    *in_nesting_block = *nesting_block_depth > 0;
+}
