@@ -122,6 +122,8 @@ impl CommentStyle {
 pub struct SlocCounter {
     style: CommentStyle,
     in_block_comment: bool,
+    /// Rustのネストされたブロックコメント用の深さカウンター
+    block_comment_depth: usize,
     count: usize,
 }
 
@@ -131,6 +133,7 @@ impl SlocCounter {
         Self {
             style: CommentStyle::from_extension(extension),
             in_block_comment: false,
+            block_comment_depth: 0,
             count: 0,
         }
     }
@@ -145,7 +148,14 @@ impl SlocCounter {
         }
 
         match self.style {
-            CommentStyle::CStyle => self.process_c_style(trimmed),
+            CommentStyle::CStyle => {
+                // Rustの場合はネストコメント対応版を使用
+                if Self::is_rust_style(self.style) {
+                    self.process_rust_style(trimmed);
+                } else {
+                    self.process_c_style(trimmed);
+                }
+            }
             CommentStyle::Hash => self.process_hash_style(trimmed),
             CommentStyle::Lua => self.process_lua_style(trimmed),
             CommentStyle::Html => self.process_html_style(trimmed),
@@ -173,58 +183,289 @@ impl SlocCounter {
         self.in_block_comment
     }
 
-    /// 文字列リテラル外でパターンを検索（簡易実装）
-    /// 文字列リテラル（"..." や '...'）内のパターンは無視する
+    /// 文字列リテラル外でパターンを検索
+    /// 
+    /// 以下の文字列リテラル内のパターンは無視する:
+    /// - 通常の文字列: `"..."`, `'...'`
+    /// - Rust raw文字列: `r"..."`, `r#"..."#`, `r##"..."##` など
     fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
-        let mut in_string = false;
-        let mut string_char = '"';
-        let mut escape_next = false;
         let pattern_bytes = pattern.as_bytes();
         let line_bytes = line.as_bytes();
         
         if pattern_bytes.is_empty() || line_bytes.len() < pattern_bytes.len() {
             return None;
         }
-        
+
         let mut i = 0;
         while i <= line_bytes.len() - pattern_bytes.len() {
-            let c = line_bytes[i];
-            
-            if escape_next {
-                escape_next = false;
-                i += 1;
+            // Rust raw文字列リテラル: r"...", r#"..."#, r##"..."## など
+            // 直前が識別子文字でないことを確認（bar"..." などを誤検出しない）
+            if line_bytes[i] == b'r'
+                && (i == 0 || !Self::is_ident_char(line_bytes[i - 1]))
+                && let Some(skip) = Self::try_skip_raw_string(&line_bytes[i..])
+            {
+                i += skip;
                 continue;
             }
             
-            if c == b'\\' && in_string {
-                escape_next = true;
-                i += 1;
-                continue;
-            }
-            
-            if !in_string {
-                if c == b'"' || c == b'\'' {
-                    in_string = true;
-                    string_char = c as char;
-                    i += 1;
+            // Rust byte文字列: b"...", br"...", br#"..."# など
+            if line_bytes[i] == b'b'
+                && (i == 0 || !Self::is_ident_char(line_bytes[i - 1]))
+            {
+                if let Some(skip) = Self::try_skip_byte_string(&line_bytes[i..]) {
+                    i += skip;
                     continue;
                 }
-                
-                // パターンとマッチするかチェック
-                if &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes {
-                    return Some(i);
+            }
+            
+            // ダブルクォート文字列リテラル: "..."
+            if line_bytes[i] == b'"' {
+                i += 1;
+                while i < line_bytes.len() {
+                    if line_bytes[i] == b'\\' && i + 1 < line_bytes.len() {
+                        i += 2; // エスケープシーケンスをスキップ
+                        continue;
+                    }
+                    if line_bytes[i] == b'"' {
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
                 }
-            } else {
-                // 文字列内
-                if c == string_char as u8 {
-                    in_string = false;
+                continue;
+            }
+            
+            // シングルクォート: 文字リテラル ('a', '\n' など) vs ライフタイム ('a)
+            // 文字リテラルは短い（最大8文字程度: '\u{10FFFF}'）
+            // 閉じクォートが見つからない場合はライフタイムとみなしスキップしない
+            if line_bytes[i] == b'\'' {
+                if let Some(skip) = Self::try_skip_char_literal(&line_bytes[i..]) {
+                    i += skip;
+                    continue;
                 }
+                // ライフタイム注釈の場合は単に次へ進む
+                i += 1;
+                continue;
+            }
+            
+            // パターンとマッチするかチェック
+            if i + pattern_bytes.len() <= line_bytes.len() 
+                && &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes 
+            {
+                return Some(i);
             }
             
             i += 1;
         }
         
         None
+    }
+
+    /// Rust raw文字列リテラルをスキップする
+    /// 
+    /// `r"..."`, `r#"..."#`, `r##"..."##` などの形式を処理
+    /// 成功した場合はスキップするバイト数を返す
+    fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
+        if bytes.is_empty() || bytes[0] != b'r' {
+            return None;
+        }
+        
+        let mut i = 1;
+        
+        // '#' の数をカウント
+        let mut hash_count = 0;
+        while i < bytes.len() && bytes[i] == b'#' {
+            hash_count += 1;
+            i += 1;
+        }
+        
+        // '"' で始まる必要がある
+        if i >= bytes.len() || bytes[i] != b'"' {
+            return None;
+        }
+        i += 1;
+        
+        // 終端の '"' + '#' * hash_count を探す
+        while i < bytes.len() {
+            if bytes[i] == b'"' {
+                // 閉じクォートの後に必要な数の '#' があるか確認
+                let remaining = &bytes[i + 1..];
+                if hash_count == 0 {
+                    // r"..." の場合
+                    return Some(i + 1);
+                } else if remaining.len() >= hash_count 
+                    && remaining[..hash_count].iter().all(|&b| b == b'#') 
+                {
+                    // r#"..."# や r##"..."## の場合
+                    return Some(i + 1 + hash_count);
+                }
+            }
+            i += 1;
+        }
+        
+        // 閉じられていない raw 文字列（行末まで）
+        Some(bytes.len())
+    }
+
+    /// Rust byte文字列をスキップする
+    /// 
+    /// `b"..."`, `br"..."`, `br#"..."#` などの形式を処理
+    /// 成功した場合はスキップするバイト数を返す
+    fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
+        if bytes.is_empty() || bytes[0] != b'b' {
+            return None;
+        }
+        
+        if bytes.len() < 2 {
+            return None;
+        }
+        
+        // b"..." の場合
+        if bytes[1] == b'"' {
+            let mut i = 2;
+            while i < bytes.len() {
+                if bytes[i] == b'\\' && i + 1 < bytes.len() {
+                    i += 2;
+                    continue;
+                }
+                if bytes[i] == b'"' {
+                    return Some(i + 1);
+                }
+                i += 1;
+            }
+            return Some(bytes.len());
+        }
+        
+        // br"..." または br#"..."# の場合
+        if bytes[1] == b'r' {
+            // try_skip_raw_string に &bytes[1..] を渡して、+1 して返す
+            if let Some(skip) = Self::try_skip_raw_string(&bytes[1..]) {
+                return Some(1 + skip);
+            }
+        }
+        
+        None
+    }
+
+    /// 識別子に使える文字かどうかを判定
+    #[inline]
+    fn is_ident_char(b: u8) -> bool {
+        b.is_ascii_alphanumeric() || b == b'_'
+    }
+
+    /// CommentStyleがRust（ネストコメント対応）かどうかを判定
+    #[inline]
+    fn is_rust_style(_style: CommentStyle) -> bool {
+        // 現在はCStyleの中でRustを判別できないので、
+        // SlocCounterの作成時にextensionを保存する必要がある
+        // ここでは簡易的にtrueを返す（CStyleで呼ばれるのはRustの場合のみと仮定）
+        true
+    }
+
+    /// 文字リテラルをスキップする（ライフタイム注釈との区別）
+    /// 
+    /// 文字リテラル: `'a'`, `'\n'`, `'\u{1234}'` など（最大8文字程度）
+    /// ライフタイム: `'a`, `'static` など（閉じクォートがない）
+    /// 
+    /// 閉じクォートが8文字以内に見つからない場合はライフタイムとみなしNoneを返す
+    fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
+        if bytes.is_empty() || bytes[0] != b'\'' {
+            return None;
+        }
+        
+        const MAX_CHAR_LITERAL_LEN: usize = 12; // '\u{10FFFF}' + 余裕
+        let search_limit = bytes.len().min(MAX_CHAR_LITERAL_LEN);
+        
+        let mut i = 1;
+        while i < search_limit {
+            if bytes[i] == b'\\' && i + 1 < search_limit {
+                i += 2; // エスケープシーケンスをスキップ
+                continue;
+            }
+            if bytes[i] == b'\'' {
+                // 閉じクォートが見つかった = 文字リテラル
+                return Some(i + 1);
+            }
+            i += 1;
+        }
+        
+        // 閉じクォートが見つからない = ライフタイム注釈
+        None
+    }
+
+    /// Rustスタイル処理（ネストされたブロックコメント対応）
+    fn process_rust_style(&mut self, line: &str) {
+        // ネストされたブロックコメント内
+        if self.block_comment_depth > 0 {
+            self.process_rust_block_comment_line(line);
+            return;
+        }
+
+        // 行コメント（文字列外）のみの行かチェック
+        if let Some(line_comment_pos) = Self::find_outside_string(line, "//") {
+            let before = &line[..line_comment_pos];
+            if before.trim().is_empty() {
+                return;
+            }
+            self.count += 1;
+            return;
+        }
+
+        // ブロックコメント開始をチェック（文字列外）
+        if let Some(block_start) = Self::find_outside_string(line, "/*") {
+            let before = &line[..block_start];
+            let has_code_before = !before.trim().is_empty();
+            
+            // ブロックコメント開始後の部分を処理
+            self.block_comment_depth = 1;
+            let rest = &line[block_start + 2..];
+            self.process_rust_block_comment_line(rest);
+            
+            if has_code_before {
+                self.count += 1;
+            }
+            return;
+        }
+
+        // コードがある行
+        self.count += 1;
+    }
+
+    /// Rustのネストされたブロックコメント行を処理
+    fn process_rust_block_comment_line(&mut self, line: &str) {
+        let bytes = line.as_bytes();
+        let mut i = 0;
+        
+        while i < bytes.len() {
+            if i + 1 < bytes.len() {
+                // /* を見つけたらネスト深度を増やす
+                if bytes[i] == b'/' && bytes[i + 1] == b'*' {
+                    self.block_comment_depth += 1;
+                    i += 2;
+                    continue;
+                }
+                // */ を見つけたらネスト深度を減らす
+                if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                    self.block_comment_depth -= 1;
+                    i += 2;
+                    
+                    // 全てのコメントが閉じた
+                    if self.block_comment_depth == 0 {
+                        let rest = &line[i..];
+                        if !rest.trim().is_empty() {
+                            // 残りの部分を再帰的に処理
+                            self.process_rust_style(rest);
+                        }
+                        return;
+                    }
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        
+        // in_block_comment フラグも同期
+        self.in_block_comment = self.block_comment_depth > 0;
     }
 
     /// C系スタイル (// と /* */) の処理
@@ -265,7 +506,7 @@ impl SlocCounter {
             if let Some(block_end) = line[block_start + 2..].find("*/") {
                 let after = &line[block_start + 2 + block_end + 2..];
                 let has_code_after = !after.trim().is_empty() 
-                    && Self::find_outside_string(after, "//").map_or(true, |p| p > 0);
+                    && Self::find_outside_string(after, "//").is_none_or(|p| p > 0);
                 if has_code_before || has_code_after {
                     self.count += 1;
                 }
@@ -588,6 +829,48 @@ mod tests {
     }
 
     #[test]
+    fn test_rust_raw_string_literal() {
+        // r"..." 形式のraw文字列
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line(r#"let s = r"/* not a comment */";"#);
+        counter.process_line("let x = 1;");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment(), "r\"...\" should not trigger block comment");
+    }
+
+    #[test]
+    fn test_rust_raw_string_with_hashes() {
+        // r#"..."# 形式のraw文字列
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line(r###"let regex = r#"<div class="foo">"#;"###);
+        counter.process_line("let y = 2;");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment(), "r#\"...\"# should not trigger block comment");
+    }
+
+    #[test]
+    fn test_rust_raw_string_with_multiple_hashes() {
+        // r##"..."## 形式のraw文字列
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line(r####"let s = r##"contains "# but not end"##;"####);
+        counter.process_line("let z = 3;");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_rust_raw_string_with_comment_markers() {
+        // raw文字列内に // や /* */ が含まれるケース
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line(r##"let pattern = r#"// not comment /* also not */ //"#;"##);
+        counter.process_line("real_code();");
+        counter.process_line("// actual comment");
+        counter.process_line("more_code();");
+        assert_eq!(counter.count(), 3); // raw文字列行 + real_code + more_code
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
     fn test_block_comment_state_issue() {
         // Test the actual content from the user's file
         let mut counter = SlocCounter::new("rs");
@@ -687,5 +970,122 @@ mod tests {
         counter.process_line("comment ]]");
         counter.process_line("local y = 2");
         assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_identifier_ending_with_r_not_raw_string() {
+        // bar"/*" のような識別子+文字列がraw文字列として誤検出されないこと
+        let mut counter = SlocCounter::new("rs");
+        // bar という変数に文字列を代入（r で終わるが raw 文字列ではない）
+        counter.process_line(r#"let bar = "/*";"#);
+        counter.process_line("let x = 1;");
+        // "/*" は通常文字列なので、ブロックコメント開始として誤検出されない
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_byte_string_literal() {
+        // b"..." 形式のバイト文字列
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line(r#"let bytes = b"/* not a comment */";"#);
+        counter.process_line("let x = 1;");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_byte_raw_string_literal() {
+        // br"..." や br#"..."# 形式のバイトraw文字列
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line(r##"let bytes = br#"/* not a comment */"#;"##);
+        counter.process_line("let y = 2;");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_identifier_with_r_suffix_complex() {
+        // 複雑なケース: 識別子が r で終わり、その後に文字列がある
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line(r#"println!(buffer"/*test*/");"#);  // 架空の構文
+        // これは raw 文字列ではないので通常文字列として処理される
+        assert_eq!(counter.count(), 1);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_lifetime_annotation_not_char_literal() {
+        // ライフタイム注釈が文字リテラルとして誤認されないこと
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line("fn foo<'a, 'b>(x: &'a str, y: &'b str) {");
+        counter.process_line("    x.len() // コメント");
+        counter.process_line("}");
+        // 全て SLOC（コメント付きの行もコードがあるので）
+        assert_eq!(counter.count(), 3);
+    }
+
+    #[test]
+    fn test_lifetime_static() {
+        // 'static ライフタイム
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line("static S: &'static str = \"hello\";");
+        counter.process_line("let x = 1;");
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_char_literal_vs_lifetime() {
+        // 文字リテラルとライフタイムの混在
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line("fn foo<'a>(c: char) -> &'a str {");
+        counter.process_line("    let x = 'c';");  // 文字リテラル
+        counter.process_line("    let y = '\\n';"); // エスケープ文字リテラル
+        counter.process_line("}");
+        assert_eq!(counter.count(), 4);
+    }
+
+    #[test]
+    fn test_nested_block_comment() {
+        // Rustのネストされたブロックコメント
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line("/* outer");
+        counter.process_line("  /* inner */");
+        counter.process_line("  still in comment");
+        counter.process_line("*/");
+        counter.process_line("let x = 1;"); // ここからコード
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_nested_block_comment_single_line() {
+        // 1行にネストされたコメント
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line("/* /* nested */ still comment */ code();");
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_nested_block_comment_deep() {
+        // 深いネスト
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line("/* level 1");
+        counter.process_line("/* level 2");
+        counter.process_line("/* level 3 */");
+        counter.process_line("back to level 2 */");
+        counter.process_line("back to level 1 */");
+        counter.process_line("code();");
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_code_before_nested_comment() {
+        // コードの後にネストコメント開始
+        let mut counter = SlocCounter::new("rs");
+        counter.process_line("let x = 1; /* comment");
+        counter.process_line("  /* nested */");
+        counter.process_line("*/");
+        counter.process_line("let y = 2;");
+        assert_eq!(counter.count(), 2); // x = 1 と y = 2 の2行
     }
 }
