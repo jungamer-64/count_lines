@@ -10,7 +10,7 @@ mod string_utils;
 pub use comment_style::CommentStyle;
 
 use processors::{
-    process_assembly_style, process_batch_style, process_c_style_with_options, process_cpp_style,
+    process_assembly_style, process_batch_style, process_c_style_with_options,
     process_dlang_style, process_erlang_style, process_fortran_style, process_gas_assembly_style,
     process_haskell_style, process_html_style, process_julia_style, process_lisp_style,
     process_lua_style, process_matlab_style, process_nesting_c_style_with_options,
@@ -34,8 +34,6 @@ pub struct SlocCounter {
     docstring_quote: Option<u8>,
     /// Ruby/Perl の埋め込みドキュメント内か (=begin/=end, =pod/=cut)
     in_embedded_doc: bool,
-    /// C++ Raw Stringリテラルをサポートするか
-    supports_cpp_raw_string: bool,
     /// Swift の拡張デリミタ文字列をサポートするか
     is_swift: bool,
     /// Lua ブロックコメントのレベル (等号の数)
@@ -62,12 +60,6 @@ impl SlocCounter {
             "rs" | "swift" | "kt" | "kts" | "scala" | "sc"
         );
 
-        // C++ Raw Stringをサポートする言語
-        let supports_cpp_raw_string = matches!(
-            ext_lower.as_str(),
-            "cpp" | "cc" | "cxx" | "c++" | "hpp" | "hh" | "hxx" | "h++"
-        );
-
         // Swift の拡張デリミタ文字列をサポート
         let is_swift = ext_lower == "swift";
 
@@ -79,7 +71,6 @@ impl SlocCounter {
             supports_nesting,
             docstring_quote: None,
             in_embedded_doc: false,
-            supports_cpp_raw_string,
             is_swift,
             lua_block_level: 0,
             in_dlang_nesting_block: false,
@@ -116,10 +107,9 @@ impl SlocCounter {
                         &mut self.in_block_comment,
                         &mut self.count,
                     );
-                } else if self.supports_cpp_raw_string {
-                    process_cpp_style(trimmed, &mut self.in_block_comment, &mut self.count);
                 } else {
-                    // C, Java, Go, JS/TS など - 言語別の文字列オプションを使用
+                    // C, C++, Java, Go, JS/TS など - 言語別の文字列オプションを使用
+                    // (C++ Raw String は StringSkipOptions::cpp() に含まれる)
                     process_c_style_with_options(
                         trimmed,
                         &self.string_opts,

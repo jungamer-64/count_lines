@@ -5,7 +5,7 @@
 //! `//` 行コメントと `/* */` ブロックコメントを処理します。
 
 use super::super::string_utils::{
-    find_outside_string, find_outside_string_cpp, find_outside_string_swift,
+    find_outside_string, find_outside_string_swift,
     find_outside_string_with_options, StringSkipOptions,
 };
 
@@ -194,57 +194,6 @@ fn process_nesting_block_comment_line_with_options(
     
     // in_block_comment フラグも同期
     *in_block_comment = *block_comment_depth > 0;
-}
-
-/// C++スタイル処理（Raw String Literal対応）
-pub fn process_cpp_style(
-    line: &str,
-    in_block_comment: &mut bool,
-    count: &mut usize,
-) {
-    if *in_block_comment {
-        if let Some(pos) = line.find("*/") {
-            *in_block_comment = false;
-            let rest = &line[pos + 2..];
-            if !rest.trim().is_empty() && !rest.trim().starts_with("//") {
-                *count += 1;
-            }
-        }
-        return;
-    }
-
-    // 行コメント（文字列外）のみの行かチェック
-    if let Some(line_comment_pos) = find_outside_string_cpp(line, "//") {
-        let before = &line[..line_comment_pos];
-        if before.trim().is_empty() {
-            return;
-        }
-        *count += 1;
-        return;
-    }
-
-    // ブロックコメント開始をチェック（文字列外、Raw String考慮）
-    if let Some(block_start) = find_outside_string_cpp(line, "/*") {
-        let before = &line[..block_start];
-        let has_code_before = !before.trim().is_empty();
-        
-        if let Some(block_end) = line[block_start + 2..].find("*/") {
-            let after = &line[block_start + 2 + block_end + 2..];
-            let has_code_after = !after.trim().is_empty() 
-                && find_outside_string_cpp(after, "//").is_none_or(|p| p > 0);
-            if has_code_before || has_code_after {
-                *count += 1;
-            }
-        } else {
-            *in_block_comment = true;
-            if has_code_before {
-                *count += 1;
-            }
-        }
-        return;
-    }
-
-    *count += 1;
 }
 
 /// Swift スタイル処理（拡張デリミタ文字列 #"..."# と多重引用符 """...""" 対応）
