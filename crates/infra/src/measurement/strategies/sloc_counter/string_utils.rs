@@ -16,6 +16,8 @@ pub fn is_ident_char(b: u8) -> bool {
 /// - 通常の文字列: `"..."`, `'...'`
 /// - Rust raw文字列: `r"..."`, `r#"..."#`, `r##"..."##` など
 /// - バイト文字列: `b"..."`, `br"..."`, `br#"..."#` など
+/// - C# Verbatim文字列: `@"..."` (\はエスケープせず、""が"のエスケープ)
+/// - Java/Kotlin Text Block: `"""..."""`
 pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();
@@ -26,6 +28,14 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
 
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
+        // C# Verbatim String: @"..."
+        if line_bytes[i] == b'@' && i + 1 < line_bytes.len() && line_bytes[i + 1] == b'"' {
+            if let Some(skip) = try_skip_csharp_verbatim_string(&line_bytes[i..]) {
+                i += skip;
+                continue;
+            }
+        }
+        
         // Rust raw文字列リテラル: r"...", r#"..."#, r##"..."## など
         // 直前が識別子文字でないことを確認（bar"..." などを誤検出しない）
         if line_bytes[i] == b'r'
@@ -41,6 +51,19 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
             && (i == 0 || !is_ident_char(line_bytes[i - 1]))
         {
             if let Some(skip) = try_skip_byte_string(&line_bytes[i..]) {
+                i += skip;
+                continue;
+            }
+        }
+        
+        // Java/Kotlin Text Block: """...""" (三重クォート)
+        // 通常のダブルクォート処理より先にチェック
+        if line_bytes[i] == b'"' 
+            && i + 2 < line_bytes.len() 
+            && line_bytes[i + 1] == b'"' 
+            && line_bytes[i + 2] == b'"' 
+        {
+            if let Some(skip) = try_skip_text_block(&line_bytes[i..]) {
                 i += skip;
                 continue;
             }
@@ -227,6 +250,7 @@ pub fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
 }
 
 /// C++ Raw String Literal を考慮した文字列外検索
+/// C# Verbatim String と Java/Kotlin Text Block にも対応
 pub fn find_outside_string_cpp(line: &str, pattern: &str) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();
@@ -237,9 +261,30 @@ pub fn find_outside_string_cpp(line: &str, pattern: &str) -> Option<usize> {
 
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
+        // C# Verbatim String: @"..."
+        if line_bytes[i] == b'@' && i + 1 < line_bytes.len() && line_bytes[i + 1] == b'"' {
+            if let Some(skip) = try_skip_csharp_verbatim_string(&line_bytes[i..]) {
+                i += skip;
+                continue;
+            }
+        }
+        
         // C++ Raw String: R"delimiter(...)delimiter"
         if line_bytes[i] == b'R' && i + 1 < line_bytes.len() && line_bytes[i + 1] == b'"' {
             if let Some(skip) = try_skip_cpp_raw_string(&line_bytes[i..]) {
+                i += skip;
+                continue;
+            }
+        }
+        
+        // Java/Kotlin Text Block: """...""" (三重クォート)
+        // 通常のダブルクォート処理より先にチェック
+        if line_bytes[i] == b'"' 
+            && i + 2 < line_bytes.len() 
+            && line_bytes[i + 1] == b'"' 
+            && line_bytes[i + 2] == b'"' 
+        {
+            if let Some(skip) = try_skip_text_block(&line_bytes[i..]) {
                 i += skip;
                 continue;
             }
@@ -677,4 +722,64 @@ pub fn find_outside_string_swift(line: &str, pattern: &str) -> Option<usize> {
     }
 
     None
+}
+
+/// C# Verbatim String をスキップ
+/// 形式: @"..." ( " は "" でエスケープ、\ はエスケープしない)
+pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
+    if bytes.len() < 2 || bytes[0] != b'@' || bytes[1] != b'"' {
+        return None;
+    }
+    
+    let mut i = 2;
+    while i < bytes.len() {
+        if bytes[i] == b'"' {
+            // ダブルクォート2つ ("") はエスケープされた " 1つとみなす
+            if i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                i += 2;
+                continue;
+            }
+            // 単独の " は文字列終了
+            return Some(i + 1);
+        }
+        i += 1;
+    }
+    
+    // 行末まで閉じられていない (C# verbatim string は改行を許可するためこれでOK)
+    Some(bytes.len())
+}
+
+/// Java/Kotlin Text Block (三重クォート) をスキップ
+/// 形式: """..."""
+pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
+    // 最低でも6文字必要: """ + """
+    if bytes.len() < 6 
+        || bytes[0] != b'"' 
+        || bytes[1] != b'"' 
+        || bytes[2] != b'"' 
+    {
+        return None;
+    }
+    
+    let mut i = 3;
+    while i < bytes.len() {
+        // エスケープシーケンス
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            i += 2;
+            continue;
+        }
+        
+        // 終了の """ を探す
+        if bytes[i] == b'"' 
+            && i + 2 < bytes.len() 
+            && bytes[i + 1] == b'"' 
+            && bytes[i + 2] == b'"' 
+        {
+            return Some(i + 3);
+        }
+        i += 1;
+    }
+    
+    // 行末まで閉じられていない (複数行文字列の途中)
+    Some(bytes.len())
 }

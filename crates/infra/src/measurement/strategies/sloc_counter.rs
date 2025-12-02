@@ -1222,4 +1222,72 @@ mod tests {
         // 両方の行がSLOC
         assert_eq!(counter.count(), 2);
     }
+
+    // ==================== C# Verbatim String テスト ====================
+
+    #[test]
+    fn test_csharp_verbatim_string_basic() {
+        let mut counter = SlocCounter::new("cs");
+        counter.process_line(r#"var path = @"C:\MyFolder\file.txt";"#);
+        counter.process_line("var x = 1;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_csharp_verbatim_string_with_comment_marker() {
+        let mut counter = SlocCounter::new("cs");
+        counter.process_line(r#"var regex = @"^# not a comment$";"#);
+        counter.process_line("var y = 2;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_csharp_verbatim_string_escaped_quote() {
+        let mut counter = SlocCounter::new("cs");
+        // "" は " 一文字にエスケープされる
+        counter.process_line(r#"var s = @"Quotes""Here""";"#);
+        counter.process_line("var z = 3;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_csharp_verbatim_string_with_block_comment_marker() {
+        let mut counter = SlocCounter::new("cs");
+        counter.process_line(r#"var s = @"/* not a comment */";"#);
+        counter.process_line("var w = 4;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== Java/Kotlin Text Block テスト ====================
+
+    #[test]
+    fn test_java_text_block_basic() {
+        let mut counter = SlocCounter::new("java");
+        counter.process_line(r#"String s = """text block""";"#);
+        counter.process_line("int x = 1;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_java_text_block_with_comment_marker() {
+        let mut counter = SlocCounter::new("java");
+        counter.process_line(r#"String s = """// not a comment""";"#);
+        counter.process_line("int y = 2;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_kotlin_text_block_with_block_comment_marker() {
+        let mut counter = SlocCounter::new("kt");
+        counter.process_line(r#"val s = """/* not a comment */""";"#);
+        counter.process_line("val z = 3;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
 }
