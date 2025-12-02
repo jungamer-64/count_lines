@@ -22,10 +22,11 @@ mod ruby_style;
 mod simple_hash_style;
 mod sql_style;
 mod swift_style;
+mod vhdl_style;
 mod visual_basic_style;
 
 // フラットにエクスポート
-pub use assembly_style::{process_assembly_style, process_gas_assembly_style, process_vhdl_style};
+pub use assembly_style::{process_assembly_style, process_gas_assembly_style};
 pub use batch_style::process_batch_style;
 pub use c_style::{process_c_style_with_options, process_nesting_c_style_with_options};
 pub use dlang_style::process_dlang_style;
@@ -46,4 +47,5 @@ pub use ruby_style::process_ruby_style;
 pub use simple_hash_style::process_simple_hash_style;
 pub use sql_style::process_sql_style;
 pub use swift_style::process_swift_style;
+pub use vhdl_style::process_vhdl_style;
 pub use visual_basic_style::process_visual_basic_style;
