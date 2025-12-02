@@ -42,6 +42,8 @@ pub enum CommentStyle {
     GasAssembly,
     /// VHDL: -- のみ (ブロックコメントなし)
     Vhdl,
+    /// Visual Basic/VBA/VBS: ' と REM
+    VisualBasic,
     /// コメント構文なし（全ての非空行をカウント）
     None,
 }
@@ -70,6 +72,11 @@ impl CommentStyle {
             "groovy" | "gradle" => Self::CStyle,
             "css" | "scss" | "sass" | "less" => Self::CStyle,
             "json" | "jsonc" => Self::CStyle, // JSONCはコメント可
+            
+            // Protocol Buffers, Thrift, Solidity (Cスタイル)
+            "proto" => Self::CStyle,
+            "thrift" => Self::CStyle,
+            "sol" => Self::CStyle, // Solidity
             
             // Linker Script (OS開発で必須)
             "ld" | "lds" => Self::CStyle,
@@ -100,6 +107,9 @@ impl CommentStyle {
             // 設定ファイル (#)
             "ini" | "conf" | "cfg" | "properties" => Self::Hash,
             
+            // GraphQL (#)
+            "graphql" | "gql" => Self::Hash,
+            
             // PowerShell (# と <# #>)
             "ps1" | "psm1" | "psd1" => Self::PowerShell,
             "nix" => Self::Hash, // Nix
@@ -127,7 +137,7 @@ impl CommentStyle {
             // OCaml/F#/Pascal (* *)
             "ml" | "mli" => Self::OCaml, // OCaml
             "fs" | "fsi" | "fsx" | "fsscript" => Self::OCaml, // F#
-            "pas" | "pp" | "inc" | "dpr" | "dpk" => Self::OCaml, // Pascal/Delphi
+            "pas" | "pp" | "dpr" | "dpk" => Self::OCaml, // Pascal/Delphi (inc は曖昧)
             "sml" | "sig" | "fun" => Self::OCaml, // Standard ML
             
             // Lisp系 (;)
@@ -140,7 +150,7 @@ impl CommentStyle {
             "erl" | "hrl" => Self::Erlang,
             
             // LaTeX (論文・ドキュメント)
-            "tex" | "sty" | "cls" | "bib" => Self::Erlang,
+            "tex" | "sty" | "bib" | "ltx" => Self::Erlang,
             
             // Fortran (!)
             "f" | "f90" | "f95" | "f03" | "f08" | "for" | "ftn" => Self::Fortran,
@@ -161,6 +171,10 @@ impl CommentStyle {
             
             // VHDL (-- コメント)
             "vhd" | "vhdl" => Self::Vhdl,
+            
+            // Visual Basic / VBA / VBScript (' と REM)
+            // cls は VBA クラスモジュール、frm はフォームモジュール、bas は標準モジュール
+            "vb" | "vbs" | "bas" | "cls" | "frm" => Self::VisualBasic,
             
             // その他（コメント構文なし）
             _ => Self::None,

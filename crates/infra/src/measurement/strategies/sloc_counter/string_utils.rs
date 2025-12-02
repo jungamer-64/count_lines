@@ -4,21 +4,120 @@
 //! 各種言語の文字列リテラル（通常文字列、Raw文字列、バイト文字列等）を
 //! 正しく認識し、その内部のコメントマーカーを無視するためのユーティリティ。
 
+/// 文字列リテラルスキップオプション
+///
+/// 言語ごとに有効な文字列構文を指定することで、
+/// 他の言語の構文による誤検出を防ぐ
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StringSkipOptions {
+    /// Rust raw string: r"...", r#"..."#
+    pub rust_raw_string: bool,
+    /// Rust byte string: b"...", br"..."
+    pub rust_byte_string: bool,
+    /// Rust ライフタイム注釈を考慮 ('a, 'static)
+    pub rust_lifetime: bool,
+    /// C++ Raw String: R"delimiter(...)delimiter"
+    pub cpp_raw_string: bool,
+    /// C# Verbatim String: @"..."
+    pub csharp_verbatim: bool,
+    /// Java/Kotlin Text Block: """..."""
+    pub text_block: bool,
+    /// バッククォート文字列: `...` (Go, JS/TS)
+    pub backtick_string: bool,
+    /// 通常のダブルクォート文字列: "..."
+    pub double_quote: bool,
+    /// 通常のシングルクォート: '...'
+    pub single_quote: bool,
+}
+
+impl StringSkipOptions {
+    /// Rust 用オプション
+    pub fn rust() -> Self {
+        Self {
+            rust_raw_string: true,
+            rust_byte_string: true,
+            rust_lifetime: true,
+            double_quote: true,
+            single_quote: true, // 文字リテラル
+            ..Default::default()
+        }
+    }
+
+    /// C/C++ 用オプション
+    pub fn cpp() -> Self {
+        Self {
+            cpp_raw_string: true,
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// C 用オプション (Raw String なし)
+    pub fn c() -> Self {
+        Self {
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// C#/Java/Kotlin 用オプション
+    pub fn csharp_java() -> Self {
+        Self {
+            csharp_verbatim: true,
+            text_block: true,
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// Go/JavaScript/TypeScript 用オプション
+    pub fn go_js() -> Self {
+        Self {
+            backtick_string: true,
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// 基本的な C スタイル (多くの言語で共通)
+    pub fn basic() -> Self {
+        Self {
+            double_quote: true,
+            single_quote: true,
+            ..Default::default()
+        }
+    }
+}
+
 /// 識別子に使える文字かどうかを判定
 #[inline]
 pub fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-/// 文字列リテラル外でパターンを検索 (Rust向け)
+/// 文字列リテラル外でパターンを検索 (言語非依存・基本版)
 /// 
-/// 以下の文字列リテラル内のパターンは無視する:
-/// - 通常の文字列: `"..."`, `'...'`
-/// - Rust raw文字列: `r"..."`, `r#"..."#`, `r##"..."##` など
-/// - バイト文字列: `b"..."`, `br"..."`, `br#"..."#` など
-/// - C# Verbatim文字列: `@"..."` (\はエスケープせず、""が"のエスケープ)
-/// - Java/Kotlin Text Block: `"""..."""`
+/// 基本的な文字列リテラル ("...", '...') のみをスキップ。
+/// 言語固有の文字列構文は考慮しない。
+/// 
+/// より正確な検索が必要な場合は `find_outside_string_with_options` を使用。
 pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
+    find_outside_string_with_options(line, pattern, &StringSkipOptions::rust())
+}
+
+/// 文字列リテラル外でパターンを検索 (オプション指定版)
+/// 
+/// 指定されたオプションに基づいて、言語固有の文字列構文をスキップする。
+/// これにより、異なる言語間での誤検出を防ぐ。
+pub fn find_outside_string_with_options(
+    line: &str,
+    pattern: &str,
+    options: &StringSkipOptions,
+) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();
     
@@ -29,7 +128,11 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
         // C# Verbatim String: @"..."
-        if line_bytes[i] == b'@' && i + 1 < line_bytes.len() && line_bytes[i + 1] == b'"' {
+        if options.csharp_verbatim 
+            && line_bytes[i] == b'@' 
+            && i + 1 < line_bytes.len() 
+            && line_bytes[i + 1] == b'"' 
+        {
             if let Some(skip) = try_skip_csharp_verbatim_string(&line_bytes[i..]) {
                 i += skip;
                 continue;
@@ -37,7 +140,11 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
         }
         
         // C++ Raw String: R"delimiter(...)delimiter"
-        if line_bytes[i] == b'R' && i + 1 < line_bytes.len() && line_bytes[i + 1] == b'"' {
+        if options.cpp_raw_string 
+            && line_bytes[i] == b'R' 
+            && i + 1 < line_bytes.len() 
+            && line_bytes[i + 1] == b'"' 
+        {
             if let Some(skip) = try_skip_cpp_raw_string(&line_bytes[i..]) {
                 i += skip;
                 continue;
@@ -45,8 +152,8 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
         }
         
         // Rust raw文字列リテラル: r"...", r#"..."#, r##"..."## など
-        // 直前が識別子文字でないことを確認（bar"..." などを誤検出しない）
-        if line_bytes[i] == b'r'
+        if options.rust_raw_string
+            && line_bytes[i] == b'r'
             && (i == 0 || !is_ident_char(line_bytes[i - 1]))
             && let Some(skip) = try_skip_raw_string(&line_bytes[i..])
         {
@@ -55,7 +162,8 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
         }
         
         // Rust byte文字列: b"...", br"...", br#"..."# など
-        if line_bytes[i] == b'b'
+        if options.rust_byte_string
+            && line_bytes[i] == b'b'
             && (i == 0 || !is_ident_char(line_bytes[i - 1]))
         {
             if let Some(skip) = try_skip_byte_string(&line_bytes[i..]) {
@@ -66,7 +174,8 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
         
         // Java/Kotlin Text Block: """...""" (三重クォート)
         // 通常のダブルクォート処理より先にチェック
-        if line_bytes[i] == b'"' 
+        if options.text_block 
+            && line_bytes[i] == b'"' 
             && i + 2 < line_bytes.len() 
             && line_bytes[i + 1] == b'"' 
             && line_bytes[i + 2] == b'"' 
@@ -78,7 +187,7 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
         }
         
         // ダブルクォート文字列リテラル: "..."
-        if line_bytes[i] == b'"' {
+        if options.double_quote && line_bytes[i] == b'"' {
             i += 1;
             while i < line_bytes.len() {
                 if line_bytes[i] == b'\\' && i + 1 < line_bytes.len() {
@@ -94,23 +203,37 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
             continue;
         }
         
-        // シングルクォート: 文字リテラル ('a', '\n' など) vs ライフタイム ('a)
-        // 文字リテラルは短い（最大8文字程度: '\u{10FFFF}'）
-        // 閉じクォートが見つからない場合はライフタイムとみなしスキップしない
-        if line_bytes[i] == b'\'' {
-            if let Some(skip) = try_skip_char_literal(&line_bytes[i..]) {
-                i += skip;
+        // シングルクォート処理
+        if options.single_quote && line_bytes[i] == b'\'' {
+            if options.rust_lifetime {
+                // Rust: 文字リテラル vs ライフタイム注釈の区別
+                if let Some(skip) = try_skip_char_literal(&line_bytes[i..]) {
+                    i += skip;
+                    continue;
+                }
+                // ライフタイム注釈の場合は単に次へ進む
+                i += 1;
+                continue;
+            } else {
+                // 他の言語: 通常のシングルクォート文字列/文字リテラル
+                i += 1;
+                while i < line_bytes.len() {
+                    if line_bytes[i] == b'\\' && i + 1 < line_bytes.len() {
+                        i += 2;
+                        continue;
+                    }
+                    if line_bytes[i] == b'\'' {
+                        i += 1;
+                        break;
+                    }
+                    i += 1;
+                }
                 continue;
             }
-            // ライフタイム注釈の場合は単に次へ進む
-            i += 1;
-            continue;
         }
         
         // バッククォート文字列 (Go Raw String, JS/TS Template Literal)
-        // Go: `...` (エスケープなし、バッククォート内にバッククォートを含めることは不可)
-        // JS/TS: `...` (エスケープあり、${} で式展開があるがSLOC的には無視でOK)
-        if line_bytes[i] == b'`' {
+        if options.backtick_string && line_bytes[i] == b'`' {
             i += 1;
             while i < line_bytes.len() {
                 // JS/TSのテンプレートリテラルではエスケープが可能

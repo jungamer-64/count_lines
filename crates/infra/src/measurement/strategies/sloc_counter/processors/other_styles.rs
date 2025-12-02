@@ -524,3 +524,64 @@ pub fn process_vhdl_style(line: &str, count: &mut usize) {
     
     *count += 1;
 }
+
+/// Visual Basic / VBA / VBScript スタイル (' と REM) の処理
+///
+/// VB系言語のコメント:
+/// - `'` で始まる行コメント
+/// - `REM` で始まる行コメント (大文字小文字不問)
+/// - 行中の `'` 以降もコメント（文字列リテラル外）
+pub fn process_visual_basic_style(line: &str, count: &mut usize) {
+    let trimmed = line.trim();
+    
+    // ' で始まるコメント行
+    if trimmed.starts_with('\'') {
+        return;
+    }
+    
+    // REM コメント (大文字小文字不問)
+    let upper = trimmed.to_uppercase();
+    if upper == "REM" || upper.starts_with("REM ") || upper.starts_with("REM\t") {
+        return;
+    }
+    
+    // 文字列リテラル外の ' を探す
+    // VBの文字列は "" でエスケープ、\ はエスケープなし
+    let bytes = line.as_bytes();
+    let mut i = 0;
+    let mut in_string = false;
+    
+    while i < bytes.len() {
+        if in_string {
+            if bytes[i] == b'"' {
+                // "" はエスケープされた "
+                if i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                    i += 2;
+                    continue;
+                }
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+        
+        if bytes[i] == b'"' {
+            in_string = true;
+            i += 1;
+            continue;
+        }
+        
+        if bytes[i] == b'\'' {
+            // ' 以前にコードがあればカウント
+            let before = &line[..i];
+            if !before.trim().is_empty() {
+                *count += 1;
+            }
+            return;
+        }
+        
+        i += 1;
+    }
+    
+    *count += 1;
+}

@@ -15,7 +15,7 @@ use processors::{
     process_hash_style, process_haskell_style, process_html_style, process_julia_style,
     process_lisp_style, process_lua_style, process_matlab_style, process_nesting_c_style,
     process_ocaml_style, process_php_style, process_powershell_style, process_sql_style,
-    process_swift_style, process_vhdl_style,
+    process_swift_style, process_vhdl_style, process_visual_basic_style,
 };
 
 /// SLOCカウンターの状態
@@ -179,6 +179,7 @@ impl SlocCounter {
                 process_gas_assembly_style(trimmed, &mut self.in_block_comment, &mut self.count)
             }
             CommentStyle::Vhdl => process_vhdl_style(trimmed, &mut self.count),
+            CommentStyle::VisualBasic => process_visual_basic_style(trimmed, &mut self.count),
             CommentStyle::Lisp => process_lisp_style(trimmed, &mut self.count),
             CommentStyle::Erlang => process_erlang_style(trimmed, &mut self.count),
             CommentStyle::Fortran => process_fortran_style(trimmed, &mut self.count),
@@ -1761,5 +1762,157 @@ mod tests {
         counter.process_line("app.version=1.0");
         // 2行がSLOC
         assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== Visual Basic テスト ====================
+
+    #[test]
+    fn test_vb_single_quote_comment() {
+        let mut counter = SlocCounter::new("vb");
+        counter.process_line("' This is a VB comment");
+        counter.process_line("Dim x As Integer");
+        // Dim の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_vb_rem_comment() {
+        let mut counter = SlocCounter::new("vb");
+        counter.process_line("REM This is a REM comment");
+        counter.process_line("x = 10");
+        // x = 10 の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_vb_inline_comment() {
+        let mut counter = SlocCounter::new("vb");
+        counter.process_line("Dim y As String ' variable declaration");
+        counter.process_line("y = \"Hello\"");
+        // 2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_vb_string_with_quote() {
+        let mut counter = SlocCounter::new("vb");
+        counter.process_line("s = \"It's a test\" ' comment");
+        // 1行がSLOC（文字列内の ' はコメントではない）
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_vba_class_module() {
+        let mut counter = SlocCounter::new("cls");
+        counter.process_line("' Class module");
+        counter.process_line("Private m_value As Long");
+        counter.process_line("REM Property getter");
+        counter.process_line("Public Property Get Value() As Long");
+        counter.process_line("    Value = m_value ' return value");
+        counter.process_line("End Property");
+        // 4行がSLOC (Private, Public, Value, End)
+        assert_eq!(counter.count(), 4);
+    }
+
+    #[test]
+    fn test_vbs_script() {
+        let mut counter = SlocCounter::new("vbs");
+        counter.process_line("' VBScript");
+        counter.process_line("WScript.Echo \"Hello, World!\"");
+        // 1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== Protocol Buffers テスト ====================
+
+    #[test]
+    fn test_protobuf_line_comment() {
+        let mut counter = SlocCounter::new("proto");
+        counter.process_line("// Protocol buffer definition");
+        counter.process_line("syntax = \"proto3\";");
+        // syntax の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_protobuf_message() {
+        let mut counter = SlocCounter::new("proto");
+        counter.process_line("message Person {");
+        counter.process_line("  // Name field");
+        counter.process_line("  string name = 1;");
+        counter.process_line("  /* age field */");
+        counter.process_line("  int32 age = 2;");
+        counter.process_line("}");
+        // 4行がSLOC (message, name, age, })
+        assert_eq!(counter.count(), 4);
+    }
+
+    // ==================== GraphQL テスト ====================
+
+    #[test]
+    fn test_graphql_hash_comment() {
+        let mut counter = SlocCounter::new("graphql");
+        counter.process_line("# GraphQL schema");
+        counter.process_line("type Query {");
+        counter.process_line("  users: [User]");
+        counter.process_line("}");
+        // 3行がSLOC (type, users, })
+        assert_eq!(counter.count(), 3);
+    }
+
+    #[test]
+    fn test_graphql_gql_extension() {
+        let mut counter = SlocCounter::new("gql");
+        counter.process_line("# Mutation");
+        counter.process_line("type Mutation {");
+        counter.process_line("  createUser(name: String!): User");
+        counter.process_line("}");
+        // 3行がSLOC
+        assert_eq!(counter.count(), 3);
+    }
+
+    // ==================== Solidity テスト ====================
+
+    #[test]
+    fn test_solidity_line_comment() {
+        let mut counter = SlocCounter::new("sol");
+        counter.process_line("// SPDX-License-Identifier: MIT");
+        counter.process_line("pragma solidity ^0.8.0;");
+        // pragma の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_solidity_contract() {
+        let mut counter = SlocCounter::new("sol");
+        counter.process_line("/* ERC20 Token */");
+        counter.process_line("contract Token {");
+        counter.process_line("    uint256 public totalSupply; // total supply");
+        counter.process_line("}");
+        // 3行がSLOC (contract, totalSupply, })
+        assert_eq!(counter.count(), 3);
+    }
+
+    // ==================== Thrift テスト ====================
+
+    #[test]
+    fn test_thrift_line_comment() {
+        let mut counter = SlocCounter::new("thrift");
+        counter.process_line("// Thrift IDL");
+        counter.process_line("namespace java com.example");
+        // namespace の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_thrift_struct() {
+        let mut counter = SlocCounter::new("thrift");
+        counter.process_line("struct User {");
+        counter.process_line("  /* user id */");
+        counter.process_line("  1: i64 id,");
+        counter.process_line("  2: string name, // user name");
+        counter.process_line("}");
+        // 4行がSLOC (struct, id, name, })
+        assert_eq!(counter.count(), 4);
     }
 }
