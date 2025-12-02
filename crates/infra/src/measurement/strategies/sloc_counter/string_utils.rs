@@ -28,6 +28,8 @@ pub struct StringSkipOptions {
     pub double_quote: bool,
     /// 通常のシングルクォート: '...'
     pub single_quote: bool,
+    /// 正規表現リテラル: /.../ (JavaScript, TypeScript, Ruby, Perl)
+    pub regex_literal: bool,
 }
 
 impl StringSkipOptions {
@@ -82,12 +84,43 @@ impl StringSkipOptions {
         }
     }
 
-    /// Go/JavaScript/TypeScript 用オプション (バッククォート `...` 対応)
-    pub fn go_js() -> Self {
+    /// Go 用オプション (バッククォート `...` 対応、正規表現リテラルなし)
+    pub fn go() -> Self {
         Self {
             backtick_string: true,
             double_quote: true,
             single_quote: true,
+            ..Default::default()
+        }
+    }
+
+    /// JavaScript/TypeScript 用オプション (バッククォート `...` と正規表現 /.../ 対応)
+    pub fn javascript() -> Self {
+        Self {
+            backtick_string: true,
+            double_quote: true,
+            single_quote: true,
+            regex_literal: true,
+            ..Default::default()
+        }
+    }
+
+    /// Ruby 用オプション (正規表現 /.../ 対応)
+    pub fn ruby() -> Self {
+        Self {
+            double_quote: true,
+            single_quote: true,
+            regex_literal: true,
+            ..Default::default()
+        }
+    }
+
+    /// Perl 用オプション (正規表現 /.../ 対応)
+    pub fn perl() -> Self {
+        Self {
+            double_quote: true,
+            single_quote: true,
+            regex_literal: true,
             ..Default::default()
         }
     }
@@ -170,10 +203,12 @@ impl StringSkipOptions {
             "kt" | "kts" => Self::java_kotlin(),
             "scala" | "sc" => Self::java_kotlin(),
             
-            // Go/JavaScript/TypeScript (バッククォート対応)
-            "go" => Self::go_js(),
-            "js" | "mjs" | "cjs" | "jsx" => Self::go_js(),
-            "ts" | "tsx" | "mts" | "cts" => Self::go_js(),
+            // Go (バッククォート対応、正規表現リテラルなし)
+            "go" => Self::go(),
+            
+            // JavaScript/TypeScript (バッククォート + 正規表現リテラル対応)
+            "js" | "mjs" | "cjs" | "jsx" => Self::javascript(),
+            "ts" | "tsx" | "mts" | "cts" => Self::javascript(),
             
             // Swift
             "swift" => Self::swift(),
@@ -189,6 +224,12 @@ impl StringSkipOptions {
             
             // Groovy (Java-like)
             "groovy" | "gradle" => Self::java_kotlin(),
+            
+            // Ruby (正規表現リテラル対応)
+            "rb" | "rake" | "gemspec" | "podspec" | "jbuilder" | "erb" => Self::ruby(),
+            
+            // Perl (正規表現リテラル対応)
+            "pl" | "pm" | "t" | "psgi" => Self::perl(),
             
             // D言語
             "d" => Self::basic(), // D言語は Raw String あるが専用処理で対応
@@ -366,6 +407,21 @@ pub fn find_outside_string_with_options(
                 i += 1;
             }
             continue;
+        }
+        
+        // 正規表現リテラル: /.../ (JavaScript, TypeScript, Ruby, Perl)
+        // コメント開始 (//, /*) との区別が必要
+        if options.regex_literal && line_bytes[i] == b'/' {
+            // // (行コメント) や /* (ブロックコメント) は除外
+            let is_line_comment = i + 1 < line_bytes.len() && line_bytes[i + 1] == b'/';
+            let is_block_comment = i + 1 < line_bytes.len() && line_bytes[i + 1] == b'*';
+            
+            if !is_line_comment && !is_block_comment {
+                if let Some(skip) = try_skip_regex_literal(line_bytes, i) {
+                    i += skip;
+                    continue;
+                }
+            }
         }
         
         // パターンとマッチするかチェック
@@ -928,6 +984,189 @@ pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
     Some(bytes.len())
 }
 
+// ============================================================================
+// 正規表現リテラルのスキップ
+// ============================================================================
+
+/// 正規表現リテラルの開始かどうかを判定
+/// 
+/// `/` が正規表現リテラルの開始である可能性が高いかを、
+/// 直前のトークンを分析して判定します。
+/// 
+/// # 引数
+/// * `bytes` - 行全体のバイト列
+/// * `pos` - `/` の位置
+/// 
+/// # 戻り値
+/// * `true` - 正規表現リテラルの可能性が高い
+/// * `false` - 除算演算子の可能性が高い
+fn is_likely_regex_start(bytes: &[u8], pos: usize) -> bool {
+    if pos == 0 {
+        // 行頭の `/` は正規表現の可能性が高い
+        return true;
+    }
+    
+    // 直前の非空白文字を探す
+    let mut prev_pos = pos;
+    while prev_pos > 0 {
+        prev_pos -= 1;
+        let c = bytes[prev_pos];
+        if c != b' ' && c != b'\t' && c != b'\r' && c != b'\n' {
+            break;
+        }
+    }
+    
+    // 空白しかなければ正規表現の可能性が高い
+    if prev_pos == 0 && (bytes[0] == b' ' || bytes[0] == b'\t') {
+        return true;
+    }
+    
+    let prev_char = bytes[prev_pos];
+    
+    // 正規表現が続く可能性が高い文字
+    // これらの後の `/` は正規表現の開始である可能性が高い
+    match prev_char {
+        // 演算子・区切り文字
+        b'=' | b'!' | b'(' | b'[' | b'{' | b',' | b';' | b':' | b'?' |
+        b'&' | b'|' | b'^' | b'~' | b'<' | b'>' | b'+' | b'-' | b'*' | b'%' => true,
+        
+        // 改行直後は正規表現の可能性が高い（実際には発生しにくいが念のため）
+        b'\n' | b'\r' => true,
+        
+        // 識別子・数値・閉じ括弧の後は除算の可能性が高い
+        b')' | b']' | b'}' => false,
+        b'0'..=b'9' => false,
+        
+        // 識別子の終わりかキーワードかをチェック
+        b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
+            // キーワードの後は正規表現の可能性が高い
+            is_regex_preceding_keyword(bytes, prev_pos)
+        }
+        
+        // その他は除算と判定（保守的）
+        _ => false,
+    }
+}
+
+/// 正規表現が続く可能性のあるキーワードかどうかを判定
+/// 
+/// # 引数
+/// * `bytes` - 行全体のバイト列
+/// * `end_pos` - キーワードの最後の文字の位置
+fn is_regex_preceding_keyword(bytes: &[u8], end_pos: usize) -> bool {
+    // キーワードの開始位置を探す
+    let mut start_pos = end_pos;
+    while start_pos > 0 {
+        let prev = bytes[start_pos - 1];
+        if prev.is_ascii_alphanumeric() || prev == b'_' {
+            start_pos -= 1;
+        } else {
+            break;
+        }
+    }
+    
+    let keyword = &bytes[start_pos..=end_pos];
+    
+    // 正規表現が続く可能性のあるキーワード
+    // JavaScript/TypeScript/Ruby/Perl で共通的に使用されるもの
+    matches!(
+        keyword,
+        b"return" | b"if" | b"else" | b"while" | b"for" | b"do" |
+        b"switch" | b"case" | b"throw" | b"new" | b"delete" | b"typeof" |
+        b"void" | b"in" | b"of" | b"instanceof" | b"yield" | b"await" |
+        b"when" | b"unless" | b"until" | b"and" | b"or" | b"not" |
+        b"eq" | b"ne" | b"lt" | b"gt" | b"le" | b"ge" | b"cmp" |
+        b"split" | b"match" | b"grep" | b"map" | b"sub" | b"gsub" |
+        b"scan" | b"replace" | b"test" | b"exec"
+    )
+}
+
+/// 正規表現リテラルをスキップする
+/// 
+/// JavaScript/TypeScript/Ruby/Perl の正規表現リテラル `/pattern/flags` を
+/// スキップします。
+/// 
+/// # 引数
+/// * `bytes` - 行全体のバイト列
+/// * `start_pos` - `/` の開始位置
+/// 
+/// # 戻り値
+/// * `Some(n)` - スキップするバイト数
+/// * `None` - 正規表現リテラルではない
+pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
+    // 正規表現の開始として妥当かチェック
+    if !is_likely_regex_start(bytes, start_pos) {
+        return None;
+    }
+    
+    let mut i = start_pos + 1; // 開始の `/` をスキップ
+    
+    // 空の正規表現 `//` は除算と区別がつかないのでスキップしない
+    if i >= bytes.len() || bytes[i] == b'/' {
+        return None;
+    }
+    
+    // 閉じる `/` を探す
+    let mut in_char_class = false; // `[...]` 内かどうか
+    
+    while i < bytes.len() {
+        let c = bytes[i];
+        
+        match c {
+            // バックスラッシュエスケープ
+            b'\\' => {
+                i += 1;
+                if i < bytes.len() {
+                    i += 1;
+                }
+            }
+            
+            // 文字クラスの開始
+            b'[' if !in_char_class => {
+                in_char_class = true;
+                i += 1;
+            }
+            
+            // 文字クラスの終了
+            b']' if in_char_class => {
+                in_char_class = false;
+                i += 1;
+            }
+            
+            // 閉じる `/`（文字クラス外のみ）
+            b'/' if !in_char_class => {
+                i += 1;
+                // フラグをスキップ (g, i, m, s, u, y, d など)
+                while i < bytes.len() && is_regex_flag_char(bytes[i]) {
+                    i += 1;
+                }
+                return Some(i - start_pos);
+            }
+            
+            // 行末に達した場合（正規表現は単一行）
+            b'\n' | b'\r' => {
+                return None;
+            }
+            
+            _ => {
+                i += 1;
+            }
+        }
+    }
+    
+    // 閉じる `/` が見つからなかった
+    None
+}
+
+/// 正規表現フラグ文字かどうかを判定
+#[inline]
+fn is_regex_flag_char(b: u8) -> bool {
+    // JavaScript: g, i, m, s, u, y, d, v
+    // Ruby: i, m, x, o, e, s, u, n
+    // Perl: g, i, m, s, x, o, p, a, d, l, u, n, c, e, r
+    matches!(b, b'a'..=b'z')
+}
+
 /// SQL 文字列リテラル外でパターンを検索
 /// 
 /// SQL の文字列リテラル:
@@ -992,4 +1231,193 @@ pub fn find_outside_string_sql(line: &str, pattern: &str) -> Option<usize> {
     }
     
     None
+}
+
+// ============================================================================
+// テスト
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    // =========================================================================
+    // 正規表現リテラルのテスト
+    // =========================================================================
+    
+    mod regex_literal_tests {
+        use super::*;
+        
+        #[test]
+        fn test_simple_regex_literal() {
+            // 単純な正規表現リテラル
+            let bytes = b"/abc/";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, Some(5));
+        }
+        
+        #[test]
+        fn test_regex_with_flags() {
+            // フラグ付き正規表現
+            let bytes = b"/abc/gi";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, Some(7));
+        }
+        
+        #[test]
+        fn test_regex_with_escaped_slash() {
+            // エスケープされたスラッシュ
+            let bytes = b"/a\\/b/";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, Some(6));
+        }
+        
+        #[test]
+        fn test_regex_with_character_class() {
+            // 文字クラス内のスラッシュ
+            let bytes = b"/[/]/";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, Some(5));
+        }
+        
+        #[test]
+        fn test_regex_containing_comment_like_pattern() {
+            // 正規表現内の // パターン
+            let bytes = b"/https:\\/\\//";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, Some(12));
+        }
+        
+        #[test]
+        fn test_division_after_number() {
+            // 数値の後の除算
+            let bytes = b"10/2";
+            let result = try_skip_regex_literal(bytes, 2);
+            assert_eq!(result, None);
+        }
+        
+        #[test]
+        fn test_division_after_identifier() {
+            // 識別子の後の除算
+            let bytes = b"x/2";
+            let result = try_skip_regex_literal(bytes, 1);
+            assert_eq!(result, None);
+        }
+        
+        #[test]
+        fn test_division_after_closing_paren() {
+            // 閉じ括弧の後の除算
+            let bytes = b"(x+y)/2";
+            let result = try_skip_regex_literal(bytes, 5);
+            assert_eq!(result, None);
+        }
+        
+        #[test]
+        fn test_regex_after_equals() {
+            // = の後の正規表現
+            let bytes = b"x = /abc/";
+            let result = try_skip_regex_literal(bytes, 4);
+            assert_eq!(result, Some(5));
+        }
+        
+        #[test]
+        fn test_regex_after_return() {
+            // return の後の正規表現
+            let bytes = b"return /abc/";
+            let result = try_skip_regex_literal(bytes, 7);
+            assert_eq!(result, Some(5));
+        }
+        
+        #[test]
+        fn test_regex_after_open_paren() {
+            // ( の後の正規表現
+            let bytes = b"if (/abc/.test(s))";
+            let result = try_skip_regex_literal(bytes, 4);
+            assert_eq!(result, Some(5));
+        }
+        
+        #[test]
+        fn test_empty_regex_treated_as_division() {
+            // 空の正規表現は除算として扱う
+            let bytes = b"//";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, None);
+        }
+        
+        #[test]
+        fn test_regex_at_line_start() {
+            // 行頭の正規表現
+            let bytes = b"/abc/g.test(x)";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, Some(6));
+        }
+    }
+    
+    // =========================================================================
+    // find_outside_string_with_options のテスト (JavaScript/正規表現)
+    // =========================================================================
+    
+    mod find_outside_string_js_tests {
+        use super::*;
+        
+        #[test]
+        fn test_js_regex_not_mistaken_for_comment() {
+            // 正規表現内の // が行コメントと誤認されないこと
+            let options = StringSkipOptions::javascript();
+            let result = find_outside_string_with_options(
+                "var re = /https:\\/\\//;",
+                "//",
+                &options,
+            );
+            assert_eq!(result, None);
+        }
+        
+        #[test]
+        fn test_js_comment_after_regex() {
+            // 正規表現の後の行コメント
+            let options = StringSkipOptions::javascript();
+            let result = find_outside_string_with_options(
+                "var re = /abc/g; // comment",
+                "//",
+                &options,
+            );
+            assert_eq!(result, Some(17));
+        }
+        
+        #[test]
+        fn test_js_block_comment_in_regex() {
+            // 正規表現内の /* */ がブロックコメントと誤認されないこと
+            let options = StringSkipOptions::javascript();
+            let result = find_outside_string_with_options(
+                "var re = /a*b/g;",
+                "/*",
+                &options,
+            );
+            assert_eq!(result, None);
+        }
+        
+        #[test]
+        fn test_js_division_not_regex() {
+            // 除算演算子の後のコメント
+            let options = StringSkipOptions::javascript();
+            let result = find_outside_string_with_options(
+                "var x = a/b; // division",
+                "//",
+                &options,
+            );
+            assert_eq!(result, Some(13));
+        }
+        
+        #[test]
+        fn test_js_template_string_with_regex() {
+            // テンプレート文字列内の正規表現パターン
+            let options = StringSkipOptions::javascript();
+            let result = find_outside_string_with_options(
+                "var s = `pattern: /abc/`;",
+                "//",
+                &options,
+            );
+            assert_eq!(result, None);
+        }
+    }
 }
