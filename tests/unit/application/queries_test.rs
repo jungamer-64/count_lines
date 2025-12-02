@@ -54,6 +54,7 @@ fn base_options() -> ConfigOptions {
         watch_interval: None,
         watch_output: count_lines_core::domain::options::WatchOutput::Full,
         compare: None,
+        sloc: false,
     }
 }
 

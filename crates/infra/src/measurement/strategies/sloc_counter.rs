@@ -3,137 +3,68 @@
 //!
 //! 言語ごとのコメント構文を認識し、純粋なコード行のみをカウントします。
 
-/// コメント構文の種類
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CommentStyle {
-    /// C系言語: // と /* */
-    CStyle,
-    /// Python/Ruby/Shell: #
-    Hash,
-    /// Lua: -- と --[[ ]]
-    Lua,
-    /// HTML/XML: <!-- -->
-    Html,
-    /// SQL: -- と /* */
-    Sql,
-    /// Haskell: -- と {- -}
-    Haskell,
-    /// Lisp系: ;
-    Lisp,
-    /// Erlang: %
-    Erlang,
-    /// Fortran: ! (行頭)
-    Fortran,
-    /// MATLAB/Octave: % と %{ %}
-    Matlab,
-    /// コメント構文なし（全ての非空行をカウント）
-    None,
-}
+mod comment_style;
+mod processors;
+mod string_utils;
 
-impl CommentStyle {
-    /// 拡張子から言語のコメントスタイルを判定
-    pub fn from_extension(ext: &str) -> Self {
-        match ext.to_lowercase().as_str() {
-            // C系言語 (// と /* */)
-            "c" | "h" => Self::CStyle,
-            "cpp" | "cc" | "cxx" | "c++" | "hpp" | "hh" | "hxx" | "h++" => Self::CStyle,
-            "cs" => Self::CStyle, // C#
-            "java" => Self::CStyle,
-            "js" | "mjs" | "cjs" | "jsx" => Self::CStyle,
-            "ts" | "tsx" | "mts" | "cts" => Self::CStyle,
-            "rs" => Self::CStyle, // Rust
-            "go" => Self::CStyle,
-            "swift" => Self::CStyle,
-            "kt" | "kts" => Self::CStyle, // Kotlin
-            "scala" | "sc" => Self::CStyle,
-            "dart" => Self::CStyle,
-            "v" => Self::CStyle,    // V言語
-            "zig" => Self::CStyle,  // Zig
-            "d" => Self::CStyle,    // D言語
-            "m" | "mm" => Self::CStyle, // Objective-C
-            "groovy" | "gradle" => Self::CStyle,
-            "php" => Self::CStyle, // PHP (も # をサポートするが // が一般的)
-            "css" | "scss" | "sass" | "less" => Self::CStyle,
-            "json" | "jsonc" => Self::CStyle, // JSONCはコメント可
-            
-            // Hash系 (#)
-            "py" | "pyw" | "pyi" => Self::Hash, // Python
-            "rb" | "rake" | "gemspec" => Self::Hash, // Ruby
-            "sh" | "bash" | "zsh" | "fish" => Self::Hash,
-            "pl" | "pm" | "perl" => Self::Hash, // Perl
-            "r" | "rmd" => Self::Hash, // R
-            "yml" | "yaml" => Self::Hash,
-            "toml" => Self::Hash,
-            "dockerfile" => Self::Hash,
-            "makefile" | "mk" => Self::Hash,
-            "cmake" => Self::Hash,
-            "nim" => Self::Hash, // Nim
-            "cr" => Self::Hash,  // Crystal
-            "ex" | "exs" => Self::Hash, // Elixir
-            "coffee" => Self::Hash, // CoffeeScript
-            "tcl" => Self::Hash,
-            "awk" => Self::Hash,
-            "sed" => Self::Hash,
-            "ps1" | "psm1" | "psd1" => Self::Hash, // PowerShell
-            "tf" | "tfvars" => Self::Hash, // Terraform
-            "nix" => Self::Hash, // Nix
-            
-            // Lua (-- と --[[ ]])
-            "lua" => Self::Lua,
-            
-            // HTML/XML (<!-- -->)
-            "html" | "htm" | "xhtml" => Self::Html,
-            "xml" | "xsl" | "xslt" | "xsd" => Self::Html,
-            "svg" => Self::Html,
-            "vue" => Self::Html, // Vue (HTML-like)
-            
-            // SQL (-- と /* */)
-            "sql" => Self::Sql,
-            
-            // Haskell (-- と {- -})
-            "hs" | "lhs" => Self::Haskell,
-            "elm" => Self::Haskell,
-            "purs" => Self::Haskell, // PureScript
-            
-            // Lisp系 (;)
-            "lisp" | "lsp" | "cl" => Self::Lisp,
-            "el" => Self::Lisp,  // Emacs Lisp
-            "clj" | "cljs" | "cljc" | "edn" => Self::Lisp, // Clojure
-            "scm" | "ss" | "rkt" => Self::Lisp, // Scheme, Racket
-            
-            // Erlang/Elixirのerlang (%)
-            "erl" | "hrl" => Self::Erlang,
-            
-            // Fortran (!)
-            "f" | "f90" | "f95" | "f03" | "f08" | "for" | "ftn" => Self::Fortran,
-            
-            // MATLAB (% と %{ %})
-            // 注: ".m" はObjective-Cとして扱う（より一般的）
-            "mat" | "mlx" => Self::Matlab,
-            "oct" => Self::Matlab, // Octave
-            
-            // その他（コメント構文なし）
-            _ => Self::None,
-        }
-    }
-}
+pub use comment_style::CommentStyle;
+
+use processors::{
+    process_c_style, process_cpp_style, process_erlang_style, process_fortran_style,
+    process_hash_style, process_haskell_style, process_html_style, process_lisp_style,
+    process_lua_style, process_matlab_style, process_nesting_c_style, process_powershell_style,
+    process_sql_style, process_swift_style,
+};
 
 /// SLOCカウンターの状態
 pub struct SlocCounter {
     style: CommentStyle,
     in_block_comment: bool,
-    /// Rustのネストされたブロックコメント用の深さカウンター
+    /// Rust/Swift/Kotlinのネストされたブロックコメント用の深さカウンター
     block_comment_depth: usize,
+    /// ブロックコメントのネストをサポートするか (Rust/Swift/Kotlin)
+    supports_nesting: bool,
+    /// Python Docstringの開始クォート (Some(b'"') or Some(b'\''))
+    docstring_quote: Option<u8>,
+    /// Ruby/Perl の埋め込みドキュメント内か (=begin/=end, =pod/=cut)
+    in_embedded_doc: bool,
+    /// C++ Raw Stringリテラルをサポートするか
+    supports_cpp_raw_string: bool,
+    /// Swift の拡張デリミタ文字列をサポートするか
+    is_swift: bool,
     count: usize,
 }
 
 impl SlocCounter {
     /// 新しいカウンターを作成
     pub fn new(extension: &str) -> Self {
+        let style = CommentStyle::from_extension(extension);
+        let ext_lower = extension.to_lowercase();
+
+        // ネストコメントをサポートする言語
+        let supports_nesting = matches!(
+            ext_lower.as_str(),
+            "rs" | "swift" | "kt" | "kts" | "scala" | "sc" | "d"
+        );
+
+        // C++ Raw Stringをサポートする言語
+        let supports_cpp_raw_string = matches!(
+            ext_lower.as_str(),
+            "cpp" | "cc" | "cxx" | "c++" | "hpp" | "hh" | "hxx" | "h++"
+        );
+
+        // Swift の拡張デリミタ文字列をサポート
+        let is_swift = ext_lower == "swift";
+
         Self {
-            style: CommentStyle::from_extension(extension),
+            style,
             in_block_comment: false,
             block_comment_depth: 0,
+            supports_nesting,
+            docstring_quote: None,
+            in_embedded_doc: false,
+            supports_cpp_raw_string,
+            is_swift,
             count: 0,
         }
     }
@@ -141,7 +72,7 @@ impl SlocCounter {
     /// 行を処理してSLOCかどうかを判定
     pub fn process_line(&mut self, line: &str) {
         let trimmed = line.trim();
-        
+
         // 空行はスキップ
         if trimmed.is_empty() {
             return;
@@ -149,22 +80,56 @@ impl SlocCounter {
 
         match self.style {
             CommentStyle::CStyle => {
-                // Rustの場合はネストコメント対応版を使用
-                if Self::is_rust_style(self.style) {
-                    self.process_rust_style(trimmed);
+                // Swift は拡張デリミタ文字列対応の専用処理を使用
+                if self.is_swift {
+                    process_swift_style(
+                        trimmed,
+                        &mut self.block_comment_depth,
+                        &mut self.in_block_comment,
+                        &mut self.count,
+                    );
+                } else if self.supports_nesting {
+                    // Rust/Kotlin/Scala/D などのネストコメント対応
+                    process_nesting_c_style(
+                        trimmed,
+                        &mut self.block_comment_depth,
+                        &mut self.in_block_comment,
+                        &mut self.count,
+                    );
+                } else if self.supports_cpp_raw_string {
+                    process_cpp_style(trimmed, &mut self.in_block_comment, &mut self.count);
                 } else {
-                    self.process_c_style(trimmed);
+                    process_c_style(trimmed, &mut self.in_block_comment, &mut self.count);
                 }
             }
-            CommentStyle::Hash => self.process_hash_style(trimmed),
-            CommentStyle::Lua => self.process_lua_style(trimmed),
-            CommentStyle::Html => self.process_html_style(trimmed),
-            CommentStyle::Sql => self.process_sql_style(trimmed),
-            CommentStyle::Haskell => self.process_haskell_style(trimmed),
-            CommentStyle::Lisp => self.process_lisp_style(trimmed),
-            CommentStyle::Erlang => self.process_erlang_style(trimmed),
-            CommentStyle::Fortran => self.process_fortran_style(trimmed),
-            CommentStyle::Matlab => self.process_matlab_style(trimmed),
+            CommentStyle::Hash => process_hash_style(
+                line, // 埋め込みドキュメントは行頭判定が必要なため trim 前の line を渡す
+                &mut self.docstring_quote,
+                &mut self.in_embedded_doc,
+                &mut self.in_block_comment,
+                &mut self.count,
+            ),
+            CommentStyle::PowerShell => {
+                process_powershell_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
+            CommentStyle::Lua => {
+                process_lua_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
+            CommentStyle::Html => {
+                process_html_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
+            CommentStyle::Sql => {
+                process_sql_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
+            CommentStyle::Haskell => {
+                process_haskell_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
+            CommentStyle::Lisp => process_lisp_style(trimmed, &mut self.count),
+            CommentStyle::Erlang => process_erlang_style(trimmed, &mut self.count),
+            CommentStyle::Fortran => process_fortran_style(trimmed, &mut self.count),
+            CommentStyle::Matlab => {
+                process_matlab_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
             CommentStyle::None => {
                 // コメント構文なしの場合、非空行は全てSLOC
                 self.count += 1;
@@ -181,555 +146,6 @@ impl SlocCounter {
     #[cfg(test)]
     pub fn is_in_block_comment(&self) -> bool {
         self.in_block_comment
-    }
-
-    /// 文字列リテラル外でパターンを検索
-    /// 
-    /// 以下の文字列リテラル内のパターンは無視する:
-    /// - 通常の文字列: `"..."`, `'...'`
-    /// - Rust raw文字列: `r"..."`, `r#"..."#`, `r##"..."##` など
-    fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
-        let pattern_bytes = pattern.as_bytes();
-        let line_bytes = line.as_bytes();
-        
-        if pattern_bytes.is_empty() || line_bytes.len() < pattern_bytes.len() {
-            return None;
-        }
-
-        let mut i = 0;
-        while i <= line_bytes.len() - pattern_bytes.len() {
-            // Rust raw文字列リテラル: r"...", r#"..."#, r##"..."## など
-            // 直前が識別子文字でないことを確認（bar"..." などを誤検出しない）
-            if line_bytes[i] == b'r'
-                && (i == 0 || !Self::is_ident_char(line_bytes[i - 1]))
-                && let Some(skip) = Self::try_skip_raw_string(&line_bytes[i..])
-            {
-                i += skip;
-                continue;
-            }
-            
-            // Rust byte文字列: b"...", br"...", br#"..."# など
-            if line_bytes[i] == b'b'
-                && (i == 0 || !Self::is_ident_char(line_bytes[i - 1]))
-            {
-                if let Some(skip) = Self::try_skip_byte_string(&line_bytes[i..]) {
-                    i += skip;
-                    continue;
-                }
-            }
-            
-            // ダブルクォート文字列リテラル: "..."
-            if line_bytes[i] == b'"' {
-                i += 1;
-                while i < line_bytes.len() {
-                    if line_bytes[i] == b'\\' && i + 1 < line_bytes.len() {
-                        i += 2; // エスケープシーケンスをスキップ
-                        continue;
-                    }
-                    if line_bytes[i] == b'"' {
-                        i += 1;
-                        break;
-                    }
-                    i += 1;
-                }
-                continue;
-            }
-            
-            // シングルクォート: 文字リテラル ('a', '\n' など) vs ライフタイム ('a)
-            // 文字リテラルは短い（最大8文字程度: '\u{10FFFF}'）
-            // 閉じクォートが見つからない場合はライフタイムとみなしスキップしない
-            if line_bytes[i] == b'\'' {
-                if let Some(skip) = Self::try_skip_char_literal(&line_bytes[i..]) {
-                    i += skip;
-                    continue;
-                }
-                // ライフタイム注釈の場合は単に次へ進む
-                i += 1;
-                continue;
-            }
-            
-            // パターンとマッチするかチェック
-            if i + pattern_bytes.len() <= line_bytes.len() 
-                && &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes 
-            {
-                return Some(i);
-            }
-            
-            i += 1;
-        }
-        
-        None
-    }
-
-    /// Rust raw文字列リテラルをスキップする
-    /// 
-    /// `r"..."`, `r#"..."#`, `r##"..."##` などの形式を処理
-    /// 成功した場合はスキップするバイト数を返す
-    fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
-        if bytes.is_empty() || bytes[0] != b'r' {
-            return None;
-        }
-        
-        let mut i = 1;
-        
-        // '#' の数をカウント
-        let mut hash_count = 0;
-        while i < bytes.len() && bytes[i] == b'#' {
-            hash_count += 1;
-            i += 1;
-        }
-        
-        // '"' で始まる必要がある
-        if i >= bytes.len() || bytes[i] != b'"' {
-            return None;
-        }
-        i += 1;
-        
-        // 終端の '"' + '#' * hash_count を探す
-        while i < bytes.len() {
-            if bytes[i] == b'"' {
-                // 閉じクォートの後に必要な数の '#' があるか確認
-                let remaining = &bytes[i + 1..];
-                if hash_count == 0 {
-                    // r"..." の場合
-                    return Some(i + 1);
-                } else if remaining.len() >= hash_count 
-                    && remaining[..hash_count].iter().all(|&b| b == b'#') 
-                {
-                    // r#"..."# や r##"..."## の場合
-                    return Some(i + 1 + hash_count);
-                }
-            }
-            i += 1;
-        }
-        
-        // 閉じられていない raw 文字列（行末まで）
-        Some(bytes.len())
-    }
-
-    /// Rust byte文字列をスキップする
-    /// 
-    /// `b"..."`, `br"..."`, `br#"..."#` などの形式を処理
-    /// 成功した場合はスキップするバイト数を返す
-    fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
-        if bytes.is_empty() || bytes[0] != b'b' {
-            return None;
-        }
-        
-        if bytes.len() < 2 {
-            return None;
-        }
-        
-        // b"..." の場合
-        if bytes[1] == b'"' {
-            let mut i = 2;
-            while i < bytes.len() {
-                if bytes[i] == b'\\' && i + 1 < bytes.len() {
-                    i += 2;
-                    continue;
-                }
-                if bytes[i] == b'"' {
-                    return Some(i + 1);
-                }
-                i += 1;
-            }
-            return Some(bytes.len());
-        }
-        
-        // br"..." または br#"..."# の場合
-        if bytes[1] == b'r' {
-            // try_skip_raw_string に &bytes[1..] を渡して、+1 して返す
-            if let Some(skip) = Self::try_skip_raw_string(&bytes[1..]) {
-                return Some(1 + skip);
-            }
-        }
-        
-        None
-    }
-
-    /// 識別子に使える文字かどうかを判定
-    #[inline]
-    fn is_ident_char(b: u8) -> bool {
-        b.is_ascii_alphanumeric() || b == b'_'
-    }
-
-    /// CommentStyleがRust（ネストコメント対応）かどうかを判定
-    #[inline]
-    fn is_rust_style(_style: CommentStyle) -> bool {
-        // 現在はCStyleの中でRustを判別できないので、
-        // SlocCounterの作成時にextensionを保存する必要がある
-        // ここでは簡易的にtrueを返す（CStyleで呼ばれるのはRustの場合のみと仮定）
-        true
-    }
-
-    /// 文字リテラルをスキップする（ライフタイム注釈との区別）
-    /// 
-    /// 文字リテラル: `'a'`, `'\n'`, `'\u{1234}'` など（最大8文字程度）
-    /// ライフタイム: `'a`, `'static` など（閉じクォートがない）
-    /// 
-    /// 閉じクォートが8文字以内に見つからない場合はライフタイムとみなしNoneを返す
-    fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
-        if bytes.is_empty() || bytes[0] != b'\'' {
-            return None;
-        }
-        
-        const MAX_CHAR_LITERAL_LEN: usize = 12; // '\u{10FFFF}' + 余裕
-        let search_limit = bytes.len().min(MAX_CHAR_LITERAL_LEN);
-        
-        let mut i = 1;
-        while i < search_limit {
-            if bytes[i] == b'\\' && i + 1 < search_limit {
-                i += 2; // エスケープシーケンスをスキップ
-                continue;
-            }
-            if bytes[i] == b'\'' {
-                // 閉じクォートが見つかった = 文字リテラル
-                return Some(i + 1);
-            }
-            i += 1;
-        }
-        
-        // 閉じクォートが見つからない = ライフタイム注釈
-        None
-    }
-
-    /// Rustスタイル処理（ネストされたブロックコメント対応）
-    fn process_rust_style(&mut self, line: &str) {
-        // ネストされたブロックコメント内
-        if self.block_comment_depth > 0 {
-            self.process_rust_block_comment_line(line);
-            return;
-        }
-
-        // 行コメント（文字列外）のみの行かチェック
-        if let Some(line_comment_pos) = Self::find_outside_string(line, "//") {
-            let before = &line[..line_comment_pos];
-            if before.trim().is_empty() {
-                return;
-            }
-            self.count += 1;
-            return;
-        }
-
-        // ブロックコメント開始をチェック（文字列外）
-        if let Some(block_start) = Self::find_outside_string(line, "/*") {
-            let before = &line[..block_start];
-            let has_code_before = !before.trim().is_empty();
-            
-            // ブロックコメント開始後の部分を処理
-            self.block_comment_depth = 1;
-            let rest = &line[block_start + 2..];
-            self.process_rust_block_comment_line(rest);
-            
-            if has_code_before {
-                self.count += 1;
-            }
-            return;
-        }
-
-        // コードがある行
-        self.count += 1;
-    }
-
-    /// Rustのネストされたブロックコメント行を処理
-    fn process_rust_block_comment_line(&mut self, line: &str) {
-        let bytes = line.as_bytes();
-        let mut i = 0;
-        
-        while i < bytes.len() {
-            if i + 1 < bytes.len() {
-                // /* を見つけたらネスト深度を増やす
-                if bytes[i] == b'/' && bytes[i + 1] == b'*' {
-                    self.block_comment_depth += 1;
-                    i += 2;
-                    continue;
-                }
-                // */ を見つけたらネスト深度を減らす
-                if bytes[i] == b'*' && bytes[i + 1] == b'/' {
-                    self.block_comment_depth -= 1;
-                    i += 2;
-                    
-                    // 全てのコメントが閉じた
-                    if self.block_comment_depth == 0 {
-                        let rest = &line[i..];
-                        if !rest.trim().is_empty() {
-                            // 残りの部分を再帰的に処理
-                            self.process_rust_style(rest);
-                        }
-                        return;
-                    }
-                    continue;
-                }
-            }
-            i += 1;
-        }
-        
-        // in_block_comment フラグも同期
-        self.in_block_comment = self.block_comment_depth > 0;
-    }
-
-    /// C系スタイル (// と /* */) の処理
-    fn process_c_style(&mut self, line: &str) {
-        if self.in_block_comment {
-            // ブロックコメント内
-            if let Some(pos) = line.find("*/") {
-                self.in_block_comment = false;
-                // 閉じた後にコードがあるかチェック
-                let rest = &line[pos + 2..];
-                if !rest.trim().is_empty() && !rest.trim().starts_with("//") {
-                    self.count += 1;
-                }
-            }
-            return;
-        }
-
-        // 行コメント（文字列外）のみの行かチェック
-        if let Some(line_comment_pos) = Self::find_outside_string(line, "//") {
-            // // より前にコードがあるか
-            let before = &line[..line_comment_pos];
-            if before.trim().is_empty() {
-                // コメントのみの行
-                return;
-            }
-            // コメント前にコードがある
-            self.count += 1;
-            return;
-        }
-
-        // ブロックコメント開始をチェック（文字列外）
-        if let Some(block_start) = Self::find_outside_string(line, "/*") {
-            // /* より前にコードがあるか
-            let before = &line[..block_start];
-            let has_code_before = !before.trim().is_empty();
-            
-            // ブロックコメントが同じ行で閉じるか
-            if let Some(block_end) = line[block_start + 2..].find("*/") {
-                let after = &line[block_start + 2 + block_end + 2..];
-                let has_code_after = !after.trim().is_empty() 
-                    && Self::find_outside_string(after, "//").is_none_or(|p| p > 0);
-                if has_code_before || has_code_after {
-                    self.count += 1;
-                }
-            } else {
-                self.in_block_comment = true;
-                if has_code_before {
-                    self.count += 1;
-                }
-            }
-            return;
-        }
-
-        // コードがある行
-        self.count += 1;
-    }
-
-    /// Hash スタイル (#) の処理
-    fn process_hash_style(&mut self, line: &str) {
-        // shebang行を除外
-        if line.starts_with("#!") && self.count == 0 {
-            return;
-        }
-        
-        // #で始まる行はコメント
-        if line.starts_with('#') {
-            return;
-        }
-
-        // # より前にコードがあるか（文字列内の # は無視すべきだが、簡易実装）
-        if let Some(hash_pos) = line.find('#') {
-            let before = &line[..hash_pos];
-            if !before.trim().is_empty() {
-                self.count += 1;
-            }
-        } else {
-            self.count += 1;
-        }
-    }
-
-    /// Lua スタイル (-- と --[[ ]]) の処理
-    fn process_lua_style(&mut self, line: &str) {
-        if self.in_block_comment {
-            if line.contains("]]") {
-                self.in_block_comment = false;
-            }
-            return;
-        }
-
-        if line.starts_with("--[[") || line.starts_with("--[=[") {
-            self.in_block_comment = true;
-            return;
-        }
-
-        if line.starts_with("--") {
-            return;
-        }
-
-        self.count += 1;
-    }
-
-    /// HTML スタイル (<!-- -->) の処理
-    fn process_html_style(&mut self, line: &str) {
-        if self.in_block_comment {
-            if line.contains("-->") {
-                self.in_block_comment = false;
-                // --> の後にコードがあるかチェック
-                if let Some(pos) = line.find("-->") {
-                    let rest = &line[pos + 3..];
-                    if !rest.trim().is_empty() {
-                        self.count += 1;
-                    }
-                }
-            }
-            return;
-        }
-
-        if let Some(start) = line.find("<!--") {
-            let before = &line[..start];
-            let has_code_before = !before.trim().is_empty();
-
-            if let Some(end_offset) = line[start + 4..].find("-->") {
-                let after = &line[start + 4 + end_offset + 3..];
-                if has_code_before || !after.trim().is_empty() {
-                    self.count += 1;
-                }
-            } else {
-                self.in_block_comment = true;
-                if has_code_before {
-                    self.count += 1;
-                }
-            }
-            return;
-        }
-
-        self.count += 1;
-    }
-
-    /// SQL スタイル (-- と /* */) の処理
-    fn process_sql_style(&mut self, line: &str) {
-        if self.in_block_comment {
-            if let Some(pos) = line.find("*/") {
-                self.in_block_comment = false;
-                let rest = &line[pos + 2..];
-                if !rest.trim().is_empty() && !rest.trim().starts_with("--") {
-                    self.count += 1;
-                }
-            }
-            return;
-        }
-
-        // ブロックコメント開始
-        if let Some(block_start) = line.find("/*") {
-            let before = &line[..block_start];
-            let has_code_before = !before.trim().is_empty() && !before.trim().starts_with("--");
-
-            if let Some(end_offset) = line[block_start + 2..].find("*/") {
-                let after = &line[block_start + 2 + end_offset + 2..];
-                if has_code_before || !after.trim().is_empty() {
-                    self.count += 1;
-                }
-            } else {
-                self.in_block_comment = true;
-                if has_code_before {
-                    self.count += 1;
-                }
-            }
-            return;
-        }
-
-        // 行コメント
-        if line.starts_with("--") {
-            return;
-        }
-
-        self.count += 1;
-    }
-
-    /// Haskell スタイル (-- と {- -}) の処理
-    fn process_haskell_style(&mut self, line: &str) {
-        if self.in_block_comment {
-            if let Some(pos) = line.find("-}") {
-                self.in_block_comment = false;
-                let rest = &line[pos + 2..];
-                if !rest.trim().is_empty() && !rest.trim().starts_with("--") {
-                    self.count += 1;
-                }
-            }
-            return;
-        }
-
-        if let Some(block_start) = line.find("{-") {
-            let before = &line[..block_start];
-            let has_code_before = !before.trim().is_empty() && !before.trim().starts_with("--");
-
-            if let Some(end_offset) = line[block_start + 2..].find("-}") {
-                let after = &line[block_start + 2 + end_offset + 2..];
-                if has_code_before || !after.trim().is_empty() {
-                    self.count += 1;
-                }
-            } else {
-                self.in_block_comment = true;
-                if has_code_before {
-                    self.count += 1;
-                }
-            }
-            return;
-        }
-
-        if line.starts_with("--") {
-            return;
-        }
-
-        self.count += 1;
-    }
-
-    /// Lisp スタイル (;) の処理
-    fn process_lisp_style(&mut self, line: &str) {
-        if line.starts_with(';') {
-            return;
-        }
-        self.count += 1;
-    }
-
-    /// Erlang スタイル (%) の処理
-    fn process_erlang_style(&mut self, line: &str) {
-        if line.starts_with('%') {
-            return;
-        }
-        self.count += 1;
-    }
-
-    /// Fortran スタイル (!) の処理
-    fn process_fortran_style(&mut self, line: &str) {
-        // Fortran: ! で始まるコメント、または C/c/*/d/D で始まる固定形式コメント
-        if line.starts_with('!')
-            || line.starts_with('C')
-            || line.starts_with('c')
-            || line.starts_with('*')
-        {
-            return;
-        }
-        self.count += 1;
-    }
-
-    /// MATLAB スタイル (% と %{ %}) の処理
-    fn process_matlab_style(&mut self, line: &str) {
-        if self.in_block_comment {
-            if line.trim() == "%}" {
-                self.in_block_comment = false;
-            }
-            return;
-        }
-
-        if line.trim() == "%{" {
-            self.in_block_comment = true;
-            return;
-        }
-
-        if line.starts_with('%') {
-            return;
-        }
-
-        self.count += 1;
     }
 }
 
@@ -757,7 +173,11 @@ mod tests {
         counter.process_line("/// More docs");
         counter.process_line("pub fn foo() {}");
         // Doc comments should not be counted, only the actual code line
-        assert_eq!(counter.count(), 1, "Only 'pub fn foo() {{}}' should be counted as SLOC");
+        assert_eq!(
+            counter.count(),
+            1,
+            "Only 'pub fn foo() {{}}' should be counted as SLOC"
+        );
     }
 
     #[test]
@@ -787,15 +207,19 @@ mod tests {
             "    }",
             "}",
         ];
-        
+
         for line in &lines {
             counter.process_line(line);
         }
-        
+
         // Expected SLOC: use(2) + #[derive](1) + enum declaration(1) + Allow,(1) + Deny,(1) + }(1)
         //              + impl(1) + pub fn(1) + matches!(1) + }(1) + }(1) = 12
         // NOT including: //!, //! comments, /// doc comments, empty lines
-        assert!(counter.count() > 10, "Expected more than 10 SLOC, got {}", counter.count());
+        assert!(
+            counter.count() > 10,
+            "Expected more than 10 SLOC, got {}",
+            counter.count()
+        );
     }
 
     #[test]
@@ -804,7 +228,11 @@ mod tests {
         let mut counter = SlocCounter::new("rs");
         counter.process_line("#[derive(Debug, Clone)]");
         counter.process_line("pub struct Foo;");
-        assert_eq!(counter.count(), 2, "Both attribute and struct should be SLOC");
+        assert_eq!(
+            counter.count(),
+            2,
+            "Both attribute and struct should be SLOC"
+        );
     }
 
     #[test]
@@ -815,8 +243,15 @@ mod tests {
         counter.process_line("    // do something");
         counter.process_line("}");
         // First line has code, second is comment, third has code
-        assert_eq!(counter.count(), 2, "String literal with /* should not trigger block comment");
-        assert!(!counter.is_in_block_comment(), "Should not be in block comment mode");
+        assert_eq!(
+            counter.count(),
+            2,
+            "String literal with /* should not trigger block comment"
+        );
+        assert!(
+            !counter.is_in_block_comment(),
+            "Should not be in block comment mode"
+        );
     }
 
     #[test]
@@ -835,7 +270,10 @@ mod tests {
         counter.process_line(r#"let s = r"/* not a comment */";"#);
         counter.process_line("let x = 1;");
         assert_eq!(counter.count(), 2);
-        assert!(!counter.is_in_block_comment(), "r\"...\" should not trigger block comment");
+        assert!(
+            !counter.is_in_block_comment(),
+            "r\"...\" should not trigger block comment"
+        );
     }
 
     #[test]
@@ -845,7 +283,10 @@ mod tests {
         counter.process_line(r###"let regex = r#"<div class="foo">"#;"###);
         counter.process_line("let y = 2;");
         assert_eq!(counter.count(), 2);
-        assert!(!counter.is_in_block_comment(), "r#\"...\"# should not trigger block comment");
+        assert!(
+            !counter.is_in_block_comment(),
+            "r#\"...\"# should not trigger block comment"
+        );
     }
 
     #[test]
@@ -874,7 +315,7 @@ mod tests {
     fn test_block_comment_state_issue() {
         // Test the actual content from the user's file
         let mut counter = SlocCounter::new("rs");
-        
+
         // These lines should NOT trigger block comment mode
         let test_lines = vec![
             "//! Security Policy Engine for ExoRust",
@@ -896,18 +337,31 @@ mod tests {
             "    /// Allow the operation",
             "    Allow,",
         ];
-        
+
         for (i, line) in test_lines.iter().enumerate() {
             let before = counter.count();
             counter.process_line(line);
             let after = counter.count();
-            eprintln!("Line {}: '{}' -> count {} -> {} (in_block={})", 
-                     i, line, before, after, counter.is_in_block_comment());
+            eprintln!(
+                "Line {}: '{}' -> count {} -> {} (in_block={})",
+                i,
+                line,
+                before,
+                after,
+                counter.is_in_block_comment()
+            );
         }
-        
+
         // Should have: 5 use statements + extern crate + #[derive] + pub enum + Allow, = 9
-        assert!(counter.count() >= 9, "Expected at least 9 SLOC, got {}", counter.count());
-        assert!(!counter.is_in_block_comment(), "Should not be in block comment mode");
+        assert!(
+            counter.count() >= 9,
+            "Expected at least 9 SLOC, got {}",
+            counter.count()
+        );
+        assert!(
+            !counter.is_in_block_comment(),
+            "Should not be in block comment mode"
+        );
     }
 
     #[test]
@@ -1008,8 +462,8 @@ mod tests {
     fn test_identifier_with_r_suffix_complex() {
         // 複雑なケース: 識別子が r で終わり、その後に文字列がある
         let mut counter = SlocCounter::new("rs");
-        counter.process_line(r#"println!(buffer"/*test*/");"#);  // 架空の構文
-        // これは raw 文字列ではないので通常文字列として処理される
+        counter.process_line(r#"println!(buffer"/*test*/");"#); // 架空の構文
+                                                                // これは raw 文字列ではないので通常文字列として処理される
         assert_eq!(counter.count(), 1);
         assert!(!counter.is_in_block_comment());
     }
@@ -1039,7 +493,7 @@ mod tests {
         // 文字リテラルとライフタイムの混在
         let mut counter = SlocCounter::new("rs");
         counter.process_line("fn foo<'a>(c: char) -> &'a str {");
-        counter.process_line("    let x = 'c';");  // 文字リテラル
+        counter.process_line("    let x = 'c';"); // 文字リテラル
         counter.process_line("    let y = '\\n';"); // エスケープ文字リテラル
         counter.process_line("}");
         assert_eq!(counter.count(), 4);
@@ -1087,5 +541,361 @@ mod tests {
         counter.process_line("*/");
         counter.process_line("let y = 2;");
         assert_eq!(counter.count(), 2); // x = 1 と y = 2 の2行
+    }
+
+    // ==================== C系言語ネスト非対応テスト ====================
+
+    #[test]
+    fn test_c_no_nested_comments() {
+        // C言語はネストコメント非対応
+        let mut counter = SlocCounter::new("c");
+        counter.process_line("/* outer /* inner */ code_here(); */");
+        // C言語では最初の */ でコメント終了、code_here(); がコード扱い
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_java_no_nested_comments() {
+        // Javaもネストコメント非対応
+        let mut counter = SlocCounter::new("java");
+        counter.process_line("/* comment */");
+        counter.process_line("int x = 1;");
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== Python Docstring テスト ====================
+
+    #[test]
+    fn test_python_docstring_multiline() {
+        let mut counter = SlocCounter::new("py");
+        counter.process_line("def foo():");
+        counter.process_line("    \"\"\"");
+        counter.process_line("    This is a docstring.");
+        counter.process_line("    Multiple lines.");
+        counter.process_line("    \"\"\"");
+        counter.process_line("    return 1");
+        // def foo(): と return 1 のみがSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_python_docstring_single_line() {
+        let mut counter = SlocCounter::new("py");
+        counter.process_line("def bar():");
+        counter.process_line("    \"\"\"Single line docstring.\"\"\"");
+        counter.process_line("    pass");
+        // def bar(): と pass のみがSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_python_docstring_single_quote() {
+        let mut counter = SlocCounter::new("py");
+        counter.process_line("'''");
+        counter.process_line("Triple single quote docstring");
+        counter.process_line("'''");
+        counter.process_line("x = 1");
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_python_string_with_hash() {
+        // 文字列内の # はコメントではない
+        let mut counter = SlocCounter::new("py");
+        counter.process_line("s = \"hello # world\"");
+        counter.process_line("t = 'foo # bar'");
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== C++ Raw String Literal テスト ====================
+
+    #[test]
+    fn test_cpp_raw_string_basic() {
+        let mut counter = SlocCounter::new("cpp");
+        counter.process_line("const char* s = R\"(/* not a comment */)\";");
+        counter.process_line("int x = 1;");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_cpp_raw_string_with_delimiter() {
+        let mut counter = SlocCounter::new("cpp");
+        counter.process_line("const char* s = R\"foo(/* not a comment */)foo\";");
+        counter.process_line("int y = 2;");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_cpp_raw_string_with_line_comment() {
+        let mut counter = SlocCounter::new("cpp");
+        counter.process_line("const char* s = R\"(// not a comment)\";");
+        counter.process_line("int z = 3;");
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== Swift/Kotlin ネストコメントテスト ====================
+
+    #[test]
+    fn test_swift_nested_comments() {
+        let mut counter = SlocCounter::new("swift");
+        counter.process_line("/* outer");
+        counter.process_line("  /* nested */");
+        counter.process_line("*/");
+        counter.process_line("let x = 1");
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_kotlin_nested_comments() {
+        let mut counter = SlocCounter::new("kt");
+        counter.process_line("/* outer /* inner */ still comment */");
+        counter.process_line("val x = 1");
+        // Kotlinはネスト対応なので、全てのコメントが閉じてからコード
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== Ruby 埋め込みドキュメント テスト ====================
+
+    #[test]
+    fn test_ruby_embedded_document() {
+        let mut counter = SlocCounter::new("rb");
+        counter.process_line("x = 1");
+        counter.process_line("=begin");
+        counter.process_line("This is embedded documentation.");
+        counter.process_line("It can span multiple lines.");
+        counter.process_line("=end");
+        counter.process_line("y = 2");
+        // x = 1 と y = 2 のみがSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_ruby_embedded_document_with_comments() {
+        let mut counter = SlocCounter::new("rb");
+        counter.process_line("# regular comment");
+        counter.process_line("def foo");
+        counter.process_line("=begin");
+        counter.process_line("  embedded doc");
+        counter.process_line("=end");
+        counter.process_line("  puts 'hello'");
+        counter.process_line("end");
+        // def foo, puts 'hello', end のみがSLOC
+        assert_eq!(counter.count(), 3);
+    }
+
+    #[test]
+    fn test_ruby_embedded_doc_must_start_at_line_beginning() {
+        // =begin は行頭から始まる必要がある
+        let mut counter = SlocCounter::new("rb");
+        counter.process_line("x = 1  # =begin is not at line start");
+        counter.process_line("y = 2");
+        // 両方ともコード行
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== Perl POD テスト ====================
+
+    #[test]
+    fn test_perl_pod_basic() {
+        let mut counter = SlocCounter::new("pl");
+        counter.process_line("use strict;");
+        counter.process_line("=pod");
+        counter.process_line("This is POD documentation.");
+        counter.process_line("=cut");
+        counter.process_line("print \"Hello\";");
+        // use strict と print のみがSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_perl_pod_with_head() {
+        let mut counter = SlocCounter::new("pl");
+        counter.process_line("my $x = 1;");
+        counter.process_line("=head1 NAME");
+        counter.process_line("");
+        counter.process_line("MyModule - A sample module");
+        counter.process_line("");
+        counter.process_line("=head2 DESCRIPTION");
+        counter.process_line("");
+        counter.process_line("This module does something.");
+        counter.process_line("");
+        counter.process_line("=cut");
+        counter.process_line("my $y = 2;");
+        // $x = 1 と $y = 2 のみがSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_perl_pod_over_item() {
+        let mut counter = SlocCounter::new("pm");
+        counter.process_line("sub foo { 1 }");
+        counter.process_line("=over 4");
+        counter.process_line("=item * First item");
+        counter.process_line("=item * Second item");
+        counter.process_line("=back");
+        counter.process_line("=cut");
+        counter.process_line("sub bar { 2 }");
+        // sub foo と sub bar のみがSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_perl_shebang_not_counted() {
+        let mut counter = SlocCounter::new("pl");
+        counter.process_line("#!/usr/bin/perl");
+        counter.process_line("use warnings;");
+        counter.process_line("print 1;");
+        // shebang は除外、use と print がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== PowerShell テスト ====================
+
+    #[test]
+    fn test_powershell_line_comment() {
+        let mut counter = SlocCounter::new("ps1");
+        counter.process_line("# This is a comment");
+        counter.process_line("$x = 1");
+        counter.process_line("$y = 2  # inline comment");
+        // $x と $y の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_powershell_block_comment_single_line() {
+        let mut counter = SlocCounter::new("ps1");
+        counter.process_line("<# block comment #>");
+        counter.process_line("$x = 1");
+        // ブロックコメントは除外、$x の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_powershell_block_comment_multiline() {
+        let mut counter = SlocCounter::new("ps1");
+        counter.process_line("$x = 1");
+        counter.process_line("<#");
+        counter.process_line("  This is a multi-line");
+        counter.process_line("  block comment");
+        counter.process_line("#>");
+        counter.process_line("$y = 2");
+        // $x と $y の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_powershell_code_before_block_comment() {
+        let mut counter = SlocCounter::new("ps1");
+        counter.process_line("$x = 1 <# start comment");
+        counter.process_line("still in comment");
+        counter.process_line("#> $y = 2");
+        // $x = 1 と $y = 2 の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_powershell_block_comment_in_string() {
+        let mut counter = SlocCounter::new("ps1");
+        // 文字列内の <# はコメント開始ではない
+        counter.process_line(r#"$s = "<# not a comment #>""#);
+        counter.process_line("$x = 1");
+        // 両方ともSLOC
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_powershell_module() {
+        let mut counter = SlocCounter::new("psm1");
+        counter.process_line("<#");
+        counter.process_line(".SYNOPSIS");
+        counter.process_line("    A sample function");
+        counter.process_line("#>");
+        counter.process_line("function Get-Sample {");
+        counter.process_line("    param($Name)");
+        counter.process_line("    Write-Output $Name");
+        counter.process_line("}");
+        // function, param, Write-Output, } の4行がSLOC
+        assert_eq!(counter.count(), 4);
+    }
+
+    // ==================== Swift 拡張デリミタ文字列テスト ====================
+
+    #[test]
+    fn test_swift_extended_delimiter_string() {
+        let mut counter = SlocCounter::new("swift");
+        // #"..."# 形式の拡張デリミタ文字列
+        counter.process_line(r##"let s = #"/* not a comment */"#"##);
+        counter.process_line("let x = 1");
+        // 両方ともSLOC
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_swift_extended_delimiter_double_hash() {
+        let mut counter = SlocCounter::new("swift");
+        // ##"..."## 形式
+        counter.process_line(r###"let s = ##"contains "# but not end"##"###);
+        counter.process_line("let y = 2");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_swift_multiline_string() {
+        let mut counter = SlocCounter::new("swift");
+        // """...""" 形式の多重引用符文字列（1行で閉じる場合）
+        counter.process_line(r#"let s = """/* not a comment */""""#);
+        counter.process_line("let z = 3");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_swift_extended_delimiter_with_comment_markers() {
+        let mut counter = SlocCounter::new("swift");
+        // 拡張デリミタ文字列内にコメントマーカーがある
+        counter.process_line(r##"let pattern = #"// not comment /* also not */"#"##);
+        counter.process_line("realCode()");
+        counter.process_line("// actual comment");
+        counter.process_line("moreCode()");
+        // pattern, realCode, moreCode の3行がSLOC
+        assert_eq!(counter.count(), 3);
+    }
+
+    #[test]
+    fn test_swift_normal_string_with_comment() {
+        let mut counter = SlocCounter::new("swift");
+        // 通常の文字列
+        counter.process_line(r#"let s = "/* not a comment */""#);
+        counter.process_line("let x = 1");
+        assert_eq!(counter.count(), 2);
+        assert!(!counter.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_swift_nested_comments_with_strings() {
+        // Swift はネストコメントをサポート
+        let mut counter = SlocCounter::new("swift");
+        counter.process_line("/* outer");
+        counter.process_line("  /* nested */");
+        counter.process_line("  still in comment");
+        counter.process_line("*/");
+        counter.process_line("let x = 1");
+        // let x の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_swift_hash_not_comment() {
+        // Swift では # はコメント開始ではない（拡張デリミタの一部）
+        let mut counter = SlocCounter::new("swift");
+        counter.process_line("let hash = #selector(foo)");
+        counter.process_line("let x = 1");
+        // 両方ともSLOC
+        assert_eq!(counter.count(), 2);
     }
 }

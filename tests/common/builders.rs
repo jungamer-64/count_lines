@@ -194,6 +194,7 @@ impl ConfigBuilder {
                 watch_interval: Duration::from_secs(1),
                 watch_output: WatchOutput::Full,
                 compare: None,
+                sloc: false,
             },
         }
     }

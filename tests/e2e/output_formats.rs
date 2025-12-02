@@ -61,6 +61,7 @@ fn build_options(root: &Path, output: PathBuf, format: OutputFormat) -> ConfigOp
         watch_interval: None,
         watch_output: count_lines_core::domain::options::WatchOutput::Full,
         compare: None,
+        sloc: false,
     }
 }
 

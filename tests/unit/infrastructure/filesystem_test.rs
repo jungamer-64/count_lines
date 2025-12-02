@@ -73,6 +73,7 @@ fn base_config(root: &Path) -> Config {
         watch_interval: Duration::from_secs(1),
         watch_output: count_lines_core::domain::options::WatchOutput::Full,
         compare: None,
+        sloc: false,
     }
 }
 
