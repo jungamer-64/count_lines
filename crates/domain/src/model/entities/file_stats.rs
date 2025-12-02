@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     model::FileMeta,
     value_objects::{
-        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, SlocCount,
+        WordCount,
     },
 };
 
@@ -18,6 +19,9 @@ pub struct FileStats {
     pub lines: usize,
     pub chars: usize,
     pub words: Option<usize>,
+    /// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数
+    #[serde(default)]
+    pub sloc: Option<usize>,
     pub size: u64,
     pub mtime: Option<DateTime<Local>>,
     pub ext: String,
@@ -32,6 +36,29 @@ impl FileStats {
             lines,
             chars,
             words,
+            sloc: None,
+            size: meta.size,
+            mtime: meta.mtime,
+            ext: meta.ext.clone(),
+            name: meta.name.clone(),
+        }
+    }
+
+    /// SLOC付きのコンストラクタ
+    pub fn with_sloc(
+        path: PathBuf,
+        lines: usize,
+        chars: usize,
+        words: Option<usize>,
+        sloc: Option<usize>,
+        meta: &FileMeta,
+    ) -> Self {
+        Self {
+            path,
+            lines,
+            chars,
+            words,
+            sloc,
             size: meta.size,
             mtime: meta.mtime,
             ext: meta.ext.clone(),
@@ -72,6 +99,9 @@ mod file_stats_v2 {
         lines: LineCount,
         chars: CharCount,
         words: Option<WordCount>,
+        /// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数
+        #[serde(default)]
+        sloc: Option<SlocCount>,
         size: FileSize,
         mtime: Option<ModificationTime>,
         ext: FileExtension,
@@ -85,12 +115,13 @@ mod file_stats_v2 {
             lines: LineCount,
             chars: CharCount,
             words: Option<WordCount>,
+            sloc: Option<SlocCount>,
             size: FileSize,
             mtime: Option<ModificationTime>,
             ext: FileExtension,
             name: FileName,
         ) -> Self {
-            Self { path, lines, chars, words, size, mtime, ext, name }
+            Self { path, lines, chars, words, sloc, size, mtime, ext, name }
         }
 
         pub fn builder(path: FilePath) -> FileStatsBuilder {
@@ -115,6 +146,11 @@ mod file_stats_v2 {
         #[inline]
         pub fn words(&self) -> Option<WordCount> {
             self.words
+        }
+
+        #[inline]
+        pub fn sloc(&self) -> Option<SlocCount> {
+            self.sloc
         }
 
         #[inline]
@@ -143,6 +179,7 @@ mod file_stats_v2 {
                 lines: self.lines.value(),
                 chars: self.chars.value(),
                 words: self.words.map(|w| w.value()),
+                sloc: self.sloc.map(|s| s.value()),
                 size: self.size.bytes(),
                 mtime: self.mtime.as_ref().map(|m| *m.timestamp()),
                 ext: self.ext.as_str().to_string(),
@@ -160,6 +197,7 @@ mod file_stats_v2 {
                 lines: LineCount::new(legacy.lines),
                 chars: CharCount::new(legacy.chars),
                 words: legacy.words.map(WordCount::new),
+                sloc: legacy.sloc.map(SlocCount::new),
                 size: FileSize::new(legacy.size),
                 mtime: legacy.mtime.as_ref().map(|m| ModificationTime::new(*m)),
                 ext: FileExtension::new(legacy.ext.clone()),
@@ -185,6 +223,7 @@ mod file_stats_v2 {
         lines: LineCount,
         chars: CharCount,
         words: Option<WordCount>,
+        sloc: Option<SlocCount>,
         size: FileSize,
         mtime: Option<ModificationTime>,
         ext: FileExtension,
@@ -201,6 +240,7 @@ mod file_stats_v2 {
                 lines: LineCount::zero(),
                 chars: CharCount::zero(),
                 words: None,
+                sloc: None,
                 size: FileSize::zero(),
                 mtime: None,
                 ext,
@@ -220,6 +260,11 @@ mod file_stats_v2 {
 
         pub fn words(mut self, words: Option<WordCount>) -> Self {
             self.words = words;
+            self
+        }
+
+        pub fn sloc(mut self, sloc: Option<SlocCount>) -> Self {
+            self.sloc = sloc;
             self
         }
 
@@ -249,6 +294,7 @@ mod file_stats_v2 {
                 lines: self.lines,
                 chars: self.chars,
                 words: self.words,
+                sloc: self.sloc,
                 size: self.size,
                 mtime: self.mtime,
                 ext: self.ext,

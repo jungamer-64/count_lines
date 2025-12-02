@@ -18,8 +18,8 @@ pub struct OutputOptions {
     #[arg(long, value_enum, default_value = "table", help_heading = "出力")]
     pub format: CliOutputFormat,
 
-    /// ソートキー（複数可, 例: lines:desc,chars:desc,name）。`words` を含む場合は単語数計測が自動有効化されます。
-    #[arg(long, default_value = "lines:desc", help_heading = "出力")]
+    /// ソートキー（複数可, 例: lines:desc,chars:desc,name）。`words` を含む場合は単語数計測が自動有効化されます。`sloc` を含む場合は純粋コード行数計測が自動有効化されます。
+    #[arg(long, default_value = "lines", help_heading = "出力")]
     pub sort: SortSpec,
 
     /// 上位N件のみ表示（一覧）
@@ -129,6 +129,10 @@ pub struct FilterOptions {
     /// 単語数も計測
     #[arg(long, help_heading = "フィルタ")]
     pub words: bool,
+
+    /// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数も計測
+    #[arg(long, help_heading = "フィルタ")]
+    pub sloc: bool,
 
     /// 最小単語数（指定すると --words が暗黙に有効化されます。CLI では --min-words）
     #[arg(long, help_heading = "フィルタ")]

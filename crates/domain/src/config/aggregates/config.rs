@@ -35,6 +35,8 @@ pub struct Config {
     pub abs_canonical: bool,
     pub trim_root: Option<PathBuf>,
     pub words: bool,
+    /// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数を計測するかどうか
+    pub sloc: bool,
     pub count_newlines_in_chars: bool,
     pub text_only: bool,
     pub fast_text_detect: bool,
@@ -159,6 +161,7 @@ mod tests {
             abs_canonical: false,
             trim_root: None,
             words: false,
+            sloc: false,
             count_newlines_in_chars: false,
             text_only: false,
             fast_text_detect: false,

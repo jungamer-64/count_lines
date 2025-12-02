@@ -77,10 +77,10 @@ impl SortStrategy {
         Self::new(specs)
     }
 
-    /// デフォルト戦略（行数降順）
+    /// デフォルト戦略（行数昇順）
     #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self {
-        Self::new(vec![SortSpec::descending(SortKey::Lines)])
+        Self::new(vec![SortSpec::ascending(SortKey::Lines)])
     }
 
     /// ソート仕様が空かどうか
@@ -127,7 +127,7 @@ impl SortStrategy {
 
 impl Default for SortStrategy {
     fn default() -> Self {
-        Self::new(vec![SortSpec::descending(SortKey::Lines)])
+        Self::new(vec![SortSpec::ascending(SortKey::Lines)])
     }
 }
 
@@ -142,6 +142,11 @@ impl SortKey {
                 let a_words = a.words().unwrap_or_default();
                 let b_words = b.words().unwrap_or_default();
                 a_words.cmp(&b_words)
+            }
+            Self::Sloc => {
+                let a_sloc = a.sloc().unwrap_or_default();
+                let b_sloc = b.sloc().unwrap_or_default();
+                a_sloc.cmp(&b_sloc)
             }
             Self::Size => a.size().cmp(&b.size()),
             Self::Name => a.path().as_path().cmp(b.path().as_path()),

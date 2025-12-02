@@ -30,6 +30,7 @@ impl ConfigQueryService {
         let use_ignore_overrides = Self::has_ignore_overrides(&filters);
         let jobs = Self::determine_jobs(&query);
         let words = Self::should_enable_words(&query, &filters);
+        let sloc = Self::should_enable_sloc(&query);
         let (abs_path, trim_root) = Self::abs_and_trim(&query);
         let watch_interval = Self::watch_interval(&query);
         let cache_dir = Self::cache_dir(&query);
@@ -61,6 +62,7 @@ impl ConfigQueryService {
             abs_canonical: query.abs_canonical,
             trim_root,
             words,
+            sloc,
             count_newlines_in_chars: query.count_newlines_in_chars,
             text_only: query.text_only,
             fast_text_detect: query.fast_text_detect,
@@ -170,6 +172,23 @@ impl ConfigQueryService {
             || Self::filter_uses_words(filters)
             || Self::sort_uses_words(&query.sort_specs)
             || Self::filter_expr_mentions_words(query.filters.filter.as_deref())
+    }
+
+    fn should_enable_sloc(query: &ConfigOptions) -> bool {
+        query.sloc
+            || Self::sort_uses_sloc(&query.sort_specs)
+            || Self::filter_expr_mentions_sloc(query.filters.filter.as_deref())
+    }
+
+    fn sort_uses_sloc(sort_specs: &[(crate::domain::options::SortKey, bool)]) -> bool {
+        sort_specs.iter().any(|(key, _)| matches!(key, crate::domain::options::SortKey::Sloc))
+    }
+
+    /// Lightweight detection for builds without the `eval` feature: look for `sloc` tokens.
+    fn filter_expr_mentions_sloc(expr: Option<&str>) -> bool {
+        let Some(expr) = expr else { return false };
+        expr.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+            .any(|tok| tok.eq_ignore_ascii_case("sloc"))
     }
 
     #[cfg(feature = "eval")]

@@ -471,10 +471,169 @@ impl Sum<usize> for WordCount {
     }
 }
 
+/// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数を表す値オブジェクト
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[must_use]
+#[repr(transparent)]
+#[serde(transparent)]
+pub struct SlocCount(usize);
+
+impl SlocCount {
+    pub const ZERO: Self = Self(0);
+
+    #[inline]
+    #[must_use]
+    pub const fn new(value: usize) -> Self {
+        Self(value)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn zero() -> Self {
+        Self(0)
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn value(self) -> usize {
+        self.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn saturating_add(self, rhs: usize) -> Self {
+        Self(self.0.saturating_add(rhs))
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn saturating_sub(self, rhs: usize) -> Self {
+        Self(self.0.saturating_sub(rhs))
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn saturating_add_count(self, rhs: Self) -> Self {
+        Self(self.0.saturating_add(rhs.0))
+    }
+
+    #[inline]
+    #[must_use]
+    pub const fn saturating_sub_count(self, rhs: Self) -> Self {
+        Self(self.0.saturating_sub(rhs.0))
+    }
+}
+
+impl Zero for SlocCount {
+    fn zero() -> Self {
+        Self::ZERO
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+
+    fn set_zero(&mut self) {
+        self.0 = 0;
+    }
+}
+
+impl Add for SlocCount {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0 + rhs.0)
+    }
+}
+
+impl AddAssign for SlocCount {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 += rhs.0;
+    }
+}
+
+impl PartialEq<usize> for SlocCount {
+    fn eq(&self, other: &usize) -> bool {
+        self.0 == *other
+    }
+}
+
+impl PartialEq<SlocCount> for usize {
+    fn eq(&self, other: &SlocCount) -> bool {
+        *self == other.0
+    }
+}
+
+impl Add<usize> for SlocCount {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: usize) -> Self::Output {
+        Self(self.0 + rhs)
+    }
+}
+
+impl AddAssign<usize> for SlocCount {
+    #[inline]
+    fn add_assign(&mut self, rhs: usize) {
+        self.0 += rhs;
+    }
+}
+
+impl From<usize> for SlocCount {
+    fn from(value: usize) -> Self {
+        Self::new(value)
+    }
+}
+
+impl From<SlocCount> for usize {
+    fn from(value: SlocCount) -> Self {
+        value.value()
+    }
+}
+
+impl FromIterator<SlocCount> for SlocCount {
+    fn from_iter<I: IntoIterator<Item = SlocCount>>(iter: I) -> Self {
+        iter.into_iter().fold(Self::zero(), |acc, n| acc + n)
+    }
+}
+
+impl FromIterator<usize> for SlocCount {
+    fn from_iter<I: IntoIterator<Item = usize>>(iter: I) -> Self {
+        iter.into_iter().fold(Self::zero(), |acc, n| acc + n)
+    }
+}
+
+impl Sum for SlocCount {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::zero(), |acc, item| acc + item)
+    }
+}
+
+impl<'a> Sum<&'a SlocCount> for SlocCount {
+    fn sum<I: Iterator<Item = &'a SlocCount>>(iter: I) -> Self {
+        iter.fold(Self::zero(), |acc, item| acc + *item)
+    }
+}
+
+impl Sum<usize> for SlocCount {
+    fn sum<I: Iterator<Item = usize>>(iter: I) -> Self {
+        iter.fold(Self::zero(), |acc, item| acc + item)
+    }
+}
+
 mod display {
     use std::fmt;
 
-    use super::{CharCount, LineCount, WordCount};
+    use super::{CharCount, LineCount, SlocCount, WordCount};
 
     impl fmt::Display for LineCount {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -489,6 +648,12 @@ mod display {
     }
 
     impl fmt::Display for WordCount {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}", self.value())
+        }
+    }
+
+    impl fmt::Display for SlocCount {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(f, "{}", self.value())
         }

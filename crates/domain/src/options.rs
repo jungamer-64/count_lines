@@ -29,6 +29,8 @@ pub enum SortKey {
     Size,
     Name,
     Ext,
+    /// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数
+    Sloc,
 }
 
 /// Sort specification. Example: `lines:desc,chars:desc,name`.
@@ -69,6 +71,7 @@ fn parse_sort_key(key_str: &str) -> Result<SortKey, String> {
         "size" => Ok(SortKey::Size),
         "name" => Ok(SortKey::Name),
         "ext" => Ok(SortKey::Ext),
+        "sloc" => Ok(SortKey::Sloc),
         other => Err(format!("Unknown sort key: {other}")),
     }
 }

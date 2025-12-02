@@ -16,6 +16,12 @@ const HEADER_WORDS_RATIO: &str = "    LINES%\t    LINES\t CHARACTERS%\t CHARACTE
 const HEADER_WORDS: &str = "    LINES\t CHARACTERS\t   WORDS\tFILE";
 const HEADER_RATIO: &str = "    LINES%\t    LINES\t CHARACTERS%\t CHARACTERS\tFILE";
 const HEADER_BASIC: &str = "    LINES\t CHARACTERS\tFILE";
+// SLOC付きヘッダー
+const HEADER_SLOC: &str = "    LINES\t     SLOC\t CHARACTERS\tFILE";
+const HEADER_SLOC_WORDS: &str = "    LINES\t     SLOC\t CHARACTERS\t   WORDS\tFILE";
+const HEADER_SLOC_RATIO: &str = "    LINES%\t    LINES\t     SLOC%\t     SLOC\t CHARACTERS%\t CHARACTERS\tFILE";
+const HEADER_SLOC_WORDS_RATIO: &str =
+    "    LINES%\t    LINES\t     SLOC%\t     SLOC\t CHARACTERS%\t CHARACTERS\t   WORDS\tFILE";
 
 pub fn output_table(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     if config.total_only {
@@ -50,20 +56,28 @@ fn write_table_rows(stats: &[FileStats], config: &Config, out: &mut impl Write) 
 }
 
 fn header_line(config: &Config) -> &'static str {
-    match (config.words, config.ratio) {
-        (true, true) => HEADER_WORDS_RATIO,
-        (true, false) => HEADER_WORDS,
-        (false, true) => HEADER_RATIO,
-        (false, false) => HEADER_BASIC,
+    match (config.sloc, config.words, config.ratio) {
+        (true, true, true) => HEADER_SLOC_WORDS_RATIO,
+        (true, true, false) => HEADER_SLOC_WORDS,
+        (true, false, true) => HEADER_SLOC_RATIO,
+        (true, false, false) => HEADER_SLOC,
+        (false, true, true) => HEADER_WORDS_RATIO,
+        (false, true, false) => HEADER_WORDS,
+        (false, false, true) => HEADER_RATIO,
+        (false, false, false) => HEADER_BASIC,
     }
 }
 
 fn format_row(s: &FileStats, summary: &Summary, config: &Config, path: &str) -> String {
-    match (config.words, config.ratio) {
-        (true, true) => format_row_words_ratio(s, summary, path),
-        (true, false) => format_row_words(s, path),
-        (false, true) => format_row_ratio(s, summary, path),
-        (false, false) => format_row_basic(s, path),
+    match (config.sloc, config.words, config.ratio) {
+        (true, true, true) => format_row_sloc_words_ratio(s, summary, path),
+        (true, true, false) => format_row_sloc_words(s, path),
+        (true, false, true) => format_row_sloc_ratio(s, summary, path),
+        (true, false, false) => format_row_sloc(s, path),
+        (false, true, true) => format_row_words_ratio(s, summary, path),
+        (false, true, false) => format_row_words(s, path),
+        (false, false, true) => format_row_ratio(s, summary, path),
+        (false, false, false) => format_row_basic(s, path),
     }
 }
 
@@ -98,6 +112,49 @@ fn format_row_basic(s: &FileStats, path: &str) -> String {
     format!("{:>10}\t{:>10}\t{}", s.lines, s.chars, path)
 }
 
+// SLOC付きフォーマット関数
+fn format_row_sloc(s: &FileStats, path: &str) -> String {
+    format!("{:>10}\t{:>10}\t{:>10}\t{}", s.lines, s.sloc.unwrap_or(0), s.chars, path)
+}
+
+fn format_row_sloc_words(s: &FileStats, path: &str) -> String {
+    format!(
+        "{:>10}\t{:>10}\t{:>10}\t{:>7}\t{}",
+        s.lines,
+        s.sloc.unwrap_or(0),
+        s.chars,
+        s.words.unwrap_or(0),
+        path
+    )
+}
+
+fn format_row_sloc_ratio(s: &FileStats, summary: &Summary, path: &str) -> String {
+    format!(
+        "{:>10}\t{:>10}\t{:>10}\t{:>10}\t{:>12}\t{:>11}\t{}",
+        format_ratio(s.lines, summary.lines),
+        s.lines,
+        format_ratio(s.sloc.unwrap_or(0), summary.sloc),
+        s.sloc.unwrap_or(0),
+        format_ratio(s.chars, summary.chars),
+        s.chars,
+        path
+    )
+}
+
+fn format_row_sloc_words_ratio(s: &FileStats, summary: &Summary, path: &str) -> String {
+    format!(
+        "{:>10}\t{:>10}\t{:>10}\t{:>10}\t{:>12}\t{:>11}\t{:>7}\t{}",
+        format_ratio(s.lines, summary.lines),
+        s.lines,
+        format_ratio(s.sloc.unwrap_or(0), summary.sloc),
+        s.sloc.unwrap_or(0),
+        format_ratio(s.chars, summary.chars),
+        s.chars,
+        s.words.unwrap_or(0),
+        path
+    )
+}
+
 fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let groups = Aggregator::aggregate(stats, &config.by_modes);
     for (label, mut rows) in groups {
@@ -114,14 +171,25 @@ fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write
 
 fn output_summary(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
     let summary = Summary::from_stats(stats);
-    if config.words {
-        writeln!(
+    match (config.sloc, config.words) {
+        (true, true) => writeln!(
+            out,
+            "{:>10}\t{:>10}\t{:>10}\t{:>7}\tTOTAL ({} files)\n",
+            summary.lines, summary.sloc, summary.chars, summary.words, summary.files
+        )?,
+        (true, false) => writeln!(
+            out,
+            "{:>10}\t{:>10}\t{:>10}\tTOTAL ({} files)\n",
+            summary.lines, summary.sloc, summary.chars, summary.files
+        )?,
+        (false, true) => writeln!(
             out,
             "{:>10}\t{:>10}\t{:>7}\tTOTAL ({} files)\n",
             summary.lines, summary.chars, summary.words, summary.files
-        )?;
-    } else {
-        writeln!(out, "{:>10}\t{:>10}\tTOTAL ({} files)\n", summary.lines, summary.chars, summary.files)?;
+        )?,
+        (false, false) => {
+            writeln!(out, "{:>10}\t{:>10}\tTOTAL ({} files)\n", summary.lines, summary.chars, summary.files)?
+        }
     }
     Ok(())
 }
@@ -178,6 +246,7 @@ mod tests {
             abs_canonical: false,
             trim_root: None,
             words: false,
+            sloc: false,
             count_newlines_in_chars: false,
             text_only: false,
             fast_text_detect: false,

@@ -19,5 +19,6 @@ pub mod path;
 pub mod value_objects;
 
 pub use value_objects::{
-    CharCount, FileExtension, FileMeta, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+    CharCount, FileExtension, FileMeta, FileName, FilePath, FileSize, LineCount, ModificationTime, SlocCount,
+    WordCount,
 };

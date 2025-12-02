@@ -39,12 +39,13 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
 
 ### ソート
 
-* `--sort <SPEC>`  … 既定は `lines:desc`
+* `--sort <SPEC>`  … 既定は `lines`（昇順）
 
   * `SPEC` はカンマ区切りの複数キー。各キーは `:desc` 指定可。
   * 例: `--sort lines:desc,chars:desc,name`
-  * キー: `lines`, `chars`, `words`, `size`, `name`, `ext`
+  * キー: `lines`, `chars`, `words`, `size`, `name`, `ext`, `sloc`
   * `words` を含めると単語数計測が自動的に有効になります。
+  * `sloc` を含めるとSLOC（空行を除外した純粋コード行数）計測が自動的に有効になります。
   * **安定ソート**を「**最後に書いたキーから**」適用します。
 
 ### 件数制限
@@ -81,6 +82,20 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
 * `--min_lines <N>` / `--max_lines <N>`
 * `--min_chars <N>` / `--max_chars <N>`
 * `--words` を付けた時のみ: `--min-words <N>` / `--max-words <N>`（指定すると自動で単語数計測が有効化）
+* `--sloc` … SLOC（Source Lines of Code）を計測。空行とコメント行を除外した純粋なコード行数をカウントします。
+
+  **対応言語（拡張子で自動判定）：**
+  * **C系言語** (`//`, `/* */`): `.c`, `.h`, `.cpp`, `.cc`, `.hpp`, `.cs`, `.java`, `.js`, `.ts`, `.jsx`, `.tsx`, `.rs`, `.go`, `.swift`, `.kt`, `.scala`, `.dart`, `.v`, `.zig`, `.d`, `.m`, `.mm`, `.groovy`, `.php`, `.css`, `.scss`
+  * **Hash系** (`#`): `.py`, `.rb`, `.sh`, `.bash`, `.pl`, `.r`, `.yml`, `.yaml`, `.toml`, `.dockerfile`, `.makefile`, `.cmake`, `.nim`, `.cr`, `.ex`, `.ps1`, `.tf`, `.nix`
+  * **Lua** (`--`, `--[[ ]]`): `.lua`
+  * **HTML/XML** (`<!-- -->`): `.html`, `.xml`, `.svg`, `.vue`
+  * **SQL** (`--`, `/* */`): `.sql`
+  * **Haskell系** (`--`, `{- -}`): `.hs`, `.elm`, `.purs`
+  * **Lisp系** (`;`): `.lisp`, `.el`, `.clj`, `.scm`, `.rkt`
+  * **Erlang** (`%`): `.erl`, `.hrl`
+  * **Fortran** (`!`): `.f`, `.f90`, `.f95`, `.for`
+  * **MATLAB** (`%`, `%{ %}`): `.mat`, `.mlx`, `.oct`
+  * **未対応拡張子**: コメント除外なし（空行のみ除外）
 * mtime 範囲: `--mtime_since <DATE|DATETIME>` / `--mtime_until <DATE|DATETIME>`
   *受理形式*: RFC3339 / `YYYY-MM-DD HH:MM:SS` / `YYYY-MM-DD`
 
@@ -88,11 +103,12 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
 
 * `--filter "<expr>"`
 
-  * 使用可能な変数: `lines`, `chars`, `words`, `size`, `ext`, `name`, `mtime`（UNIX秒）
+  * 使用可能な変数: `lines`, `chars`, `words`, `sloc`, `size`, `ext`, `name`, `mtime`（UNIX秒）
   * 例:
     `--filter "lines > 100 && ext == 'rs'"`
     `--filter "(mtime >= 1700000000) && (chars < 2000)"`
   * `words` を参照すると単語数計測が自動的に有効になります。
+  * `sloc` を参照するとSLOC計測が自動的に有効になります。
 
 ### テキスト判定
 
@@ -239,7 +255,7 @@ PATHS を省略するとカレントディレクトリ（`.`）を対象にし�
   * 既定は高速テキスト判定（先頭 1024B の NUL 検出）。誤判定が問題になる場合は `--fast_text_detect=false` を推奨
 * 既定除外ディレクトリは `--no_default_prune` で解除可能
 * パス表示を短くしたい場合は `--trim_root <REPO_ROOT>` を活用
-* 既定ソートは `lines:desc`。旧バージョンの昇順に合わせたい場合は `--sort lines` を明示
+* 既定ソートは `lines`（昇順）。降順にしたい場合は `--sort lines:desc` を明示
 
 ## 例
 

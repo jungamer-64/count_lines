@@ -76,6 +76,7 @@ fn make_config_options(
         abs_canonical: args.path.abs_canonical,
         trim_root: args.path.trim_root.clone(),
         words: args.filter.words,
+        sloc: args.filter.sloc,
         count_newlines_in_chars: args.output.count_newlines_in_chars,
         text_only: args.scan.text_only,
         fast_text_detect: args.scan.fast_text_detect,
