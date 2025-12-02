@@ -3,29 +3,113 @@
 //!
 //! Lua, HTML/XML, SQL, Haskell, Lisp, Erlang, Fortran, MATLAB等を処理します。
 
-/// Lua スタイル (-- と --[[ ]]) の処理
+/// Lua スタイル (-- と --[=*[ ]=*]) の処理
+///
+/// Lua のブロックコメントは `--[[` で始まり `]]` で終わる。
+/// 等号を任意の数だけ挟める: `--[=[`, `--[==[`, etc.
+/// 対応する閉じ括弧も同じ数の等号が必要: `]=]`, `]==]`, etc.
 pub fn process_lua_style(
     line: &str,
     in_block_comment: &mut bool,
+    lua_block_level: &mut usize,
     count: &mut usize,
 ) {
     if *in_block_comment {
-        if line.contains("]]") {
+        // ブロックコメント内: 対応する閉じ括弧を探す
+        if let Some(_) = find_lua_block_end(line, *lua_block_level) {
             *in_block_comment = false;
+            *lua_block_level = 0;
         }
         return;
     }
 
-    if line.starts_with("--[[") || line.starts_with("--[=[") {
-        *in_block_comment = true;
-        return;
-    }
-
+    // 行コメント
     if line.starts_with("--") {
+        // ブロックコメント開始かチェック: --[[, --[=[, --[==[, etc.
+        if let Some(level) = check_lua_block_start(&line[2..]) {
+            // ブロックコメント開始
+            // 同じ行で閉じるかチェック
+            let after_open = skip_lua_block_open(&line[2..]);
+            if find_lua_block_end(after_open, level).is_some() {
+                // 同じ行で閉じる = コメント行
+                return;
+            }
+            *in_block_comment = true;
+            *lua_block_level = level;
+        }
+        // 行コメントまたはブロックコメント開始 = SLOCではない
         return;
     }
 
     *count += 1;
+}
+
+/// Lua ブロックコメント開始をチェック
+/// `[` で始まり、0個以上の `=` の後に `[` が続く場合、等号の数を返す
+fn check_lua_block_start(s: &str) -> Option<usize> {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() || bytes[0] != b'[' {
+        return None;
+    }
+
+    let mut i = 1;
+    let mut level = 0;
+
+    // 等号をカウント
+    while i < bytes.len() && bytes[i] == b'=' {
+        level += 1;
+        i += 1;
+    }
+
+    // 2番目の [ を確認
+    if i < bytes.len() && bytes[i] == b'[' {
+        return Some(level);
+    }
+
+    None
+}
+
+/// Lua ブロックコメント開始部分をスキップして残りを返す
+fn skip_lua_block_open(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    if bytes.is_empty() || bytes[0] != b'[' {
+        return s;
+    }
+
+    let mut i = 1;
+    while i < bytes.len() && bytes[i] == b'=' {
+        i += 1;
+    }
+    if i < bytes.len() && bytes[i] == b'[' {
+        return &s[i + 1..];
+    }
+    s
+}
+
+/// Lua ブロックコメント終了を検索
+/// `]` + level個の `=` + `]` を探す
+fn find_lua_block_end(s: &str, level: usize) -> Option<usize> {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if bytes[i] == b']' {
+            // 等号をカウント
+            let mut eq_count = 0;
+            let mut j = i + 1;
+            while j < bytes.len() && bytes[j] == b'=' {
+                eq_count += 1;
+                j += 1;
+            }
+            // 閉じ括弧を確認
+            if j < bytes.len() && bytes[j] == b']' && eq_count == level {
+                return Some(j + 1);
+            }
+        }
+        i += 1;
+    }
+
+    None
 }
 
 /// HTML スタイル (<!-- -->) の処理
@@ -113,46 +197,85 @@ pub fn process_sql_style(
     *count += 1;
 }
 
-/// Haskell スタイル (-- と {- -}) の処理
+/// Haskell スタイル (-- と {- -}) の処理 - ネスト対応
+///
+/// Haskell のブロックコメント `{- -}` はネスト可能
 pub fn process_haskell_style(
     line: &str,
     in_block_comment: &mut bool,
+    block_comment_depth: &mut usize,
     count: &mut usize,
 ) {
-    if *in_block_comment {
-        if let Some(pos) = line.find("-}") {
-            *in_block_comment = false;
-            let rest = &line[pos + 2..];
-            if !rest.trim().is_empty() && !rest.trim().starts_with("--") {
-                *count += 1;
-            }
-        }
+    // ネストされたブロックコメント内
+    if *block_comment_depth > 0 {
+        process_nesting_haskell_block(line, block_comment_depth, in_block_comment, count);
         return;
     }
 
-    if let Some(block_start) = line.find("{-") {
-        let before = &line[..block_start];
-        let has_code_before = !before.trim().is_empty() && !before.trim().starts_with("--");
-
-        if let Some(end_offset) = line[block_start + 2..].find("-}") {
-            let after = &line[block_start + 2 + end_offset + 2..];
-            if has_code_before || !after.trim().is_empty() {
-                *count += 1;
-            }
-        } else {
-            *in_block_comment = true;
-            if has_code_before {
-                *count += 1;
-            }
-        }
-        return;
-    }
-
+    // 行コメント
     if line.starts_with("--") {
         return;
     }
 
+    // ブロックコメント開始 {-
+    if let Some(block_start) = line.find("{-") {
+        let before = &line[..block_start];
+        let has_code_before = !before.trim().is_empty() && !before.trim().starts_with("--");
+
+        // ブロックコメント開始
+        *block_comment_depth = 1;
+        let rest = &line[block_start + 2..];
+        process_nesting_haskell_block(rest, block_comment_depth, in_block_comment, count);
+
+        if has_code_before {
+            *count += 1;
+        }
+        return;
+    }
+
     *count += 1;
+}
+
+/// ネストされた Haskell ブロックコメント行を処理
+fn process_nesting_haskell_block(
+    line: &str,
+    block_comment_depth: &mut usize,
+    in_block_comment: &mut bool,
+    count: &mut usize,
+) {
+    let bytes = line.as_bytes();
+    let mut i = 0;
+
+    while i < bytes.len() {
+        if i + 1 < bytes.len() {
+            // {- を見つけたらネスト深度を増やす
+            if bytes[i] == b'{' && bytes[i + 1] == b'-' {
+                *block_comment_depth += 1;
+                i += 2;
+                continue;
+            }
+            // -} を見つけたらネスト深度を減らす
+            if bytes[i] == b'-' && bytes[i + 1] == b'}' {
+                *block_comment_depth -= 1;
+                i += 2;
+
+                // 全てのコメントが閉じた
+                if *block_comment_depth == 0 {
+                    let rest = &line[i..];
+                    if !rest.trim().is_empty() {
+                        // 残りの部分を再帰的に処理
+                        process_haskell_style(rest, in_block_comment, block_comment_depth, count);
+                    }
+                    return;
+                }
+                continue;
+            }
+        }
+        i += 1;
+    }
+
+    // in_block_comment フラグも同期
+    *in_block_comment = *block_comment_depth > 0;
 }
 
 /// Lisp スタイル (;) の処理

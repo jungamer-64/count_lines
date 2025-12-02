@@ -283,7 +283,7 @@ checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
 
 [[package]]
 name = "count_lines"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -304,7 +304,7 @@ dependencies = [
 
 [[package]]
 name = "count_lines_core"
-version = "0.7.0"
+version = "0.8.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -333,7 +333,7 @@ dependencies = [
 
 [[package]]
 name = "count_lines_domain"
-version = "0.7.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "count_lines_shared_kernel",
@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "count_lines_infra"
-version = "0.7.0"
+version = "0.8.1"
 dependencies = [
  "ahash",
  "bytecount",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "count_lines_ports"
-version = "0.7.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "count_lines_shared_kernel",
@@ -378,7 +378,7 @@ dependencies = [
 
 [[package]]
 name = "count_lines_shared_kernel"
-version = "0.7.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "evalexpr",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "count_lines_usecase"
-version = "0.7.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "count_lines_domain",

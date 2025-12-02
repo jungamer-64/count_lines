@@ -11,16 +11,17 @@ pub use comment_style::CommentStyle;
 
 use processors::{
     process_c_style, process_cpp_style, process_erlang_style, process_fortran_style,
-    process_hash_style, process_haskell_style, process_html_style, process_lisp_style,
-    process_lua_style, process_matlab_style, process_nesting_c_style, process_powershell_style,
-    process_sql_style, process_swift_style,
+    process_hash_style, process_haskell_style, process_html_style, process_julia_style,
+    process_lisp_style, process_lua_style, process_matlab_style, process_nesting_c_style,
+    process_ocaml_style, process_php_style, process_powershell_style, process_sql_style,
+    process_swift_style,
 };
 
 /// SLOCカウンターの状態
 pub struct SlocCounter {
     style: CommentStyle,
     in_block_comment: bool,
-    /// Rust/Swift/Kotlinのネストされたブロックコメント用の深さカウンター
+    /// Rust/Swift/Kotlin/Haskellのネストされたブロックコメント用の深さカウンター
     block_comment_depth: usize,
     /// ブロックコメントのネストをサポートするか (Rust/Swift/Kotlin)
     supports_nesting: bool,
@@ -32,6 +33,8 @@ pub struct SlocCounter {
     supports_cpp_raw_string: bool,
     /// Swift の拡張デリミタ文字列をサポートするか
     is_swift: bool,
+    /// Lua ブロックコメントのレベル (等号の数)
+    lua_block_level: usize,
     count: usize,
 }
 
@@ -65,6 +68,7 @@ impl SlocCounter {
             in_embedded_doc: false,
             supports_cpp_raw_string,
             is_swift,
+            lua_block_level: 0,
             count: 0,
         }
     }
@@ -109,11 +113,19 @@ impl SlocCounter {
                 &mut self.in_block_comment,
                 &mut self.count,
             ),
+            CommentStyle::Php => {
+                process_php_style(trimmed, &mut self.in_block_comment, &mut self.count)
+            }
             CommentStyle::PowerShell => {
                 process_powershell_style(trimmed, &mut self.in_block_comment, &mut self.count)
             }
             CommentStyle::Lua => {
-                process_lua_style(trimmed, &mut self.in_block_comment, &mut self.count)
+                process_lua_style(
+                    trimmed,
+                    &mut self.in_block_comment,
+                    &mut self.lua_block_level,
+                    &mut self.count,
+                )
             }
             CommentStyle::Html => {
                 process_html_style(trimmed, &mut self.in_block_comment, &mut self.count)
@@ -122,7 +134,28 @@ impl SlocCounter {
                 process_sql_style(trimmed, &mut self.in_block_comment, &mut self.count)
             }
             CommentStyle::Haskell => {
-                process_haskell_style(trimmed, &mut self.in_block_comment, &mut self.count)
+                process_haskell_style(
+                    trimmed,
+                    &mut self.in_block_comment,
+                    &mut self.block_comment_depth,
+                    &mut self.count,
+                )
+            }
+            CommentStyle::Julia => {
+                process_julia_style(
+                    trimmed,
+                    &mut self.in_block_comment,
+                    &mut self.block_comment_depth,
+                    &mut self.count,
+                )
+            }
+            CommentStyle::OCaml => {
+                process_ocaml_style(
+                    trimmed,
+                    &mut self.in_block_comment,
+                    &mut self.block_comment_depth,
+                    &mut self.count,
+                )
             }
             CommentStyle::Lisp => process_lisp_style(trimmed, &mut self.count),
             CommentStyle::Erlang => process_erlang_style(trimmed, &mut self.count),
@@ -896,6 +929,297 @@ mod tests {
         counter.process_line("let hash = #selector(foo)");
         counter.process_line("let x = 1");
         // 両方ともSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== PHP テスト ====================
+
+    #[test]
+    fn test_php_hash_comment() {
+        let mut counter = SlocCounter::new("php");
+        counter.process_line("<?php");
+        counter.process_line("# This is a hash comment");
+        counter.process_line("$x = 1;");
+        counter.process_line("$y = 2; # inline comment");
+        counter.process_line("// double slash comment");
+        counter.process_line("$z = 3; // inline");
+        // <?php, $x, $y, $z の4行がSLOC
+        assert_eq!(counter.count(), 4);
+    }
+
+    #[test]
+    fn test_php_block_comment() {
+        let mut counter = SlocCounter::new("php");
+        counter.process_line("$a = 1;");
+        counter.process_line("/* block");
+        counter.process_line("   comment */");
+        counter.process_line("$b = 2;");
+        // $a と $b の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_php_hash_in_string() {
+        let mut counter = SlocCounter::new("php");
+        // 文字列内の # はコメントではない
+        counter.process_line(r#"$s = "Hello # World";"#);
+        counter.process_line(r#"$t = 'Hash: #tag';"#);
+        assert_eq!(counter.count(), 2);
+    }
+
+    // ==================== Python f-string テスト ====================
+
+    #[test]
+    fn test_python_fstring_with_hash() {
+        let mut counter = SlocCounter::new("py");
+        // f-string 内の # はコメントではない
+        counter.process_line(r#"s = f"Hash: #{value}""#);
+        counter.process_line("x = 1");
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_python_various_prefixes() {
+        let mut counter = SlocCounter::new("py");
+        counter.process_line(r#"a = f"test # not comment""#);
+        counter.process_line(r#"b = F"test # not comment""#);
+        counter.process_line(r#"c = r"test # not comment""#);
+        counter.process_line(r#"d = u"test # not comment""#);
+        counter.process_line(r#"e = b"test # not comment""#);
+        counter.process_line(r#"f = fr"test # not comment""#);
+        counter.process_line(r#"g = rf"test # not comment""#);
+        // 全て7行がSLOC
+        assert_eq!(counter.count(), 7);
+    }
+
+    #[test]
+    fn test_python_fstring_multiline() {
+        let mut counter = SlocCounter::new("py");
+        counter.process_line(r#"s = f"""Multi"#);
+        counter.process_line("line # not comment");
+        counter.process_line(r#"string""""#);
+        counter.process_line("x = 1");
+        // 三重引用符の開始行、終了行、x = 1 の3行がSLOC
+        // (中間行は文字列の一部なのでSLOCとしてカウント)
+        assert_eq!(counter.count(), 4);
+    }
+
+    // ==================== Haskell ネストコメント テスト ====================
+
+    #[test]
+    fn test_haskell_nested_comment() {
+        let mut counter = SlocCounter::new("hs");
+        counter.process_line("{-");
+        counter.process_line("  Outer comment");
+        counter.process_line("  {- Inner comment -}");
+        counter.process_line("  Still outer comment");
+        counter.process_line("-}");
+        counter.process_line("main = putStrLn \"Hello\"");
+        // main の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_haskell_nested_comment_deep() {
+        let mut counter = SlocCounter::new("hs");
+        counter.process_line("{- level 1");
+        counter.process_line("{- level 2");
+        counter.process_line("{- level 3 -}");
+        counter.process_line("back to level 2 -}");
+        counter.process_line("back to level 1 -}");
+        counter.process_line("x = 1");
+        // x の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_haskell_nested_comment_single_line() {
+        let mut counter = SlocCounter::new("hs");
+        counter.process_line("{- {- nested -} still comment -} x = 1");
+        // x = 1 の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_haskell_line_comment() {
+        let mut counter = SlocCounter::new("hs");
+        counter.process_line("-- comment");
+        counter.process_line("x = 1 -- inline");
+        // x = 1 は行コメントの前にコードがあるが、現在の実装では starts_with("--") でチェックしている
+        // そのため、このケースはコード行としてカウントされる
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== Lua 任意深さコメント テスト ====================
+
+    #[test]
+    fn test_lua_block_comment_basic() {
+        let mut counter = SlocCounter::new("lua");
+        counter.process_line("--[[");
+        counter.process_line("  block comment");
+        counter.process_line("]]");
+        counter.process_line("local x = 1");
+        // local x の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_lua_block_comment_level_1() {
+        let mut counter = SlocCounter::new("lua");
+        counter.process_line("--[=[");
+        counter.process_line("  contains ]] but not end");
+        counter.process_line("]=]");
+        counter.process_line("local y = 2");
+        // local y の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_lua_block_comment_level_3() {
+        let mut counter = SlocCounter::new("lua");
+        counter.process_line("--[===[");
+        counter.process_line("  contains ]] and ]=] but not end");
+        counter.process_line("]===]");
+        counter.process_line("local z = 3");
+        // local z の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_lua_block_comment_single_line() {
+        let mut counter = SlocCounter::new("lua");
+        counter.process_line("--[[ single line block ]]");
+        counter.process_line("local a = 1");
+        // local a の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_lua_line_comment() {
+        let mut counter = SlocCounter::new("lua");
+        counter.process_line("-- line comment");
+        counter.process_line("local b = 2");
+        // local b の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== Julia テスト ====================
+
+    #[test]
+    fn test_julia_line_comment() {
+        let mut counter = SlocCounter::new("jl");
+        counter.process_line("# comment");
+        counter.process_line("x = 1");
+        counter.process_line("y = 2 # inline comment");
+        // x と y の2行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_julia_block_comment() {
+        let mut counter = SlocCounter::new("jl");
+        counter.process_line("#=");
+        counter.process_line("  block comment");
+        counter.process_line("=#");
+        counter.process_line("z = 3");
+        // z の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_julia_nested_block_comment() {
+        let mut counter = SlocCounter::new("jl");
+        counter.process_line("#= outer");
+        counter.process_line("#= inner =#");
+        counter.process_line("still in outer =#");
+        counter.process_line("a = 1");
+        // a の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_julia_block_comment_single_line() {
+        let mut counter = SlocCounter::new("jl");
+        counter.process_line("#= comment =# b = 2");
+        // b = 2 の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== OCaml/F#/Pascal テスト ====================
+
+    #[test]
+    fn test_ocaml_block_comment() {
+        let mut counter = SlocCounter::new("ml");
+        counter.process_line("(* comment *)");
+        counter.process_line("let x = 1");
+        // x の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_ocaml_nested_block_comment() {
+        let mut counter = SlocCounter::new("ml");
+        counter.process_line("(* outer (* inner *) still outer *)");
+        counter.process_line("let y = 2");
+        // y の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_ocaml_multiline_block_comment() {
+        let mut counter = SlocCounter::new("ml");
+        counter.process_line("(*");
+        counter.process_line("  multiline");
+        counter.process_line("*)");
+        counter.process_line("let z = 3");
+        // z の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_fsharp_line_comment() {
+        let mut counter = SlocCounter::new("fs");
+        counter.process_line("// F# comment");
+        counter.process_line("let a = 1");
+        // a の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_pascal_block_comment() {
+        let mut counter = SlocCounter::new("pas");
+        counter.process_line("(* Pascal comment *)");
+        counter.process_line("var x: Integer;");
+        // x の1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    // ==================== バッククォート文字列テスト ====================
+
+    #[test]
+    fn test_go_raw_string_with_comment_marker() {
+        let mut counter = SlocCounter::new("go");
+        counter.process_line("s := `/* not a comment */`");
+        counter.process_line("x := 1");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_js_template_literal_with_comment_marker() {
+        let mut counter = SlocCounter::new("js");
+        counter.process_line("const s = `// not a comment`;");
+        counter.process_line("const x = 1;");
+        // 両方の行がSLOC
+        assert_eq!(counter.count(), 2);
+    }
+
+    #[test]
+    fn test_ts_template_literal_with_block_comment() {
+        let mut counter = SlocCounter::new("ts");
+        counter.process_line("const t = `/* still not a comment */`;");
+        counter.process_line("const y = 2;");
+        // 両方の行がSLOC
         assert_eq!(counter.count(), 2);
     }
 }

@@ -6,6 +6,8 @@
 pub enum CommentStyle {
     /// C系言語: // と /* */
     CStyle,
+    /// PHP: //, /* */, # (全てサポート)
+    Php,
     /// Python/Ruby/Shell: #
     Hash,
     /// PowerShell: # と <# #>
@@ -16,7 +18,7 @@ pub enum CommentStyle {
     Html,
     /// SQL: -- と /* */
     Sql,
-    /// Haskell: -- と {- -}
+    /// Haskell: -- と {- -} (ネスト対応)
     Haskell,
     /// Lisp系: ;
     Lisp,
@@ -26,6 +28,10 @@ pub enum CommentStyle {
     Fortran,
     /// MATLAB/Octave: % と %{ %}
     Matlab,
+    /// Julia: # と #= =# (ネスト対応)
+    Julia,
+    /// OCaml/F#/Pascal: (* *) (ネスト対応)
+    OCaml,
     /// コメント構文なし（全ての非空行をカウント）
     None,
 }
@@ -52,9 +58,11 @@ impl CommentStyle {
             "d" => Self::CStyle,    // D言語
             "m" | "mm" => Self::CStyle, // Objective-C
             "groovy" | "gradle" => Self::CStyle,
-            "php" => Self::CStyle, // PHP (も # をサポートするが // が一般的)
             "css" | "scss" | "sass" | "less" => Self::CStyle,
             "json" | "jsonc" => Self::CStyle, // JSONCはコメント可
+            
+            // PHP (//, /* */, #)
+            "php" => Self::Php,
             
             // Hash系 (#)
             "py" | "pyw" | "pyi" => Self::Hash, // Python
@@ -96,6 +104,15 @@ impl CommentStyle {
             "hs" | "lhs" => Self::Haskell,
             "elm" => Self::Haskell,
             "purs" => Self::Haskell, // PureScript
+            
+            // Julia (# と #= =#)
+            "jl" => Self::Julia,
+            
+            // OCaml/F#/Pascal (* *)
+            "ml" | "mli" => Self::OCaml, // OCaml
+            "fs" | "fsi" | "fsx" | "fsscript" => Self::OCaml, // F#
+            "pas" | "pp" | "inc" | "dpr" | "dpk" => Self::OCaml, // Pascal/Delphi
+            "sml" | "sig" | "fun" => Self::OCaml, // Standard ML
             
             // Lisp系 (;)
             "lisp" | "lsp" | "cl" => Self::Lisp,
