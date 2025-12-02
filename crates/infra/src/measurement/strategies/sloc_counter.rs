@@ -1290,4 +1290,55 @@ mod tests {
         // 両方の行がSLOC
         assert_eq!(counter.count(), 2);
     }
+
+    // ==================== SQL 文字列内コメントマーカー テスト ====================
+
+    #[test]
+    fn test_sql_string_with_block_comment_marker() {
+        let mut counter = SlocCounter::new("sql");
+        counter.process_line("SELECT '/* これはコメントではありません */' FROM users;");
+        // 1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_sql_string_with_line_comment_marker() {
+        let mut counter = SlocCounter::new("sql");
+        counter.process_line("SELECT '-- これもコメントではない' FROM users;");
+        // 1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_sql_escaped_quote() {
+        let mut counter = SlocCounter::new("sql");
+        // '' は ' 1文字にエスケープ
+        counter.process_line("SELECT 'It''s a test /* not comment */' FROM t;");
+        // 1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_sql_double_quote_identifier() {
+        let mut counter = SlocCounter::new("sql");
+        counter.process_line(r#"SELECT "column /* name */" FROM t;"#);
+        // 1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_sql_real_block_comment() {
+        let mut counter = SlocCounter::new("sql");
+        counter.process_line("SELECT * /* comment */ FROM t;");
+        // 1行がSLOC (コメント前後にコードがある)
+        assert_eq!(counter.count(), 1);
+    }
+
+    #[test]
+    fn test_sql_line_comment_after_code() {
+        let mut counter = SlocCounter::new("sql");
+        counter.process_line("SELECT * FROM t; -- comment");
+        // 1行がSLOC
+        assert_eq!(counter.count(), 1);
+    }
 }

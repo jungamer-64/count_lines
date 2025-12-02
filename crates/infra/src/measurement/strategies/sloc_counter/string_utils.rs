@@ -36,6 +36,14 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
             }
         }
         
+        // C++ Raw String: R"delimiter(...)delimiter"
+        if line_bytes[i] == b'R' && i + 1 < line_bytes.len() && line_bytes[i + 1] == b'"' {
+            if let Some(skip) = try_skip_cpp_raw_string(&line_bytes[i..]) {
+                i += skip;
+                continue;
+            }
+        }
+        
         // Rust raw文字列リテラル: r"...", r#"..."#, r##"..."## など
         // 直前が識別子文字でないことを確認（bar"..." などを誤検出しない）
         if line_bytes[i] == b'r'
@@ -782,4 +790,70 @@ pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
     
     // 行末まで閉じられていない (複数行文字列の途中)
     Some(bytes.len())
+}
+
+/// SQL 文字列リテラル外でパターンを検索
+/// 
+/// SQL の文字列リテラル:
+/// - シングルクォート: '...' ('' でエスケープ)
+/// - ダブルクォート識別子: "..." (一部のDBでは文字列として使用)
+pub fn find_outside_string_sql(line: &str, pattern: &str) -> Option<usize> {
+    let pattern_bytes = pattern.as_bytes();
+    let line_bytes = line.as_bytes();
+    
+    if pattern_bytes.is_empty() || line_bytes.len() < pattern_bytes.len() {
+        return None;
+    }
+
+    let mut i = 0;
+    while i <= line_bytes.len() - pattern_bytes.len() {
+        // シングルクォート文字列: '...' ('' でエスケープ)
+        if line_bytes[i] == b'\'' {
+            i += 1;
+            while i < line_bytes.len() {
+                if line_bytes[i] == b'\'' {
+                    // '' はエスケープされた ' 1つ
+                    if i + 1 < line_bytes.len() && line_bytes[i + 1] == b'\'' {
+                        i += 2;
+                        continue;
+                    }
+                    // 単独の ' は文字列終了
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        
+        // ダブルクォート識別子/文字列: "..." (一部のDBでは "" でエスケープ)
+        if line_bytes[i] == b'"' {
+            i += 1;
+            while i < line_bytes.len() {
+                if line_bytes[i] == b'"' {
+                    // "" はエスケープされた " 1つ
+                    if i + 1 < line_bytes.len() && line_bytes[i + 1] == b'"' {
+                        i += 2;
+                        continue;
+                    }
+                    // 単独の " は文字列終了
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        
+        // パターンとマッチするかチェック
+        if i + pattern_bytes.len() <= line_bytes.len() 
+            && &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes 
+        {
+            return Some(i);
+        }
+        
+        i += 1;
+    }
+    
+    None
 }
