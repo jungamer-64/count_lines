@@ -223,10 +223,38 @@ fn process_nesting_block_comment_line(
 mod tests {
     use super::*;
 
+    // ==================== SwiftProcessor テスト ====================
+
+    #[test]
+    fn test_swift_processor_line_comment() {
+        let mut p = SwiftProcessor::new();
+        assert_eq!(p.process("// comment"), 0);
+        assert_eq!(p.process("let x = 1"), 1);
+    }
+
+    #[test]
+    fn test_swift_processor_nested_block_comment() {
+        let mut p = SwiftProcessor::new();
+        assert_eq!(p.process("/* outer"), 0);
+        assert!(p.is_in_block_comment());
+        assert_eq!(p.process("/* nested */"), 0);
+        assert_eq!(p.process("*/"), 0);
+        assert!(!p.is_in_block_comment());
+        assert_eq!(p.process("let x = 1"), 1);
+    }
+
+    #[test]
+    fn test_swift_processor_extended_delimiter() {
+        let mut p = SwiftProcessor::new();
+        assert_eq!(p.process(r##"let s = #"/* not a comment */"#"##), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
     // ==================== Swift ネストコメントテスト ====================
 
     #[test]
     fn test_swift_nested_comments() {
+
         let mut block_depth = 0;
         let mut in_block = false;
         let mut count = 0;

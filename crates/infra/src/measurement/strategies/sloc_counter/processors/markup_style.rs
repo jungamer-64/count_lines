@@ -107,6 +107,33 @@ pub fn process_html_style(line: &str, in_block_comment: &mut bool, count: &mut u
 mod tests {
     use super::*;
 
+    // ==================== HtmlProcessor テスト ====================
+
+    #[test]
+    fn test_html_processor_comment() {
+        let mut p = HtmlProcessor::new();
+        assert_eq!(p.process("<!-- comment -->"), 0);
+    }
+
+    #[test]
+    fn test_html_processor_code() {
+        let mut p = HtmlProcessor::new();
+        assert_eq!(p.process("<div>content</div>"), 1);
+    }
+
+    #[test]
+    fn test_html_processor_multiline_comment() {
+        let mut p = HtmlProcessor::new();
+        assert_eq!(p.process("<!-- start"), 0);
+        assert!(p.is_in_comment());
+        assert_eq!(p.process("middle"), 0);
+        assert_eq!(p.process("end -->"), 0);
+        assert!(!p.is_in_comment());
+        assert_eq!(p.process("<p>text</p>"), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
+
     #[test]
     fn test_html_comment_single_line() {
         let mut in_block = false;

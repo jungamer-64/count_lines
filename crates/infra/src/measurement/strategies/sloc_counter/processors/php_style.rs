@@ -198,6 +198,34 @@ pub fn process_php_style(
 mod tests {
     use super::*;
 
+    // ==================== PhpProcessor テスト ====================
+
+    #[test]
+    fn test_php_processor_line_comment() {
+        let mut p = PhpProcessor::new();
+        assert_eq!(p.process("// comment"), 0);
+        assert_eq!(p.process("# comment"), 0);
+    }
+
+    #[test]
+    fn test_php_processor_code() {
+        let mut p = PhpProcessor::new();
+        assert_eq!(p.process("$x = 1;"), 1);
+    }
+
+    #[test]
+    fn test_php_processor_block_comment() {
+        let mut p = PhpProcessor::new();
+        assert_eq!(p.process("/* start"), 0);
+        assert!(p.is_in_block_comment());
+        assert_eq!(p.process("middle"), 0);
+        assert_eq!(p.process("*/"), 0);
+        assert!(!p.is_in_block_comment());
+        assert_eq!(p.process("echo 1;"), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
+
     #[test]
     fn test_php_line_comment_double_slash() {
         let mut in_block = false;
