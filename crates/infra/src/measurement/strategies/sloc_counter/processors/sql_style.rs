@@ -5,6 +5,94 @@
 
 use super::super::string_utils::find_outside_string_sql;
 
+// ============================================================================
+// SqlProcessor 構造体 (新設計)
+// ============================================================================
+
+/// SQL プロセッサ
+///
+/// - 行コメント: `--` から行末まで
+/// - ブロックコメント: `/* */`
+/// - 文字列リテラル (`'...'` と `"..."`) 内のコメントマーカーを無視
+pub struct SqlProcessor {
+    in_block_comment: bool,
+}
+
+impl SqlProcessor {
+    pub fn new() -> Self {
+        Self {
+            in_block_comment: false,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        if self.in_block_comment {
+            if let Some(pos) = line.find("*/") {
+                self.in_block_comment = false;
+                let rest = &line[pos + 2..];
+                if !rest.trim().is_empty() {
+                    return self.process(rest);
+                }
+            }
+            return 0;
+        }
+
+        // 行コメント (文字列外)
+        if let Some(line_comment_pos) = find_outside_string_sql(line, "--") {
+            let before = &line[..line_comment_pos];
+
+            // -- より前にブロックコメント開始があるかチェック
+            if let Some(block_start) = find_outside_string_sql(before, "/*") {
+                return self.process_block_comment(line, block_start);
+            }
+
+            return if !before.trim().is_empty() { 1 } else { 0 };
+        }
+
+        // ブロックコメント開始 (文字列外)
+        if let Some(block_start) = find_outside_string_sql(line, "/*") {
+            return self.process_block_comment(line, block_start);
+        }
+
+        1
+    }
+
+    fn process_block_comment(&mut self, line: &str, block_start: usize) -> usize {
+        let before = &line[..block_start];
+        let has_code_before = !before.trim().is_empty();
+
+        let after_start = &line[block_start + 2..];
+        if let Some(end_offset) = after_start.find("*/") {
+            let after = &after_start[end_offset + 2..];
+            if has_code_before {
+                return 1;
+            } else if !after.trim().is_empty() {
+                return self.process(after);
+            }
+            return 0;
+        } else {
+            self.in_block_comment = true;
+            return if has_code_before { 1 } else { 0 };
+        }
+    }
+
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
+impl Default for SqlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// SQL スタイル (-- と /* */) の処理
 ///
 /// SQL の文字列リテラル ('...' と "...") 内のコメントマーカーは無視する

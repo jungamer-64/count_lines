@@ -3,6 +3,69 @@
 //!
 //! HTML/XML/SVG などの <!-- --> コメントを処理します。
 
+// ============================================================================
+// HtmlProcessor 構造体 (新設計)
+// ============================================================================
+
+/// HTML/XML プロセッサ
+///
+/// `<!-- -->` コメントを処理します。
+pub struct HtmlProcessor {
+    in_comment: bool,
+}
+
+impl HtmlProcessor {
+    pub fn new() -> Self {
+        Self { in_comment: false }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        if self.in_comment {
+            if line.contains("-->") {
+                self.in_comment = false;
+                if let Some(pos) = line.find("-->") {
+                    let rest = &line[pos + 3..];
+                    if !rest.trim().is_empty() {
+                        return 1;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        if let Some(start) = line.find("<!--") {
+            let before = &line[..start];
+            let has_code_before = !before.trim().is_empty();
+
+            if let Some(end_offset) = line[start + 4..].find("-->") {
+                let after = &line[start + 4 + end_offset + 3..];
+                return if has_code_before || !after.trim().is_empty() { 1 } else { 0 };
+            } else {
+                self.in_comment = true;
+                return if has_code_before { 1 } else { 0 };
+            }
+        }
+
+        1
+    }
+
+    #[cfg(test)]
+    pub fn is_in_comment(&self) -> bool {
+        self.in_comment
+    }
+}
+
+impl Default for HtmlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// HTML スタイル (<!-- -->) の処理
 pub fn process_html_style(line: &str, in_block_comment: &mut bool, count: &mut usize) {
     if *in_block_comment {

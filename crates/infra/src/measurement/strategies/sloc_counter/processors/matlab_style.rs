@@ -5,6 +5,62 @@
 //! - `%` で始まる行コメント
 //! - `%{` ～ `%}` ブロックコメント (行頭必須)
 
+// ============================================================================
+// MatlabProcessor 構造体 (新設計)
+// ============================================================================
+
+/// MATLAB/Octave プロセッサ
+///
+/// - 行コメント: `%`
+/// - ブロックコメント: `%{` ～ `%}` (行頭必須)
+pub struct MatlabProcessor {
+    in_block_comment: bool,
+}
+
+impl MatlabProcessor {
+    pub fn new() -> Self {
+        Self {
+            in_block_comment: false,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        if self.in_block_comment {
+            if line.trim() == "%}" {
+                self.in_block_comment = false;
+            }
+            return 0;
+        }
+
+        if line.trim() == "%{" {
+            self.in_block_comment = true;
+            return 0;
+        }
+
+        if line.starts_with('%') {
+            return 0;
+        }
+
+        1
+    }
+
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
+impl Default for MatlabProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// MATLAB スタイル (% と %{ %}) の処理
 pub fn process_matlab_style(
     line: &str,

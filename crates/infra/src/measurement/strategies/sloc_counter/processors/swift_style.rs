@@ -9,6 +9,126 @@
 
 use super::super::string_utils::find_outside_string_swift;
 
+// ============================================================================
+// SwiftProcessor 構造体 (新設計)
+// ============================================================================
+
+/// Swift プロセッサ
+///
+/// Swift特有の機能を処理:
+/// - ネストされたブロックコメント (`/* /* */ */`)
+/// - 拡張デリミタ文字列 (`#"..."#`)
+/// - 多重引用符文字列 (`"""..."""`)
+pub struct SwiftProcessor {
+    block_comment_depth: usize,
+    in_block_comment: bool,
+}
+
+impl SwiftProcessor {
+    pub fn new() -> Self {
+        Self {
+            block_comment_depth: 0,
+            in_block_comment: false,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        // ネストされたブロックコメント内
+        if self.block_comment_depth > 0 {
+            self.process_nesting_block_line(line);
+            return 0;
+        }
+
+        // 行コメント（文字列外）のみの行かチェック
+        if let Some(line_comment_pos) = find_outside_string_swift(line, "//") {
+            let before = &line[..line_comment_pos];
+            if before.trim().is_empty() {
+                return 0;
+            }
+            return 1;
+        }
+
+        // ブロックコメント開始をチェック（文字列外）
+        if let Some(block_start) = find_outside_string_swift(line, "/*") {
+            let before = &line[..block_start];
+            let has_code_before = !before.trim().is_empty();
+
+            // ブロックコメント開始後の部分を処理
+            self.block_comment_depth = 1;
+            self.in_block_comment = true;
+            let rest = &line[block_start + 2..];
+            
+            // 残りの部分を処理（同一行での閉じがあるか確認）
+            let rest_has_code = self.process_nesting_block_line(rest);
+
+            if has_code_before || rest_has_code {
+                return 1;
+            }
+            return 0;
+        }
+
+        // コードがある行
+        1
+    }
+
+    /// ネストされたブロックコメント行を処理
+    /// 戻り値: コメント終了後にコードがあるかどうか
+    fn process_nesting_block_line(&mut self, line: &str) -> bool {
+        let bytes = line.as_bytes();
+        let mut i = 0;
+
+        while i < bytes.len() {
+            if i + 1 < bytes.len() {
+                // /* を見つけたらネスト深度を増やす
+                if bytes[i] == b'/' && bytes[i + 1] == b'*' {
+                    self.block_comment_depth += 1;
+                    i += 2;
+                    continue;
+                }
+                // */ を見つけたらネスト深度を減らす
+                if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                    self.block_comment_depth -= 1;
+                    i += 2;
+
+                    // 全てのコメントが閉じた
+                    if self.block_comment_depth == 0 {
+                        self.in_block_comment = false;
+                        let rest = &line[i..];
+                        if !rest.trim().is_empty() {
+                            // 残りの部分を再帰的に処理
+                            return self.process(rest) > 0;
+                        }
+                        return false;
+                    }
+                    continue;
+                }
+            }
+            i += 1;
+        }
+
+        // in_block_comment フラグも同期
+        self.in_block_comment = self.block_comment_depth > 0;
+        false
+    }
+
+    /// ブロックコメント内かどうか（テスト用）
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment || self.block_comment_depth > 0
+    }
+}
+
+impl Default for SwiftProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// Swift スタイル処理（拡張デリミタ文字列 #"..."# と多重引用符 """...""" 対応）
 pub fn process_swift_style(
     line: &str,

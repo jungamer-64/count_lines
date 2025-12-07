@@ -8,11 +8,67 @@
 
 use super::simple_hash_style::find_hash_outside_simple_string;
 
-/// Ruby スタイル (#) の処理
-/// 
-/// Ruby固有の対応:
-/// - 埋め込みドキュメント: `=begin` ～ `=end` (行頭必須)
-/// - 文字列: `"..."`, `'...'` のみ考慮
+// ============================================================================
+// RubyProcessor
+// ============================================================================
+
+/// Rubyプロセッサ
+#[derive(Default)]
+pub struct RubyProcessor {
+    in_embedded_doc: bool,
+    line_count: usize,
+}
+
+impl RubyProcessor {
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        let trimmed = line.trim();
+
+        // 埋め込みドキュメント内の場合
+        if self.in_embedded_doc {
+            // Ruby: =end で終了
+            if line.starts_with("=end") {
+                self.in_embedded_doc = false;
+            }
+            return 0;
+        }
+
+        // 埋め込みドキュメント開始判定（行頭の =begin で始まる）
+        if line.starts_with("=begin") {
+            self.in_embedded_doc = true;
+            return 0;
+        }
+
+        // shebang行を除外 (最初の行のみ)
+        if trimmed.starts_with("#!") && self.line_count == 0 {
+            self.line_count += 1;
+            return 0;
+        }
+        self.line_count += 1;
+        
+        // #で始まる行はコメント
+        if trimmed.starts_with('#') {
+            return 0;
+        }
+
+        // # より前にコードがあるか (標準的な文字列のみ考慮)
+        if let Some(hash_pos) = find_hash_outside_simple_string(line) {
+            let before = &line[..hash_pos];
+            if !before.trim().is_empty() {
+                return 1;
+            }
+            return 0;
+        }
+        
+        1
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数
+// ============================================================================
+
+/// Ruby スタイル (#) の処理 (後方互換)
 pub fn process_ruby_style(
     line: &str,
     in_embedded_doc: &mut bool,
@@ -60,7 +116,31 @@ pub fn process_ruby_style(
 mod tests {
     use super::*;
 
-    // ==================== Ruby 行コメントテスト ====================
+    // ==================== RubyProcessor テスト ====================
+
+    #[test]
+    fn test_ruby_processor_line_comment() {
+        let mut p = RubyProcessor::default();
+        assert_eq!(p.process("# comment"), 0);
+    }
+
+    #[test]
+    fn test_ruby_processor_code() {
+        let mut p = RubyProcessor::default();
+        assert_eq!(p.process("x = 1"), 1);
+    }
+
+    #[test]
+    fn test_ruby_processor_embedded_doc() {
+        let mut p = RubyProcessor::default();
+        assert_eq!(p.process("x = 1"), 1);
+        assert_eq!(p.process("=begin"), 0);
+        assert_eq!(p.process("documentation"), 0);
+        assert_eq!(p.process("=end"), 0);
+        assert_eq!(p.process("y = 2"), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
 
     #[test]
     fn test_ruby_line_comment() {
@@ -93,8 +173,6 @@ mod tests {
         process_ruby_style("x = 1  # inline comment", &mut in_doc, &mut count);
         assert_eq!(count, 1);
     }
-
-    // ==================== Ruby 埋め込みドキュメントテスト ====================
 
     #[test]
     fn test_ruby_embedded_document() {
@@ -162,8 +240,6 @@ mod tests {
         assert_eq!(count, 1);
     }
 
-    // ==================== Ruby shebang テスト ====================
-
     #[test]
     fn test_ruby_shebang_not_counted() {
         let mut in_doc = false;
@@ -185,8 +261,6 @@ mod tests {
         // ただし、#! で始まるのでコメントとして扱われる
         assert_eq!(count, 1);
     }
-
-    // ==================== Ruby 文字列内 # テスト ====================
 
     #[test]
     fn test_ruby_string_with_hash() {
@@ -211,8 +285,6 @@ mod tests {
         process_ruby_style(r#"s = "test" # real comment"#, &mut in_doc, &mut count);
         assert_eq!(count, 1);
     }
-
-    // ==================== Ruby クラス・メソッド定義テスト ====================
 
     #[test]
     fn test_ruby_class_definition() {

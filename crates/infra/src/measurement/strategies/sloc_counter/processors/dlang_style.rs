@@ -8,6 +8,138 @@
 
 use super::super::string_utils::find_outside_string;
 
+// ============================================================================
+// DLangProcessor 構造体 (新設計)
+// ============================================================================
+
+/// D言語 プロセッサ
+///
+/// - 行コメント: `//`
+/// - ブロックコメント: `/* */` (ネスト不可)
+/// - ネストブロックコメント: `/+ +/` (ネスト可能)
+pub struct DLangProcessor {
+    in_block_comment: bool,
+    nesting_depth: usize,
+}
+
+impl DLangProcessor {
+    pub fn new() -> Self {
+        Self {
+            in_block_comment: false,
+            nesting_depth: 0,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        // /+ +/ ネストブロックコメント内
+        if self.nesting_depth > 0 {
+            return self.process_nesting_block(line);
+        }
+
+        // 通常の /* */ ブロックコメント内
+        if self.in_block_comment {
+            if let Some(pos) = line.find("*/") {
+                self.in_block_comment = false;
+                let rest = &line[pos + 2..];
+                if !rest.trim().is_empty() && !rest.trim().starts_with("//") {
+                    return self.process(rest);
+                }
+            }
+            return 0;
+        }
+
+        // 行コメント（文字列外）のみの行かチェック
+        if let Some(line_comment_pos) = find_outside_string(line, "//") {
+            let before = &line[..line_comment_pos];
+            return if !before.trim().is_empty() { 1 } else { 0 };
+        }
+
+        // /+ ネストブロックコメント開始をチェック（文字列外）
+        if let Some(nesting_start) = find_outside_string(line, "/+") {
+            let block_start = find_outside_string(line, "/*");
+
+            if block_start.is_none() || nesting_start < block_start.unwrap() {
+                let before = &line[..nesting_start];
+                let has_code_before = !before.trim().is_empty();
+
+                self.nesting_depth = 1;
+                let rest = &line[nesting_start + 2..];
+                let rest_result = self.process_nesting_block(rest);
+
+                return if has_code_before { 1 } else { rest_result };
+            }
+        }
+
+        // /* ブロックコメント開始をチェック（文字列外）
+        if let Some(block_start) = find_outside_string(line, "/*") {
+            let before = &line[..block_start];
+            let has_code_before = !before.trim().is_empty();
+
+            if let Some(block_end) = line[block_start + 2..].find("*/") {
+                let after = &line[block_start + 2 + block_end + 2..];
+                if has_code_before {
+                    return 1;
+                } else if !after.trim().is_empty() {
+                    return self.process(after);
+                }
+                return 0;
+            } else {
+                self.in_block_comment = true;
+                return if has_code_before { 1 } else { 0 };
+            }
+        }
+
+        1
+    }
+
+    fn process_nesting_block(&mut self, line: &str) -> usize {
+        let bytes = line.as_bytes();
+        let mut i = 0;
+
+        while i < bytes.len() {
+            if i + 1 < bytes.len() {
+                if bytes[i] == b'/' && bytes[i + 1] == b'+' {
+                    self.nesting_depth += 1;
+                    i += 2;
+                    continue;
+                }
+                if bytes[i] == b'+' && bytes[i + 1] == b'/' {
+                    self.nesting_depth -= 1;
+                    i += 2;
+
+                    if self.nesting_depth == 0 {
+                        let rest = &line[i..];
+                        if !rest.trim().is_empty() {
+                            return self.process(rest);
+                        }
+                        return 0;
+                    }
+                    continue;
+                }
+            }
+            i += 1;
+        }
+
+        0
+    }
+
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment || self.nesting_depth > 0
+    }
+}
+
+impl Default for DLangProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// D言語スタイル処理 (//, /* */, /+ +/ ネスト対応)
 ///
 /// D言語は3種類のコメントをサポート:

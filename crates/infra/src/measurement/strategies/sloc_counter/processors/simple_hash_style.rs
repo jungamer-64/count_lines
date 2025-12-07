@@ -9,15 +9,51 @@
 //! - Docstringや埋め込みドキュメントなし
 //! - 高速かつ安全な処理
 
-/// 単純な Hash スタイル (#) の処理
-/// 
-/// 対象: Shell, YAML, TOML, Dockerfile, Makefile, Config系など
-/// 
-/// 特徴:
-/// - 複雑な文字列処理不要
-/// - `"..."` と `'...'` のみ考慮（バッククォートや三重クォートなし）
-/// - Docstringや埋め込みドキュメントなし
-/// - 高速かつ安全な処理
+// ============================================================================
+// SimpleHashProcessor
+// ============================================================================
+
+/// 単純な Hash コメントプロセッサ
+#[derive(Default)]
+pub struct SimpleHashProcessor {
+    line_count: usize,
+}
+
+impl SimpleHashProcessor {
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        let trimmed = line.trim();
+
+        // shebang行を除外 (最初の行のみ)
+        if trimmed.starts_with("#!") && self.line_count == 0 {
+            self.line_count += 1;
+            return 0;
+        }
+        self.line_count += 1;
+        
+        // #で始まる行はコメント
+        if trimmed.starts_with('#') {
+            return 0;
+        }
+
+        // # より前にコードがあるか (単純な文字列のみ考慮)
+        if let Some(hash_pos) = find_hash_outside_simple_string(line) {
+            let before = &line[..hash_pos];
+            if !before.trim().is_empty() {
+                return 1;
+            }
+            return 0;
+        }
+        
+        1
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数
+// ============================================================================
+
+/// 単純な Hash スタイル (#) の処理 (後方互換)
 pub fn process_simple_hash_style(
     line: &str,
     count: &mut usize,
@@ -45,7 +81,7 @@ pub fn process_simple_hash_style(
     }
 }
 
-/// 単純な文字列 ("..." / '...') 外で # を検索
+/// 単純な文字列 ("...") / '...') 外で # を検索
 /// 
 /// Shell/YAML/Config等向けの軽量版。
 /// Python の f-string や三重クォートは考慮しない。
@@ -100,7 +136,34 @@ pub fn find_hash_outside_simple_string(line: &str) -> Option<usize> {
 mod tests {
     use super::*;
 
-    // ==================== 基本テスト ====================
+    // ==================== SimpleHashProcessor テスト ====================
+
+    #[test]
+    fn test_processor_hash_comment() {
+        let mut p = SimpleHashProcessor::default();
+        assert_eq!(p.process("# comment"), 0);
+    }
+
+    #[test]
+    fn test_processor_code() {
+        let mut p = SimpleHashProcessor::default();
+        assert_eq!(p.process("x = 1"), 1);
+    }
+
+    #[test]
+    fn test_processor_inline_comment() {
+        let mut p = SimpleHashProcessor::default();
+        assert_eq!(p.process("x = 1  # comment"), 1);
+    }
+
+    #[test]
+    fn test_processor_shebang() {
+        let mut p = SimpleHashProcessor::default();
+        assert_eq!(p.process("#!/bin/bash"), 0);
+        assert_eq!(p.process("echo 'hello'"), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
 
     #[test]
     fn test_simple_hash_line_comment() {
@@ -143,8 +206,6 @@ mod tests {
         process_simple_hash_style("s = 'hello # world'", &mut count);
         assert_eq!(count, 1);
     }
-
-    // ==================== shebang テスト ====================
 
     #[test]
     fn test_simple_hash_shebang_not_counted() {

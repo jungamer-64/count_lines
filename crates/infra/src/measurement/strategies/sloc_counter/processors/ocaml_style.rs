@@ -7,6 +7,96 @@
 
 use super::super::string_utils::find_outside_string;
 
+// ============================================================================
+// OCamlProcessor 構造体 (新設計)
+// ============================================================================
+
+/// OCaml/F#/Pascal プロセッサ
+///
+/// - ブロックコメント: `(* *)` (ネスト対応)
+/// - F# 行コメント: `//`
+pub struct OCamlProcessor {
+    block_depth: usize,
+}
+
+impl OCamlProcessor {
+    pub fn new() -> Self {
+        Self { block_depth: 0 }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        let trimmed = line.trim();
+
+        // ブロックコメント内
+        if self.block_depth > 0 {
+            self.check_nesting(line);
+            return 0;
+        }
+
+        // 空行
+        if trimmed.is_empty() {
+            return 0;
+        }
+
+        // F# // 行コメント
+        if let Some(pos) = find_outside_string(line, "//") {
+            let before = &line[..pos];
+            return if !before.trim().is_empty() { 1 } else { 0 };
+        }
+
+        // ブロックコメント開始判定
+        if let Some(pos) = find_outside_string(line, "(*") {
+            let before = &line[..pos];
+            let has_code_before = !before.trim().is_empty();
+
+            self.block_depth = 1;
+            let rest = &line[pos + 2..];
+            self.check_nesting(rest);
+
+            return if has_code_before { 1 } else { 0 };
+        }
+
+        1
+    }
+
+    fn check_nesting(&mut self, content: &str) {
+        let bytes = content.as_bytes();
+        let mut i = 0;
+
+        while i < bytes.len() {
+            if i + 1 < bytes.len() && bytes[i] == b'(' && bytes[i + 1] == b'*' {
+                self.block_depth += 1;
+                i += 2;
+                continue;
+            }
+
+            if i + 1 < bytes.len() && bytes[i] == b'*' && bytes[i + 1] == b')' {
+                self.block_depth = self.block_depth.saturating_sub(1);
+                i += 2;
+                continue;
+            }
+
+            i += 1;
+        }
+    }
+
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.block_depth > 0
+    }
+}
+
+impl Default for OCamlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// OCaml スタイル ((* *)) の処理
 /// 
 /// # Arguments

@@ -6,46 +6,58 @@
 //! - ブロックコメント: `--[[` ～ `]]`
 //! - 等号付きブロックコメント: `--[=[` ～ `]=]`, `--[==[` ～ `]==]` 等
 
-/// Lua スタイル (-- と --[=*[ ]=*]) の処理
-///
-/// Lua のブロックコメントは `--[[` で始まり `]]` で終わる。
-/// 等号を任意の数だけ挟める: `--[=[`, `--[==[`, etc.
-/// 対応する閉じ括弧も同じ数の等号が必要: `]=]`, `]==]`, etc.
-pub fn process_lua_style(
-    line: &str,
-    in_block_comment: &mut bool,
-    lua_block_level: &mut usize,
-    count: &mut usize,
-) {
-    if *in_block_comment {
-        // ブロックコメント内: 対応する閉じ括弧を探す
-        if find_lua_block_end(line, *lua_block_level).is_some() {
-            *in_block_comment = false;
-            *lua_block_level = 0;
-        }
-        return;
-    }
+// ============================================================================
+// LuaProcessor
+// ============================================================================
 
-    // 行コメント
-    if line.starts_with("--") {
-        // ブロックコメント開始かチェック: --[[, --[=[, --[==[, etc.
-        if let Some(level) = check_lua_block_start(&line[2..]) {
-            // ブロックコメント開始
-            // 同じ行で閉じるかチェック
-            let after_open = skip_lua_block_open(&line[2..]);
-            if find_lua_block_end(after_open, level).is_some() {
-                // 同じ行で閉じる = コメント行
-                return;
-            }
-            *in_block_comment = true;
-            *lua_block_level = level;
-        }
-        // 行コメントまたはブロックコメント開始 = SLOCではない
-        return;
-    }
-
-    *count += 1;
+/// Luaプロセッサ
+#[derive(Default)]
+pub struct LuaProcessor {
+    in_block_comment: bool,
+    block_level: usize,
 }
+
+impl LuaProcessor {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        if self.in_block_comment {
+            // ブロックコメント内: 対応する閉じ括弧を探す
+            if find_lua_block_end(line, self.block_level).is_some() {
+                self.in_block_comment = false;
+                self.block_level = 0;
+            }
+            return 0;
+        }
+
+        // 行コメント
+        if line.starts_with("--") {
+            // ブロックコメント開始かチェック: --[[, --[=[, --[==[, etc.
+            if let Some(level) = check_lua_block_start(&line[2..]) {
+                // ブロックコメント開始
+                // 同じ行で閉じるかチェック
+                let after_open = skip_lua_block_open(&line[2..]);
+                if find_lua_block_end(after_open, level).is_some() {
+                    // 同じ行で閉じる = コメント行
+                    return 0;
+                }
+                self.in_block_comment = true;
+                self.block_level = level;
+            }
+            // 行コメントまたはブロックコメント開始 = SLOCではない
+            return 0;
+        }
+
+        1
+    }
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
 
 /// Lua ブロックコメント開始をチェック
 /// `[` で始まり、0個以上の `=` の後に `[` が続く場合、等号の数を返す
@@ -115,11 +127,80 @@ fn find_lua_block_end(s: &str, level: usize) -> Option<usize> {
     None
 }
 
+// ============================================================================
+// 後方互換性のための関数
+// ============================================================================
+
+/// Lua スタイル (-- と --[=*[ ]=*]) の処理 (後方互換)
+pub fn process_lua_style(
+    line: &str,
+    in_block_comment: &mut bool,
+    lua_block_level: &mut usize,
+    count: &mut usize,
+) {
+    if *in_block_comment {
+        // ブロックコメント内: 対応する閉じ括弧を探す
+        if find_lua_block_end(line, *lua_block_level).is_some() {
+            *in_block_comment = false;
+            *lua_block_level = 0;
+        }
+        return;
+    }
+
+    // 行コメント
+    if line.starts_with("--") {
+        // ブロックコメント開始かチェック: --[[, --[=[, --[==[, etc.
+        if let Some(level) = check_lua_block_start(&line[2..]) {
+            // ブロックコメント開始
+            // 同じ行で閉じるかチェック
+            let after_open = skip_lua_block_open(&line[2..]);
+            if find_lua_block_end(after_open, level).is_some() {
+                // 同じ行で閉じる = コメント行
+                return;
+            }
+            *in_block_comment = true;
+            *lua_block_level = level;
+        }
+        // 行コメントまたはブロックコメント開始 = SLOCではない
+        return;
+    }
+
+    *count += 1;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // テストヘルパー: 複数行を処理
+    // ==================== LuaProcessor テスト ====================
+
+    #[test]
+    fn test_lua_processor_line_comment() {
+        let mut p = LuaProcessor::new();
+        assert_eq!(p.process("-- comment"), 0);
+        assert_eq!(p.process("local x = 1"), 1);
+    }
+
+    #[test]
+    fn test_lua_processor_block_comment() {
+        let mut p = LuaProcessor::new();
+        assert_eq!(p.process("--[["), 0);
+        assert_eq!(p.process("block comment"), 0);
+        assert_eq!(p.process("]]"), 0);
+        assert_eq!(p.process("local y = 2"), 1);
+    }
+
+    #[test]
+    fn test_lua_processor_level_block() {
+        let mut p = LuaProcessor::new();
+        assert_eq!(p.process("--[=["), 0);
+        assert_eq!(p.process("contains ]] but not end"), 0);
+        assert_eq!(p.process("]=]"), 0);
+        assert_eq!(p.process("local z = 3"), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
+
     fn process_lines(lines: &[&str]) -> usize {
         let mut count = 0;
         let mut in_block = false;

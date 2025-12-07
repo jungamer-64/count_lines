@@ -9,20 +9,217 @@
 
 use super::super::string_utils::{find_outside_string_with_options, StringSkipOptions};
 
-/// C系スタイル (// と /* */) の処理 - StringSkipOptions対応版
-/// 
-/// 言語に応じたStringSkipOptionsを渡すことで、
-/// 各言語固有の文字列リテラル構文を正しくスキップできます。
+// ============================================================================
+// CStyleProcessor: ネスト非対応 (C, C++, Java, Go, etc.)
+// ============================================================================
+
+/// C系言語プロセッサ (//, /* */) - ネスト非対応
+pub struct CStyleProcessor {
+    options: StringSkipOptions,
+    in_block_comment: bool,
+}
+
+impl CStyleProcessor {
+    pub fn new(options: StringSkipOptions) -> Self {
+        Self {
+            options,
+            in_block_comment: false,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        if self.in_block_comment {
+            // ブロックコメント内
+            if let Some(pos) = line.find("*/") {
+                self.in_block_comment = false;
+                // 閉じた後にコードがあるかチェック
+                let rest = &line[pos + 2..];
+                if !rest.trim().is_empty() && !rest.trim().starts_with("//") {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        // 行コメント（文字列外）のみの行かチェック
+        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", &self.options) {
+            // // より前にコードがあるか
+            let before = &line[..line_comment_pos];
+            if before.trim().is_empty() {
+                // コメントのみの行
+                return 0;
+            }
+            // コメント前にコードがある
+            return 1;
+        }
+
+        // ブロックコメント開始をチェック（文字列外）
+        if let Some(block_start) = find_outside_string_with_options(line, "/*", &self.options) {
+            // /* より前にコードがあるか
+            let before = &line[..block_start];
+            let has_code_before = !before.trim().is_empty();
+            
+            // ブロックコメントが同じ行で閉じるか
+            if let Some(block_end) = line[block_start + 2..].find("*/") {
+                let after = &line[block_start + 2 + block_end + 2..];
+                let has_code_after = !after.trim().is_empty() 
+                    && find_outside_string_with_options(after, "//", &self.options).is_none_or(|p| p > 0);
+                if has_code_before || has_code_after {
+                    return 1;
+                }
+                return 0;
+            } else {
+                self.in_block_comment = true;
+                if has_code_before {
+                    return 1;
+                }
+            }
+            return 0;
+        }
+
+        // コードがある行
+        1
+    }
+
+    /// ブロックコメント内かどうか（テスト用）
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
+// ============================================================================
+// NestingCStyleProcessor: ネスト対応 (Rust, Kotlin, Scala)
+// ============================================================================
+
+/// C系言語プロセッサ - ネスト対応 (Rust, Kotlin, Scala)
+pub struct NestingCStyleProcessor {
+    options: StringSkipOptions,
+    in_block_comment: bool,
+    block_comment_depth: usize,
+}
+
+impl NestingCStyleProcessor {
+    pub fn new(options: StringSkipOptions) -> Self {
+        Self {
+            options,
+            in_block_comment: false,
+            block_comment_depth: 0,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        let mut count = 0;
+        self.process_internal(line, &mut count);
+        count
+    }
+
+    fn process_internal(&mut self, line: &str, count: &mut usize) {
+        // ネストされたブロックコメント内
+        if self.block_comment_depth > 0 {
+            self.process_nesting_block_line(line, count);
+            return;
+        }
+
+        // 行コメント（文字列外）のみの行かチェック
+        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", &self.options) {
+            let before = &line[..line_comment_pos];
+            if before.trim().is_empty() {
+                return;
+            }
+            *count += 1;
+            return;
+        }
+
+        // ブロックコメント開始をチェック（文字列外）
+        if let Some(block_start) = find_outside_string_with_options(line, "/*", &self.options) {
+            let before = &line[..block_start];
+            let has_code_before = !before.trim().is_empty();
+            
+            // ブロックコメント開始後の部分を処理
+            self.block_comment_depth = 1;
+            let rest = &line[block_start + 2..];
+            self.process_nesting_block_line(rest, count);
+            
+            if has_code_before {
+                *count += 1;
+            }
+            return;
+        }
+
+        // コードがある行
+        *count += 1;
+    }
+
+    fn process_nesting_block_line(&mut self, line: &str, count: &mut usize) {
+        let bytes = line.as_bytes();
+        let mut i = 0;
+        
+        while i < bytes.len() {
+            if i + 1 < bytes.len() {
+                // /* を見つけたらネスト深度を増やす
+                if bytes[i] == b'/' && bytes[i + 1] == b'*' {
+                    self.block_comment_depth += 1;
+                    i += 2;
+                    continue;
+                }
+                // */ を見つけたらネスト深度を減らす
+                if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                    self.block_comment_depth -= 1;
+                    i += 2;
+                    
+                    // 全てのコメントが閉じた
+                    if self.block_comment_depth == 0 {
+                        self.in_block_comment = false;
+                        let rest = &line[i..];
+                        if !rest.trim().is_empty() {
+                            // 残りの部分を再帰的に処理
+                            self.process_internal(rest, count);
+                        }
+                        return;
+                    }
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        
+        // in_block_comment フラグも同期
+        self.in_block_comment = self.block_comment_depth > 0;
+    }
+
+    /// ブロックコメント内かどうか（テスト用）
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment || self.block_comment_depth > 0
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (既存テストのため維持)
+// ============================================================================
+
+/// C系スタイル (// と /* */) の処理 - StringSkipOptions対応版 (後方互換)
 pub fn process_c_style_with_options(
     line: &str,
     options: &StringSkipOptions,
     in_block_comment: &mut bool,
     count: &mut usize,
 ) {
-    if *in_block_comment {
+    // 内部的に CStyleProcessor を使用
+    struct TempProcessor<'a> {
+        options: &'a StringSkipOptions,
+        in_block_comment: &'a mut bool,
+    }
+    
+    let processor = TempProcessor { options, in_block_comment };
+    
+    if *processor.in_block_comment {
         // ブロックコメント内
         if let Some(pos) = line.find("*/") {
-            *in_block_comment = false;
+            *processor.in_block_comment = false;
             // 閉じた後にコードがあるかチェック
             let rest = &line[pos + 2..];
             if !rest.trim().is_empty() && !rest.trim().starts_with("//") {
@@ -33,7 +230,7 @@ pub fn process_c_style_with_options(
     }
 
     // 行コメント（文字列外）のみの行かチェック
-    if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", options) {
+    if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", processor.options) {
         // // より前にコードがあるか
         let before = &line[..line_comment_pos];
         if before.trim().is_empty() {
@@ -46,7 +243,7 @@ pub fn process_c_style_with_options(
     }
 
     // ブロックコメント開始をチェック（文字列外）
-    if let Some(block_start) = find_outside_string_with_options(line, "/*", options) {
+    if let Some(block_start) = find_outside_string_with_options(line, "/*", processor.options) {
         // /* より前にコードがあるか
         let before = &line[..block_start];
         let has_code_before = !before.trim().is_empty();
@@ -55,12 +252,12 @@ pub fn process_c_style_with_options(
         if let Some(block_end) = line[block_start + 2..].find("*/") {
             let after = &line[block_start + 2 + block_end + 2..];
             let has_code_after = !after.trim().is_empty() 
-                && find_outside_string_with_options(after, "//", options).is_none_or(|p| p > 0);
+                && find_outside_string_with_options(after, "//", processor.options).is_none_or(|p| p > 0);
             if has_code_before || has_code_after {
                 *count += 1;
             }
         } else {
-            *in_block_comment = true;
+            *processor.in_block_comment = true;
             if has_code_before {
                 *count += 1;
             }
@@ -72,10 +269,7 @@ pub fn process_c_style_with_options(
     *count += 1;
 }
 
-/// ネストコメント対応 C系スタイル処理 - StringSkipOptions対応版
-///
-/// 言語に応じたStringSkipOptionsを渡すことで、
-/// 各言語固有の文字列リテラル構文を正しくスキップできます。
+/// ネストコメント対応 C系スタイル処理 - StringSkipOptions対応版 (後方互換)
 pub fn process_nesting_c_style_with_options(
     line: &str,
     options: &StringSkipOptions,
@@ -184,7 +378,52 @@ fn process_nesting_block_comment_line_with_options(
 mod tests {
     use super::*;
 
-    // ==================== 基本 C スタイルテスト ====================
+    // ==================== CStyleProcessor テスト ====================
+
+    #[test]
+    fn test_c_style_processor_line_comment() {
+        let mut p = CStyleProcessor::new(StringSkipOptions::c());
+        assert_eq!(p.process("// comment"), 0);
+        assert_eq!(p.process("int x = 1;"), 1);
+    }
+
+    #[test]
+    fn test_c_style_processor_block_comment() {
+        let mut p = CStyleProcessor::new(StringSkipOptions::c());
+        assert_eq!(p.process("/* start"), 0);
+        assert!(p.is_in_block_comment());
+        assert_eq!(p.process("middle"), 0);
+        assert_eq!(p.process("*/"), 0);
+        assert!(!p.is_in_block_comment());
+        assert_eq!(p.process("code();"), 1);
+    }
+
+    #[test]
+    fn test_c_style_processor_inline_comment() {
+        let mut p = CStyleProcessor::new(StringSkipOptions::c());
+        assert_eq!(p.process("int x = 1; // comment"), 1);
+    }
+
+    // ==================== NestingCStyleProcessor テスト ====================
+
+    #[test]
+    fn test_nesting_processor_nested_comment() {
+        let mut p = NestingCStyleProcessor::new(StringSkipOptions::rust());
+        assert_eq!(p.process("/* outer"), 0);
+        assert_eq!(p.process("/* inner */"), 0);
+        assert_eq!(p.process("still comment"), 0);
+        assert_eq!(p.process("*/"), 0);
+        assert!(!p.is_in_block_comment());
+        assert_eq!(p.process("let x = 1;"), 1);
+    }
+
+    #[test]
+    fn test_nesting_processor_single_line() {
+        let mut p = NestingCStyleProcessor::new(StringSkipOptions::rust());
+        assert_eq!(p.process("/* /* nested */ */ code();"), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
 
     #[test]
     fn test_c_style_line_comment() {

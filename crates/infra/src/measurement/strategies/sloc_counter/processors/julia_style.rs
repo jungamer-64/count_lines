@@ -7,6 +7,119 @@
 
 use super::super::string_utils::find_outside_string;
 
+// ============================================================================
+// JuliaProcessor 構造体 (新設計)
+// ============================================================================
+
+/// Julia プロセッサ
+///
+/// - 行コメント: `#`
+/// - ブロックコメント: `#= =#` (ネスト対応)
+pub struct JuliaProcessor {
+    in_block_comment: bool,
+    block_depth: usize,
+}
+
+impl JuliaProcessor {
+    pub fn new() -> Self {
+        Self {
+            in_block_comment: false,
+            block_depth: 0,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        let trimmed = line.trim();
+
+        // ブロックコメント内
+        if self.in_block_comment {
+            if let Some(rest) = self.process_block(line) {
+                if !rest.trim().is_empty() {
+                    return self.process(rest);
+                }
+            }
+            return 0;
+        }
+
+        // 空行
+        if trimmed.is_empty() {
+            return 0;
+        }
+
+        // ブロックコメント開始判定
+        if let Some(pos) = find_outside_string(line, "#=") {
+            let before = &line[..pos];
+            let has_code_before = !before.trim().is_empty();
+
+            self.in_block_comment = true;
+            self.block_depth = 1;
+
+            let rest = &line[pos + 2..];
+            if let Some(remaining) = self.check_nesting(rest) {
+                if !remaining.trim().is_empty() {
+                    return if has_code_before { 1 } else { self.process(remaining) };
+                }
+            }
+            return if has_code_before { 1 } else { 0 };
+        }
+
+        // 行コメント判定
+        if let Some(hash_pos) = find_outside_string(line, "#") {
+            let before = &line[..hash_pos];
+            return if !before.trim().is_empty() { 1 } else { 0 };
+        }
+
+        1
+    }
+
+    fn process_block<'a>(&mut self, line: &'a str) -> Option<&'a str> {
+        self.check_nesting(line)
+    }
+
+    fn check_nesting<'a>(&mut self, content: &'a str) -> Option<&'a str> {
+        let bytes = content.as_bytes();
+        let mut i = 0;
+
+        while i < bytes.len() {
+            if i + 1 < bytes.len() && bytes[i] == b'#' && bytes[i + 1] == b'=' {
+                self.block_depth += 1;
+                i += 2;
+                continue;
+            }
+
+            if i + 1 < bytes.len() && bytes[i] == b'=' && bytes[i + 1] == b'#' {
+                self.block_depth = self.block_depth.saturating_sub(1);
+                if self.block_depth == 0 {
+                    self.in_block_comment = false;
+                    return Some(&content[i + 2..]);
+                }
+                i += 2;
+                continue;
+            }
+
+            i += 1;
+        }
+
+        None
+    }
+
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
+impl Default for JuliaProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// Julia スタイル (# と #= =#) の処理
 /// 
 /// # Arguments

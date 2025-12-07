@@ -3,6 +3,98 @@
 //!
 //! Intel形式 (NASM/MASM) と AT&T形式 (GAS) を処理します。
 
+// ============================================================================
+// GasAssemblyProcessor 構造体 (新設計)
+// ============================================================================
+
+/// GAS (GNU Assembler) プロセッサ
+///
+/// - 行コメント: `#` または `@`
+/// - ブロックコメント: `/* */`
+pub struct GasAssemblyProcessor {
+    in_block_comment: bool,
+}
+
+impl GasAssemblyProcessor {
+    pub fn new() -> Self {
+        Self {
+            in_block_comment: false,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        if self.in_block_comment {
+            if let Some(pos) = line.find("*/") {
+                self.in_block_comment = false;
+                let rest = &line[pos + 2..];
+                if !rest.trim().is_empty() {
+                    return self.process(rest);
+                }
+            }
+            return 0;
+        }
+
+        // # 行コメント
+        if line.starts_with('#') || line.starts_with('@') {
+            return 0;
+        }
+
+        // 行中の # コメント
+        if let Some(hash_pos) = line.find('#') {
+            let before = &line[..hash_pos];
+
+            // # の前に /* があるかチェック
+            if let Some(block_start) = before.find("/*") {
+                return self.process_block_comment(line, block_start);
+            }
+
+            return if !before.trim().is_empty() { 1 } else { 0 };
+        }
+
+        // /* ブロックコメント
+        if let Some(block_start) = line.find("/*") {
+            return self.process_block_comment(line, block_start);
+        }
+
+        1
+    }
+
+    fn process_block_comment(&mut self, line: &str, block_start: usize) -> usize {
+        let before = &line[..block_start];
+        let has_code_before = !before.trim().is_empty();
+
+        let after_start = &line[block_start + 2..];
+        if let Some(end_offset) = after_start.find("*/") {
+            let after = &after_start[end_offset + 2..];
+            if has_code_before {
+                return 1;
+            } else if !after.trim().is_empty() {
+                return self.process(after);
+            }
+            return 0;
+        } else {
+            self.in_block_comment = true;
+            return if has_code_before { 1 } else { 0 };
+        }
+    }
+
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
+impl Default for GasAssemblyProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// Assembly (NASM/MASM) スタイル (; のみ) の処理
 ///
 /// Intel形式アセンブリ (NASM, MASM等):

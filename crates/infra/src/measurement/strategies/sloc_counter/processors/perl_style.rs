@@ -8,11 +8,98 @@
 
 use super::simple_hash_style::find_hash_outside_simple_string;
 
-/// Perl スタイル (#) の処理
-/// 
-/// Perl固有の対応:
-/// - POD: `=pod`, `=head1` 等 ～ `=cut` (行頭必須)
-/// - 文字列: `"..."`, `'...'` のみ考慮
+// ============================================================================
+// PerlProcessor
+// ============================================================================
+
+/// Perlプロセッサ
+#[derive(Default)]
+pub struct PerlProcessor {
+    in_pod: bool,
+    line_count: usize,
+}
+
+impl PerlProcessor {
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        let trimmed = line.trim();
+
+        // POD内の場合
+        if self.in_pod {
+            // Perl: =cut で終了
+            if line.starts_with("=cut") {
+                self.in_pod = false;
+            }
+            return 0;
+        }
+
+        // POD開始判定
+        if is_perl_pod_start(line) {
+            self.in_pod = true;
+            return 0;
+        }
+
+        // shebang行を除外 (最初の行のみ)
+        if trimmed.starts_with("#!") && self.line_count == 0 {
+            self.line_count += 1;
+            return 0;
+        }
+        self.line_count += 1;
+        
+        // #で始まる行はコメント
+        if trimmed.starts_with('#') {
+            return 0;
+        }
+
+        // # より前にコードがあるか (標準的な文字列のみ考慮)
+        if let Some(hash_pos) = find_hash_outside_simple_string(line) {
+            let before = &line[..hash_pos];
+            if !before.trim().is_empty() {
+                return 1;
+            }
+            return 0;
+        }
+        
+        1
+    }
+}
+
+// ============================================================================
+// Helper functions
+// ============================================================================
+
+/// Perl POD (Plain Old Documentation) の開始行かどうかを判定
+pub fn is_perl_pod_start(line: &str) -> bool {
+    if !line.starts_with('=') {
+        return false;
+    }
+    
+    let bytes = line.as_bytes();
+    if bytes.len() < 2 {
+        return false;
+    }
+    
+    // = の次が英字で始まる場合は POD コマンド
+    let second = bytes[1];
+    if !second.is_ascii_alphabetic() {
+        return false;
+    }
+    
+    // 主要な POD コマンドをチェック
+    line.starts_with("=pod")
+        || line.starts_with("=head")
+        || line.starts_with("=over")
+        || line.starts_with("=item")
+        || line.starts_with("=back")
+        || line.starts_with("=encoding")
+        || line.starts_with("=for")
+}
+
+// ============================================================================
+// 後方互換性のための関数
+// ============================================================================
+
+/// Perl スタイル (#) の処理 (後方互換)
 pub fn process_perl_style(
     line: &str,
     in_embedded_doc: &mut bool,
@@ -56,44 +143,35 @@ pub fn process_perl_style(
     }
 }
 
-/// Perl POD (Plain Old Documentation) の開始行かどうかを判定
-/// 
-/// PODは `=` で始まり、英字が続くコマンドで開始される:
-/// - `=pod`, `=head1`, `=head2`, `=head3`, `=head4`
-/// - `=over`, `=item`, `=back`
-/// - `=encoding`, `=for`, `=begin`, `=end`
-pub fn is_perl_pod_start(line: &str) -> bool {
-    if !line.starts_with('=') {
-        return false;
-    }
-    
-    let bytes = line.as_bytes();
-    if bytes.len() < 2 {
-        return false;
-    }
-    
-    // = の次が英字で始まる場合は POD コマンド
-    // (=begin は Ruby と共通なので上で処理済み、ここでは =pod, =head 等を検出)
-    let second = bytes[1];
-    if !second.is_ascii_alphabetic() {
-        return false;
-    }
-    
-    // 主要な POD コマンドをチェック
-    line.starts_with("=pod")
-        || line.starts_with("=head")
-        || line.starts_with("=over")
-        || line.starts_with("=item")
-        || line.starts_with("=back")
-        || line.starts_with("=encoding")
-        || line.starts_with("=for")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // ==================== Perl 行コメントテスト ====================
+    // ==================== PerlProcessor テスト ====================
+
+    #[test]
+    fn test_perl_processor_line_comment() {
+        let mut p = PerlProcessor::default();
+        assert_eq!(p.process("# Perl comment"), 0);
+    }
+
+    #[test]
+    fn test_perl_processor_code() {
+        let mut p = PerlProcessor::default();
+        assert_eq!(p.process("my $x = 1;"), 1);
+    }
+
+    #[test]
+    fn test_perl_processor_pod() {
+        let mut p = PerlProcessor::default();
+        assert_eq!(p.process("use strict;"), 1);
+        assert_eq!(p.process("=pod"), 0);
+        assert_eq!(p.process("This is POD documentation."), 0);
+        assert_eq!(p.process("=cut"), 0);
+        assert_eq!(p.process("print \"Hello\";"), 1);
+    }
+
+    // ==================== 後方互換関数テスト ====================
 
     #[test]
     fn test_perl_line_comment() {
@@ -126,8 +204,6 @@ mod tests {
         process_perl_style("my $x = 1;  # inline comment", &mut in_doc, &mut count);
         assert_eq!(count, 1);
     }
-
-    // ==================== Perl POD テスト ====================
 
     #[test]
     fn test_perl_pod_basic() {
@@ -221,8 +297,6 @@ mod tests {
         assert!(!in_doc);
     }
 
-    // ==================== Perl shebang テスト ====================
-
     #[test]
     fn test_perl_shebang_not_counted() {
         let mut in_doc = false;
@@ -233,8 +307,6 @@ mod tests {
         process_perl_style("print 1;", &mut in_doc, &mut count);
         assert_eq!(count, 2);
     }
-
-    // ==================== Perl 文字列内 # テスト ====================
 
     #[test]
     fn test_perl_string_with_hash() {
@@ -251,8 +323,6 @@ mod tests {
         process_perl_style("my $s = 'hello # world';", &mut in_doc, &mut count);
         assert_eq!(count, 1);
     }
-
-    // ==================== is_perl_pod_start テスト ====================
 
     #[test]
     fn test_is_perl_pod_start_pod() {
@@ -292,8 +362,6 @@ mod tests {
         assert!(!is_perl_pod_start("# comment"));
     }
 
-    // ==================== Perl サブルーチン定義テスト ====================
-
     #[test]
     fn test_perl_subroutine() {
         let mut in_doc = false;
@@ -311,8 +379,6 @@ mod tests {
         let mut in_doc = false;
         let mut count = 0;
 
-        // Perl の正規表現で # が現れる場合
-        // 簡易実装のため、文字列外の # はコメントとして扱われる可能性あり
         process_perl_style(r#"my $re = qr/pattern/;"#, &mut in_doc, &mut count);
         assert_eq!(count, 1);
     }

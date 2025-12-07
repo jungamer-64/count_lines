@@ -6,6 +6,105 @@
 
 use super::super::string_utils::find_hash_outside_string;
 
+// ============================================================================
+// PowerShellProcessor 構造体 (新設計)
+// ============================================================================
+
+/// PowerShell プロセッサ
+///
+/// - 行コメント: `#` から行末まで
+/// - ブロックコメント: `<#` から `#>` まで（複数行可）
+pub struct PowerShellProcessor {
+    in_block_comment: bool,
+}
+
+impl PowerShellProcessor {
+    pub fn new() -> Self {
+        Self {
+            in_block_comment: false,
+        }
+    }
+
+    /// 行を処理し、SLOCカウント (0 or 1) を返す
+    pub fn process(&mut self, line: &str) -> usize {
+        let trimmed = line.trim();
+
+        // ブロックコメント内
+        if self.in_block_comment {
+            if let Some(pos) = trimmed.find("#>") {
+                self.in_block_comment = false;
+                // 閉じた後にコードがあるかチェック
+                let rest = &trimmed[pos + 2..];
+                if !rest.trim().is_empty() {
+                    if let Some(hash_pos) = find_hash_outside_string(rest) {
+                        let before_hash = &rest[..hash_pos];
+                        if !before_hash.trim().is_empty() {
+                            return 1;
+                        }
+                    } else {
+                        return 1;
+                    }
+                }
+            }
+            return 0;
+        }
+
+        // 空行チェック
+        if trimmed.is_empty() {
+            return 0;
+        }
+
+        // ブロックコメント開始をチェック（<#）
+        if let Some(block_start) = find_block_comment_start(line) {
+            let before = &line[..block_start];
+            let has_code_before = !before.trim().is_empty()
+                && find_hash_outside_string(before.trim()).is_none_or(|p| p > 0);
+
+            // ブロックコメントが同じ行で閉じるか
+            let after_start = &line[block_start + 2..];
+            if let Some(block_end) = after_start.find("#>") {
+                // 同じ行で閉じる
+                let after_close = &after_start[block_end + 2..];
+                let has_code_after = !after_close.trim().is_empty()
+                    && find_hash_outside_string(after_close.trim()).is_none_or(|p| p > 0);
+
+                return if has_code_before || has_code_after { 1 } else { 0 };
+            } else {
+                // 次の行に続く
+                self.in_block_comment = true;
+                return if has_code_before { 1 } else { 0 };
+            }
+        }
+
+        // 行コメント (#) をチェック - 文字列外で
+        if let Some(hash_pos) = find_hash_outside_string(trimmed) {
+            let before = &trimmed[..hash_pos];
+            if before.trim().is_empty() {
+                return 0;
+            }
+            return 1;
+        }
+
+        // コードがある行
+        1
+    }
+
+    #[cfg(test)]
+    pub fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
+impl Default for PowerShellProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+// ============================================================================
+// 後方互換性のための関数 (レガシー)
+// ============================================================================
+
 /// PowerShell スタイル (# と <# #>) の処理
 ///
 /// - 行コメント: `#` から行末まで
@@ -85,6 +184,10 @@ pub fn process_powershell_style(
     // コードがある行
     *count += 1;
 }
+
+// ============================================================================
+// ヘルパー関数
+// ============================================================================
 
 /// `<#` を文字列外で検索
 ///
