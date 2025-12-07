@@ -1,44 +1,36 @@
 // crates/infra/src/measurement/strategies/sloc_counter/processors/matlab_style.rs
-//! MATLAB / Octave のコメント処理
+//! MATLAB/Octave言語のコメント処理
 //!
 //! MATLAB固有の対応:
-//! - `%` で始まる行コメント
-//! - `%{` ～ `%}` ブロックコメント (行頭必須)
+//! - 行コメント: `%`
+//! - ブロックコメント: `%{` ～ `%}`
 
-// ============================================================================
-// MatlabProcessor 構造体 (新設計)
-// ============================================================================
-
-/// MATLAB/Octave プロセッサ
-///
-/// - 行コメント: `%`
-/// - ブロックコメント: `%{` ～ `%}` (行頭必須)
+/// MATLAB プロセッサ
 pub struct MatlabProcessor {
     in_block_comment: bool,
 }
 
 impl MatlabProcessor {
     pub fn new() -> Self {
-        Self {
-            in_block_comment: false,
-        }
+        Self { in_block_comment: false }
     }
 
-    /// 行を処理し、SLOCカウント (0 or 1) を返す
     pub fn process(&mut self, line: &str) -> usize {
+        let trimmed = line.trim();
+
         if self.in_block_comment {
-            if line.trim() == "%}" {
+            if trimmed == "%}" {
                 self.in_block_comment = false;
             }
             return 0;
         }
 
-        if line.trim() == "%{" {
+        if trimmed == "%{" {
             self.in_block_comment = true;
             return 0;
         }
 
-        if line.starts_with('%') {
+        if trimmed.starts_with('%') {
             return 0;
         }
 
@@ -57,74 +49,25 @@ impl Default for MatlabProcessor {
     }
 }
 
-// ============================================================================
-// 後方互換性のための関数 (レガシー)
-// ============================================================================
-
-/// MATLAB スタイル (% と %{ %}) の処理
-pub fn process_matlab_style(
-    line: &str,
-    in_block_comment: &mut bool,
-    count: &mut usize,
-) {
-    if *in_block_comment {
-        if line.trim() == "%}" {
-            *in_block_comment = false;
-        }
-        return;
-    }
-
-    if line.trim() == "%{" {
-        *in_block_comment = true;
-        return;
-    }
-
-    if line.starts_with('%') {
-        return;
-    }
-
-    *count += 1;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    // テストヘルパー: 複数行を処理
-    fn process_lines(lines: &[&str]) -> usize {
-        let mut count = 0;
-        let mut in_block = false;
-        for line in lines {
-            process_matlab_style(line, &mut in_block, &mut count);
-        }
-        count
+    #[test]
+    fn test_matlab_processor_line_comment() {
+        let mut p = MatlabProcessor::new();
+        assert_eq!(p.process("% comment"), 0);
+        assert_eq!(p.process("x = 1;"), 1);
     }
 
     #[test]
-    fn test_percent_comment() {
-        let count = process_lines(&[
-            "% comment",
-            "x = 1;",
-        ]);
-        assert_eq!(count, 1);
-    }
-
-    #[test]
-    fn test_block_comment() {
-        let count = process_lines(&[
-            "%{",
-            "  block comment",
-            "%}",
-            "y = 2;",
-        ]);
-        assert_eq!(count, 1);
-    }
-
-    #[test]
-    fn test_code_line() {
-        let count = process_lines(&[
-            "z = 3;",
-        ]);
-        assert_eq!(count, 1);
+    fn test_matlab_processor_block_comment() {
+        let mut p = MatlabProcessor::new();
+        assert_eq!(p.process("%{"), 0);
+        assert!(p.is_in_block_comment());
+        assert_eq!(p.process("comment"), 0);
+        assert_eq!(p.process("%}"), 0);
+        assert!(!p.is_in_block_comment());
+        assert_eq!(p.process("y = 2;"), 1);
     }
 }
