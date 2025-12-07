@@ -1,5 +1,7 @@
 use std::{io::BufRead, path::Path};
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use super::sloc_counter::SlocCounter;
 use crate::persistence::FileReader;
 use count_lines_domain::{
@@ -34,7 +36,8 @@ pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option
             return None;
         }
         line_count += 1;
-        let total_chars = line.chars().count();
+        
+        // Grapheme counting requires full string slice, so we handle newlines carefully.
         let mut without_newline = line.as_str();
         if without_newline.ends_with('\n') {
             without_newline = &without_newline[..without_newline.len() - 1];
@@ -42,9 +45,19 @@ pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option
                 without_newline = &without_newline[..without_newline.len() - 1];
             }
         }
-        let base_chars = without_newline.chars().count();
+
+        let base_chars = without_newline.graphemes(true).count();
+        
         if config.count_newlines_in_chars {
-            char_count += total_chars;
+            // Count newline characters separately as simple chars since they are control chars
+            // and we want to preserve the behavior of "chars" (which usually means scalar values for control chars)
+            // OR we can just count the graphemes of the full line.
+            // However, `graphemes` on "\r\n" might return 1 grapheme (CRLF is a grapheme cluster).
+            // If the user wants "character count" including newlines, they usually expect CRLF to be 2 chars or 1 char depending on definition.
+            // The previous implementation used `chars().count()`, so CRLF was 2 chars.
+            // `graphemes(true)` treats CRLF as 1 extended grapheme cluster.
+            // To be safe and consistent with "visual" counting, we count the full line graphemes.
+            char_count += line.graphemes(true).count();
         } else {
             char_count += base_chars;
         }

@@ -611,4 +611,22 @@ mod tests {
         assert_eq!(processed.len(), 1);
         assert_eq!(processed[0].lines, 2);
     }
+
+    #[test]
+    fn grapheme_counting_handles_combined_chars() {
+        // "é" (e + combining acute accent) is 2 chars but 1 grapheme
+        // "👨‍👩‍👧‍👦" (family emoji) is 7 chars but 1 grapheme
+        let content = "e\u{0301}\n👨\u{200D}👩\u{200D}👧\u{200D}👦";
+        let file = TempFile::new(content);
+        let mut config = make_config();
+        config.words = true;
+
+        let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config).unwrap();
+
+        assert_eq!(stats.lines().value(), 2);
+        // Line 1: "é" (1 grapheme)
+        // Line 2: "👨‍👩‍👧‍👦" (1 grapheme)
+        // Total: 2 graphemes
+        assert_eq!(stats.chars().value(), 2); 
+    }
 }
