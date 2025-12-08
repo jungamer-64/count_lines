@@ -36,9 +36,8 @@ impl<'a> RunAnalysisHandler<'a> {
         self.log_start(config);
 
         let entries = self.collect_entries(config)?;
-        let MeasurementOutcome { stats: mut_stats, changed_files, removed_files } =
+        let MeasurementOutcome { stats: mut stats, changed_files, removed_files } =
             self.measure_statistics(entries, config)?;
-        let mut stats = mut_stats;
         self.apply_sorting(&mut stats, config);
         self.present_results(&stats, config)?;
 
@@ -304,6 +303,7 @@ mod tests {
             abs_canonical: false,
             trim_root: None,
             words: false,
+            sloc: false,
             count_newlines_in_chars: false,
             text_only: false,
             fast_text_detect: false,

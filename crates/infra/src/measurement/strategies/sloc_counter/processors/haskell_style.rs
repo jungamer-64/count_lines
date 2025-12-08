@@ -8,14 +8,9 @@
 use super::super::processor_trait::LineProcessor;
 
 /// Haskell プロセッサ
+#[derive(Default)]
 pub struct HaskellProcessor {
     block_comment_depth: usize,
-}
-
-impl Default for HaskellProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl LineProcessor for HaskellProcessor {

@@ -8,14 +8,9 @@
 use super::super::processor_trait::LineProcessor;
 
 /// OCaml プロセッサ
+#[derive(Default)]
 pub struct OCamlProcessor {
     block_comment_depth: usize,
-}
-
-impl Default for OCamlProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl LineProcessor for OCamlProcessor {

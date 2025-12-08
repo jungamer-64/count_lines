@@ -8,14 +8,9 @@
 use super::super::processor_trait::LineProcessor;
 
 /// MATLAB プロセッサ
+#[derive(Default)]
 pub struct MatlabProcessor {
     in_block_comment: bool,
-}
-
-impl Default for MatlabProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl LineProcessor for MatlabProcessor {

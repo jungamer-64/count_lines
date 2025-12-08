@@ -140,6 +140,7 @@ mod tests {
             abs_canonical: false,
             trim_root: None,
             words: false,
+            sloc: false,
             count_newlines_in_chars: false,
             text_only: false,
             fast_text_detect: false,

@@ -8,14 +8,9 @@
 use super::super::processor_trait::LineProcessor;
 
 /// Julia プロセッサ
+#[derive(Default)]
 pub struct JuliaProcessor {
     block_comment_depth: usize,
-}
-
-impl Default for JuliaProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl LineProcessor for JuliaProcessor {

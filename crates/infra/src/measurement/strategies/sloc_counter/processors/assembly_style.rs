@@ -8,14 +8,9 @@
 use super::super::processor_trait::LineProcessor;
 
 /// GAS Assembly プロセッサ
+#[derive(Default)]
 pub struct GasAssemblyProcessor {
     in_block_comment: bool,
-}
-
-impl Default for GasAssemblyProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl LineProcessor for GasAssemblyProcessor {
