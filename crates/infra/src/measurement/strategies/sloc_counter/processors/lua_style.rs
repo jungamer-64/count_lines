@@ -6,11 +6,23 @@
 //! - ブロックコメント: `--[[` ～ `]]`
 //! - 等号付きブロックコメント: `--[=[` ～ `]=]`, `--[==[` ～ `]==]` 等
 
+use super::super::processor_trait::LineProcessor;
+
 /// Luaプロセッサ
 #[derive(Default)]
 pub struct LuaProcessor {
     in_block_comment: bool,
     block_level: usize,
+}
+
+impl LineProcessor for LuaProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
 }
 
 impl LuaProcessor {

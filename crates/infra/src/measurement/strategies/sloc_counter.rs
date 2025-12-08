@@ -11,10 +11,12 @@
 
 mod comment_style;
 mod processor_state;
+mod processor_trait;
 pub mod processors;
 mod string_utils;
 
 pub use comment_style::CommentStyle;
+pub use processor_trait::LineProcessor;
 use processor_state::SlocProcessor;
 
 /// SLOCカウンター

@@ -5,9 +5,27 @@
 //! - ブロックコメント: `(*` ～ `*)` (ネスト対応)
 //! - 行コメントなし
 
+use super::super::processor_trait::LineProcessor;
+
 /// OCaml プロセッサ
 pub struct OCamlProcessor {
     block_comment_depth: usize,
+}
+
+impl Default for OCamlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for OCamlProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.block_comment_depth > 0
+    }
 }
 
 impl OCamlProcessor {
@@ -59,17 +77,6 @@ impl OCamlProcessor {
             i += 1;
         }
         false
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.block_comment_depth > 0
-    }
-}
-
-impl Default for OCamlProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

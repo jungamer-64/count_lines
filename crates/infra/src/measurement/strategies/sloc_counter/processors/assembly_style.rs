@@ -5,9 +5,27 @@
 //! - 行コメント: `#` と `@`
 //! - Cスタイルブロックコメント: `/* */`
 
+use super::super::processor_trait::LineProcessor;
+
 /// GAS Assembly プロセッサ
 pub struct GasAssemblyProcessor {
     in_block_comment: bool,
+}
+
+impl Default for GasAssemblyProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for GasAssemblyProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
 }
 
 impl GasAssemblyProcessor {
@@ -51,17 +69,6 @@ impl GasAssemblyProcessor {
         }
 
         1
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment
-    }
-}
-
-impl Default for GasAssemblyProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

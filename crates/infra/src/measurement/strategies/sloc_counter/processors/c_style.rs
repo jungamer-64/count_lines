@@ -4,12 +4,32 @@
 //! C/C++/Java/JavaScript/Rust/Go/Kotlin等の
 //! `//` 行コメントと `/* */` ブロックコメントを処理します。
 
+use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::{find_outside_string_with_options, StringSkipOptions};
 
 /// C系言語プロセッサ (//, /* */) - ネスト非対応
 pub struct CStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
+}
+
+impl Default for CStyleProcessor {
+    fn default() -> Self {
+        Self {
+            options: StringSkipOptions::default(),
+            in_block_comment: false,
+        }
+    }
+}
+
+impl LineProcessor for CStyleProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
 }
 
 impl CStyleProcessor {
@@ -63,11 +83,6 @@ impl CStyleProcessor {
 
         1
     }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment
-    }
 }
 
 /// C系言語プロセッサ - ネスト対応 (Rust, Kotlin, Scala)
@@ -75,6 +90,26 @@ pub struct NestingCStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
     block_comment_depth: usize,
+}
+
+impl Default for NestingCStyleProcessor {
+    fn default() -> Self {
+        Self {
+            options: StringSkipOptions::default(),
+            in_block_comment: false,
+            block_comment_depth: 0,
+        }
+    }
+}
+
+impl LineProcessor for NestingCStyleProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment || self.block_comment_depth > 0
+    }
 }
 
 impl NestingCStyleProcessor {
@@ -149,11 +184,6 @@ impl NestingCStyleProcessor {
             i += 1;
         }
         self.in_block_comment = self.block_comment_depth > 0;
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment || self.block_comment_depth > 0
     }
 }
 

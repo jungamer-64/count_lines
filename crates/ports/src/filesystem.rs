@@ -63,6 +63,12 @@ impl FileEnumerationPlan {
     pub fn new() -> Self {
         Self::default()
     }
+
+    /// Create a builder for FileEnumerationPlan
+    #[must_use]
+    pub fn builder() -> FileEnumerationPlanBuilder {
+        FileEnumerationPlanBuilder::default()
+    }
 }
 
 impl Default for FileEnumerationPlan {
@@ -96,6 +102,130 @@ impl Default for FileEnumerationPlan {
             max_depth: None,
             threads: None,
         }
+    }
+}
+
+// ============================================================================
+// Builder Pattern for FileEnumerationPlan
+// ============================================================================
+
+/// Builder for `FileEnumerationPlan`
+///
+/// Provides a fluent API for constructing `FileEnumerationPlan` instances.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use count_lines_ports::FileEnumerationPlan;
+///
+/// let plan = FileEnumerationPlan::builder()
+///     .roots(vec!["./src".into()])
+///     .follow_links(true)
+///     .include_patterns(vec!["*.rs".to_string()])
+///     .max_depth(Some(5))
+///     .build();
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct FileEnumerationPlanBuilder {
+    inner: FileEnumerationPlan,
+}
+
+impl FileEnumerationPlanBuilder {
+    /// Set the root directories to scan
+    #[must_use]
+    pub fn roots(mut self, roots: Vec<PathBuf>) -> Self {
+        self.inner.roots = roots;
+        self
+    }
+
+    /// Add a single root directory
+    #[must_use]
+    pub fn root(mut self, root: PathBuf) -> Self {
+        self.inner.roots.push(root);
+        self
+    }
+
+    /// Set whether to follow symbolic links
+    #[must_use]
+    pub fn follow_links(mut self, follow: bool) -> Self {
+        self.inner.follow_links = follow;
+        self
+    }
+
+    /// Set whether to include hidden files
+    #[must_use]
+    pub fn include_hidden(mut self, include: bool) -> Self {
+        self.inner.include_hidden = include;
+        self
+    }
+
+    /// Set include patterns (glob)
+    #[must_use]
+    pub fn include_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.inner.include_patterns = patterns;
+        self
+    }
+
+    /// Set exclude patterns (glob)
+    #[must_use]
+    pub fn exclude_patterns(mut self, patterns: Vec<String>) -> Self {
+        self.inner.exclude_patterns = patterns;
+        self
+    }
+
+    /// Set extension filters
+    #[must_use]
+    pub fn ext_filters(mut self, exts: Vec<String>) -> Self {
+        self.inner.ext_filters = exts;
+        self
+    }
+
+    /// Set size range filter
+    #[must_use]
+    pub fn size_range(mut self, min: Option<u64>, max: Option<u64>) -> Self {
+        self.inner.size_range = (min, max);
+        self
+    }
+
+    /// Set maximum directory depth
+    #[must_use]
+    pub fn max_depth(mut self, depth: Option<usize>) -> Self {
+        self.inner.max_depth = depth;
+        self
+    }
+
+    /// Set number of threads
+    #[must_use]
+    pub fn threads(mut self, threads: Option<usize>) -> Self {
+        self.inner.threads = threads;
+        self
+    }
+
+    /// Enable git mode (use git ls-files)
+    #[must_use]
+    pub fn use_git(mut self, use_git: bool) -> Self {
+        self.inner.use_git = use_git;
+        self
+    }
+
+    /// Set whether to respect .gitignore
+    #[must_use]
+    pub fn respect_gitignore(mut self, respect: bool) -> Self {
+        self.inner.respect_gitignore = respect;
+        self
+    }
+
+    /// Set fast text detection mode
+    #[must_use]
+    pub fn fast_text_detect(mut self, fast: bool) -> Self {
+        self.inner.fast_text_detect = fast;
+        self
+    }
+
+    /// Build the FileEnumerationPlan
+    #[must_use]
+    pub fn build(self) -> FileEnumerationPlan {
+        self.inner
     }
 }
 

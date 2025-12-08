@@ -5,12 +5,23 @@
 //! - `#` 行コメント
 //! - 埋め込みドキュメント: `=begin` ～ `=end` (行頭必須)
 
+use super::super::processor_trait::LineProcessor;
 use super::simple_hash_style::find_hash_outside_simple_string;
 
 /// Rubyプロセッサ
 #[derive(Default)]
 pub struct RubyProcessor {
     in_embedded_doc: bool,
+}
+
+impl LineProcessor for RubyProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_embedded_doc
+    }
 }
 
 impl RubyProcessor {

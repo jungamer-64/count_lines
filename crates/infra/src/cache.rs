@@ -10,55 +10,76 @@ use std::{
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 
+// ============================================================================
+// Cache Hasher Trait - 統一されたハッシャーインターフェース
+// ============================================================================
+
+/// キャッシュ用ハッシャートレイト
+///
+/// 異なるハッシュ実装 (xxhash, ahash, 標準) を統一インターフェースで扱います。
+trait CacheHasherTrait {
+    fn new() -> Self;
+    fn update(&mut self, bytes: &[u8]);
+    fn finish(self) -> u64;
+}
+
+#[cfg(feature = "hash-xx")]
+impl CacheHasherTrait for xxhash_rust::xxh3::Xxh3 {
+    fn new() -> Self {
+        xxhash_rust::xxh3::Xxh3::new()
+    }
+
+    fn update(&mut self, bytes: &[u8]) {
+        self.update(bytes);
+    }
+
+    fn finish(self) -> u64 {
+        self.digest()
+    }
+}
+
+#[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
+impl CacheHasherTrait for ahash::AHasher {
+    fn new() -> Self {
+        ahash::AHasher::new_with_keys(0, 0)
+    }
+
+    fn update(&mut self, bytes: &[u8]) {
+        use std::hash::Hasher;
+        self.write(bytes);
+    }
+
+    fn finish(self) -> u64 {
+        use std::hash::Hasher;
+        std::hash::Hasher::finish(&self)
+    }
+}
+
+#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
+impl CacheHasherTrait for std::collections::hash_map::DefaultHasher {
+    fn new() -> Self {
+        use std::hash::Hasher;
+        std::collections::hash_map::DefaultHasher::new()
+    }
+
+    fn update(&mut self, bytes: &[u8]) {
+        use std::hash::Hasher;
+        self.write(bytes);
+    }
+
+    fn finish(self) -> u64 {
+        use std::hash::Hasher;
+        std::hash::Hasher::finish(&self)
+    }
+}
+
+// Type alias for the active hasher
 #[cfg(feature = "hash-xx")]
 type CacheHasher = xxhash_rust::xxh3::Xxh3;
 #[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
 type CacheHasher = ahash::AHasher;
 #[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
 type CacheHasher = std::collections::hash_map::DefaultHasher;
-
-#[cfg(feature = "hash-xx")]
-fn new_hasher() -> CacheHasher {
-    CacheHasher::new()
-}
-
-#[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
-fn new_hasher() -> CacheHasher {
-    CacheHasher::new_with_keys(0, 0)
-}
-
-#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
-fn new_hasher() -> CacheHasher {
-    CacheHasher::new()
-}
-
-#[cfg(feature = "hash-xx")]
-fn update_hasher(hasher: &mut CacheHasher, bytes: &[u8]) {
-    hasher.update(bytes);
-}
-
-#[cfg(all(not(feature = "hash-xx"), feature = "hash-a"))]
-fn update_hasher(hasher: &mut CacheHasher, bytes: &[u8]) {
-    use std::hash::Hasher;
-    hasher.write(bytes);
-}
-
-#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
-fn update_hasher(hasher: &mut CacheHasher, bytes: &[u8]) {
-    use std::hash::Hasher;
-    hasher.write(bytes);
-}
-
-#[cfg(feature = "hash-xx")]
-fn finalize_hasher(hasher: CacheHasher) -> u64 {
-    hasher.digest()
-}
-
-#[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
-fn finalize_hasher(hasher: CacheHasher) -> u64 {
-    use std::hash::Hasher;
-    hasher.finish()
-}
 
 use count_lines_domain::{
     config::Config,
@@ -303,30 +324,30 @@ fn cache_file_name(config: &Config) -> String {
 fn workspace_hash(config: &Config) -> u64 {
     // Use a stable, cross-process hash so the cache filename is deterministic
     // for the same workspace paths.
-    let mut hasher = new_hasher();
+    let mut hasher = CacheHasher::new();
     let mut paths: Vec<String> =
         config.paths.iter().map(|path| logical_absolute(path).to_string_lossy().into_owned()).collect();
     paths.sort();
     for path in paths {
-        update_hasher(&mut hasher, path.as_bytes());
+        hasher.update(path.as_bytes());
         // separator to avoid accidental concatenation collisions
-        update_hasher(&mut hasher, &[0]);
+        hasher.update(&[0]);
     }
-    finalize_hasher(hasher)
+    hasher.finish()
 }
 
 fn hash_file(path: &Path) -> Option<String> {
     let mut file = fs::File::open(path).ok()?;
-    let mut hasher = new_hasher();
+    let mut hasher = CacheHasher::new();
     let mut buf = [0u8; 8192];
     loop {
         match file.read(&mut buf) {
             Ok(0) => break,
-            Ok(n) => update_hasher(&mut hasher, &buf[..n]),
+            Ok(n) => hasher.update(&buf[..n]),
             Err(_) => return None,
         }
     }
-    Some(format!("{:016x}", finalize_hasher(hasher)))
+    Some(format!("{:016x}", hasher.finish()))
 }
 
 impl CacheStore {

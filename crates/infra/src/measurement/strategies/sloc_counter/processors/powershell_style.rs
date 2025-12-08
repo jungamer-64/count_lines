@@ -3,11 +3,28 @@
 //!
 //! PowerShell は `#` 行コメントと `<# #>` ブロックコメントを使用します。
 
+use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_hash_outside_string;
 
 /// PowerShell プロセッサ
 pub struct PowerShellProcessor {
     in_block_comment: bool,
+}
+
+impl Default for PowerShellProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for PowerShellProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
 }
 
 impl PowerShellProcessor {
@@ -68,17 +85,6 @@ impl PowerShellProcessor {
         }
 
         1
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment
-    }
-}
-
-impl Default for PowerShellProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

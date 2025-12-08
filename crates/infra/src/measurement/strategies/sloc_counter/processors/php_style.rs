@@ -3,6 +3,7 @@
 //!
 //! PHP は C系の `//, /* */` に加えて、Perl/Shell系の `#` 行コメントもサポートします。
 
+use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string;
 
 // ============================================================================
@@ -17,6 +18,22 @@ use super::super::string_utils::find_outside_string;
 /// - ブロックコメント: `/* */`
 pub struct PhpProcessor {
     in_block_comment: bool,
+}
+
+impl Default for PhpProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for PhpProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
 }
 
 impl PhpProcessor {
@@ -94,18 +111,6 @@ impl PhpProcessor {
                 }
             }
         }
-    }
-
-    /// ブロックコメント内かどうか（テスト用）
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment
-    }
-}
-
-impl Default for PhpProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

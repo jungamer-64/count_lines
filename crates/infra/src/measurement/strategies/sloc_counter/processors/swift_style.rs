@@ -6,12 +6,29 @@
 //! - `/* */` ブロックコメント（ネスト対応）
 //! - 拡張デリミタ文字列 `#"..."#`, `##"..."##` 等
 
+use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string_swift;
 
 /// Swift プロセッサ
 pub struct SwiftProcessor {
     block_comment_depth: usize,
     in_block_comment: bool,
+}
+
+impl Default for SwiftProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for SwiftProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment || self.block_comment_depth > 0
+    }
 }
 
 impl SwiftProcessor {
@@ -80,17 +97,6 @@ impl SwiftProcessor {
         }
         self.in_block_comment = self.block_comment_depth > 0;
         false
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment || self.block_comment_depth > 0
-    }
-}
-
-impl Default for SwiftProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

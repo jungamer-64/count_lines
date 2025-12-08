@@ -3,6 +3,7 @@
 //!
 //! SQL の -- 行コメントと /* */ ブロックコメントを処理します。
 
+use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string_sql;
 
 /// SQL プロセッサ
@@ -12,6 +13,22 @@ use super::super::string_utils::find_outside_string_sql;
 /// - 文字列リテラル (`'...'` と `"..."`) 内のコメントマーカーを無視
 pub struct SqlProcessor {
     in_block_comment: bool,
+}
+
+impl Default for SqlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for SqlProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
 }
 
 impl SqlProcessor {
@@ -71,17 +88,6 @@ impl SqlProcessor {
             self.in_block_comment = true;
             return if has_code_before { 1 } else { 0 };
         }
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment
-    }
-}
-
-impl Default for SqlProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

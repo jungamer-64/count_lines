@@ -5,9 +5,27 @@
 //! - 行コメント: `--`
 //! - ブロックコメント: `{-` ～ `-}` (ネスト対応)
 
+use super::super::processor_trait::LineProcessor;
+
 /// Haskell プロセッサ
 pub struct HaskellProcessor {
     block_comment_depth: usize,
+}
+
+impl Default for HaskellProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for HaskellProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.block_comment_depth > 0
+    }
 }
 
 impl HaskellProcessor {
@@ -63,17 +81,6 @@ impl HaskellProcessor {
             i += 1;
         }
         false
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.block_comment_depth > 0
-    }
-}
-
-impl Default for HaskellProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

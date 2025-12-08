@@ -3,10 +3,18 @@
 //!
 //! 対象: Shell, YAML, TOML, Dockerfile, Makefile, Config系など
 
+use super::super::processor_trait::LineProcessor;
+
 /// 単純な Hash コメントプロセッサ
 #[derive(Default)]
 pub struct SimpleHashProcessor {
     line_count: usize,
+}
+
+impl LineProcessor for SimpleHashProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
 }
 
 impl SimpleHashProcessor {

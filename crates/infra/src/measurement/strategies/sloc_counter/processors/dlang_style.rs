@@ -6,12 +6,29 @@
 //! - ブロックコメント: `/* */`
 //! - ネストブロックコメント: `/+ +/` (ネスト対応)
 
+use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string;
 
 /// D言語 プロセッサ
 pub struct DLangProcessor {
     block_comment_depth: usize,
     in_c_block: bool,
+}
+
+impl Default for DLangProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for DLangProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.block_comment_depth > 0 || self.in_c_block
+    }
 }
 
 impl DLangProcessor {
@@ -99,17 +116,6 @@ impl DLangProcessor {
             i += 1;
         }
         false
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.block_comment_depth > 0 || self.in_c_block
-    }
-}
-
-impl Default for DLangProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

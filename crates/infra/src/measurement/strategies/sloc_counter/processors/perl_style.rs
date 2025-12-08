@@ -6,6 +6,7 @@
 //! - POD: `=pod`, `=head1` 等 ～ `=cut` (行頭必須)
 //! - 文字列: `"..."`, `'...'` のみ考慮
 
+use super::super::processor_trait::LineProcessor;
 use super::simple_hash_style::find_hash_outside_simple_string;
 
 /// Perlプロセッサ
@@ -13,6 +14,16 @@ use super::simple_hash_style::find_hash_outside_simple_string;
 pub struct PerlProcessor {
     in_pod: bool,
     line_count: usize,
+}
+
+impl LineProcessor for PerlProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_pod
+    }
 }
 
 impl PerlProcessor {

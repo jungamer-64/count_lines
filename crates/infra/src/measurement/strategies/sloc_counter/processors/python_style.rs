@@ -8,12 +8,23 @@
 //! - shebang行の除外
 
 use super::super::string_utils::{check_docstring_start, find_hash_outside_string};
+use super::super::processor_trait::LineProcessor;
 
 /// Pythonプロセッサ
 #[derive(Default)]
 pub struct PythonProcessor {
     docstring_quote: Option<u8>,
     line_count: usize,
+}
+
+impl LineProcessor for PythonProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.docstring_quote.is_some()
+    }
 }
 
 impl PythonProcessor {

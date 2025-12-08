@@ -5,9 +5,27 @@
 //! - 行コメント: `#`
 //! - ブロックコメント: `#=` ～ `=#` (ネスト対応)
 
+use super::super::processor_trait::LineProcessor;
+
 /// Julia プロセッサ
 pub struct JuliaProcessor {
     block_comment_depth: usize,
+}
+
+impl Default for JuliaProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for JuliaProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.block_comment_depth > 0
+    }
 }
 
 impl JuliaProcessor {
@@ -67,17 +85,6 @@ impl JuliaProcessor {
             i += 1;
         }
         false
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.block_comment_depth > 0
-    }
-}
-
-impl Default for JuliaProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 

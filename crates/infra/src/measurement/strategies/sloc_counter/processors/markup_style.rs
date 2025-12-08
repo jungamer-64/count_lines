@@ -3,11 +3,29 @@
 //!
 //! HTML/XML/SVG などの <!-- --> コメントを処理します。
 
+use super::super::processor_trait::LineProcessor;
+
 /// HTML/XML プロセッサ
 ///
 /// `<!-- -->` コメントを処理します。
 pub struct HtmlProcessor {
     in_comment: bool,
+}
+
+impl Default for HtmlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for HtmlProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_comment
+    }
 }
 
 impl HtmlProcessor {
@@ -45,17 +63,6 @@ impl HtmlProcessor {
 
         1
     }
-
-    #[cfg(test)]
-    pub fn is_in_comment(&self) -> bool {
-        self.in_comment
-    }
-}
-
-impl Default for HtmlProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 #[cfg(test)]
@@ -78,10 +85,10 @@ mod tests {
     fn test_html_processor_multiline_comment() {
         let mut p = HtmlProcessor::new();
         assert_eq!(p.process("<!-- start"), 0);
-        assert!(p.is_in_comment());
+        assert!(p.is_in_block_comment());
         assert_eq!(p.process("middle"), 0);
         assert_eq!(p.process("end -->"), 0);
-        assert!(!p.is_in_comment());
+        assert!(!p.is_in_block_comment());
         assert_eq!(p.process("<p>text</p>"), 1);
     }
 

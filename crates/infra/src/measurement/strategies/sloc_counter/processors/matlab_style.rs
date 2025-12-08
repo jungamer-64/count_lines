@@ -5,9 +5,27 @@
 //! - 行コメント: `%`
 //! - ブロックコメント: `%{` ～ `%}`
 
+use super::super::processor_trait::LineProcessor;
+
 /// MATLAB プロセッサ
 pub struct MatlabProcessor {
     in_block_comment: bool,
+}
+
+impl Default for MatlabProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LineProcessor for MatlabProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.in_block_comment
+    }
 }
 
 impl MatlabProcessor {
@@ -35,17 +53,6 @@ impl MatlabProcessor {
         }
 
         1
-    }
-
-    #[cfg(test)]
-    pub fn is_in_block_comment(&self) -> bool {
-        self.in_block_comment
-    }
-}
-
-impl Default for MatlabProcessor {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
