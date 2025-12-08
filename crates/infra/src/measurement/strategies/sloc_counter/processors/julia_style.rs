@@ -29,7 +29,7 @@ impl LineProcessor for JuliaProcessor {
 }
 
 impl JuliaProcessor {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { block_comment_depth: 0 }
     }
 

@@ -29,7 +29,7 @@ impl LineProcessor for HtmlProcessor {
 }
 
 impl HtmlProcessor {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { in_comment: false }
     }
 

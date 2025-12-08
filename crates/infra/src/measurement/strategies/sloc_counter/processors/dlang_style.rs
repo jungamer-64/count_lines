@@ -32,7 +32,7 @@ impl LineProcessor for DLangProcessor {
 }
 
 impl DLangProcessor {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { block_comment_depth: 0, in_c_block: false }
     }
 

@@ -32,7 +32,7 @@ impl LineProcessor for SwiftProcessor {
 }
 
 impl SwiftProcessor {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             block_comment_depth: 0,
             in_block_comment: false,

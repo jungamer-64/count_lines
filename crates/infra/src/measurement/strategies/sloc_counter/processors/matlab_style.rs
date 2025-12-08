@@ -29,7 +29,7 @@ impl LineProcessor for MatlabProcessor {
 }
 
 impl MatlabProcessor {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { in_block_comment: false }
     }
 
