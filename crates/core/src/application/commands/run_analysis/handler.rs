@@ -61,7 +61,10 @@ impl<'a> RunAnalysisHandler<'a> {
     fn collect_entries(&self, config: &Config) -> Result<Vec<crate::domain::model::FileEntry>> {
         self.entries
             .collect(config)
-            .map_err(|e| ApplicationError::FileCollectionFailed(e.to_string()).into())
+            .map_err(|e| {
+                let reason = e.to_string();
+                ApplicationError::FileCollectionFailed { reason, source: Some(Box::new(e)) }.into()
+            })
     }
 
     fn measure_statistics(
@@ -72,7 +75,8 @@ impl<'a> RunAnalysisHandler<'a> {
         match self.processor.measure(entries, config) {
             Ok(outcome) => Ok(outcome),
             Err(err) if config.strict => {
-                Err(ApplicationError::MeasurementFailed(err.to_string()).into())
+                let reason = err.to_string();
+                Err(ApplicationError::MeasurementFailed { reason, source: Some(Box::new(err)) }.into())
             }
             Err(err) => {
                 self.log_warning(&format!("Measurement warning: {}", err));
@@ -95,7 +99,10 @@ impl<'a> RunAnalysisHandler<'a> {
     ) -> Result<()> {
         self.presenter
             .present(stats, config)
-            .map_err(|e| ApplicationError::PresentationFailed(e.to_string()).into())
+            .map_err(|e| {
+                let reason = e.to_string();
+                ApplicationError::PresentationFailed { reason, source: Some(Box::new(e)) }.into()
+            })
     }
 
     fn log_start(&self, config: &Config) {
@@ -189,7 +196,7 @@ mod tests {
 
     impl FileStatisticsPresenter for FailingPresenter {
         fn present(&self, _stats: &[FileStats], _config: &Config) -> Result<()> {
-            Err(InfrastructureError::OutputError("failed to present".into()).into())
+            Err(InfrastructureError::OutputError { message: "failed to present".into(), source: None }.into())
         }
     }
 
@@ -443,8 +450,8 @@ mod tests {
         let err = handler.handle(&command).unwrap_err();
 
         match err {
-            CountLinesError::Application(ApplicationError::MeasurementFailed(message)) => {
-                assert!(message.contains("boom"));
+            CountLinesError::Application(ApplicationError::MeasurementFailed { reason, source: _ }) => {
+                assert!(reason.contains("boom"));
             }
             other => panic!("unexpected error variant: {other:?}"),
         }
@@ -491,8 +498,8 @@ mod tests {
 
         let err = handler.handle(&command).unwrap_err();
         match err {
-            CountLinesError::Application(ApplicationError::FileCollectionFailed(message)) => {
-                assert!(message.contains("collect"));
+            CountLinesError::Application(ApplicationError::FileCollectionFailed { reason, source: _ }) => {
+                assert!(reason.contains("collect"));
             }
             other => panic!("unexpected error variant: {other:?}"),
         }
@@ -513,8 +520,8 @@ mod tests {
 
         let err = handler.handle(&command).unwrap_err();
         match err {
-            CountLinesError::Application(ApplicationError::PresentationFailed(message)) => {
-                assert!(message.contains("failed to present"));
+            CountLinesError::Application(ApplicationError::PresentationFailed { reason, source: _ }) => {
+                assert!(reason.contains("failed to present"));
             }
             other => panic!("unexpected error variant: {other:?}"),
         }

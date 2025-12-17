@@ -27,8 +27,7 @@ pub fn emit(stats: &[FileStats], config: &Config) -> Result<()> {
             #[cfg(not(feature = "yaml"))]
             {
                 Err(
-                    InfrastructureError::OutputError("YAML support disabled at build time".into())
-                        .into(),
+                    InfrastructureError::OutputError { message: "YAML support disabled at build time".into(), source: None }.into(),
                 )
             }
         }

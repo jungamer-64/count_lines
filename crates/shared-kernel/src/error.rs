@@ -57,14 +57,26 @@ pub type DomainResult<T> = std::result::Result<T, DomainError>;
 /// Application-layer errors.
 #[derive(Debug, Error)]
 pub enum ApplicationError {
-    #[error("Failed to collect file entries: {0}")]
-    FileCollectionFailed(String),
+    #[error("Failed to collect file entries: {reason}")]
+    FileCollectionFailed {
+        reason: String,
+        #[source]
+        source: Option<Box<CountLinesError>>,
+    },
 
-    #[error("Failed to measure file statistics: {0}")]
-    MeasurementFailed(String),
+    #[error("Failed to measure file statistics: {reason}")]
+    MeasurementFailed {
+        reason: String,
+        #[source]
+        source: Option<Box<CountLinesError>>,
+    },
 
-    #[error("Failed to present output: {0}")]
-    PresentationFailed(String),
+    #[error("Failed to present output: {reason}")]
+    PresentationFailed {
+        reason: String,
+        #[source]
+        source: Option<Box<CountLinesError>>,
+    },
 
     #[error("Command execution failed: {command} - {reason}")]
     CommandFailed { command: String, reason: String },
@@ -112,8 +124,12 @@ pub enum InfrastructureError {
     #[error("Measurement error: failed to measure '{path}': {reason}")]
     MeasurementError { path: PathBuf, reason: String },
 
-    #[error("Output error: {0}")]
-    OutputError(String),
+    #[error("Output error: {message}")]
+    OutputError {
+        message: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 }
 
 pub type InfraResult<T> = std::result::Result<T, InfrastructureError>;
@@ -139,7 +155,7 @@ pub type PresentationResult<T> = std::result::Result<T, PresentationError>;
 
 impl From<std::io::Error> for InfrastructureError {
     fn from(err: std::io::Error) -> Self {
-        Self::OutputError(err.to_string())
+        Self::OutputError { message: err.to_string(), source: Some(Box::new(err)) }
     }
 }
 

@@ -155,7 +155,7 @@ impl FileStatisticsProcessor for StubProcessor {
         match &self.outcome {
             ProcessorOutcome::Success(outcome) => Ok(outcome.clone()),
             ProcessorOutcome::Failure(message) => {
-                Err(ApplicationError::MeasurementFailed(message.clone()).into())
+                Err(ApplicationError::MeasurementFailed { reason: message.clone(), source: None }.into())
             }
         }
     }

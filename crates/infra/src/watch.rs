@@ -61,12 +61,12 @@ impl WatchService {
         let mut watcher: RecommendedWatcher = notify::recommended_watcher(move |res| {
             let _ = tx.send(res);
         })
-        .map_err(|err| InfrastructureError::OutputError(err.to_string()))?;
+        .map_err(|err| InfrastructureError::OutputError { message: err.to_string(), source: Some(Box::new(err)) })?;
 
         for path in &config.paths {
             watcher
                 .watch(path, RecursiveMode::Recursive)
-                .map_err(|err| InfrastructureError::OutputError(err.to_string()))?;
+                .map_err(|err| InfrastructureError::OutputError { message: err.to_string(), source: Some(Box::new(err)) })?;
         }
 
         Ok((watcher, rx))
@@ -184,8 +184,7 @@ impl WatchService {
         F: FnMut() -> Result<()>,
     {
         Err(
-            InfrastructureError::OutputError("watch feature disabled at compile time".to_string())
-                .into(),
+            InfrastructureError::OutputError { message: "watch feature disabled at compile time".to_string(), source: None }.into(),
         )
     }
 }

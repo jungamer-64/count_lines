@@ -1319,9 +1319,8 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
                     .case_insensitive(true)
                     .build()
                     .map_err(|err| {
-                        InfrastructureError::OutputError(format!(
-                            "invalid glob pattern '{pattern}': {err}"
-                        ))
+                        let message = format!("invalid glob pattern '{pattern}': {err}");
+                        InfrastructureError::OutputError { message, source: Some(Box::new(err)) }
                     })
                     .map(|glob| glob.compile_matcher())
             })
@@ -1335,9 +1334,8 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
             .map(|pattern| {
                 Glob::new(pattern)
                     .map_err(|err| {
-                        InfrastructureError::OutputError(format!(
-                            "invalid glob pattern '{pattern}': {err}"
-                        ))
+                        let message = format!("invalid glob pattern '{pattern}': {err}");
+                        InfrastructureError::OutputError { message, source: Some(Box::new(err)) }
                     })
                     .map(|glob| glob.compile_matcher())
             })

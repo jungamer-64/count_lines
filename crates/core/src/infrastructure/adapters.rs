@@ -33,7 +33,7 @@ pub struct OutputEmitter;
 impl FileStatisticsPresenter for OutputEmitter {
     fn present(&self, stats: &[FileStats], config: &Config) -> Result<()> {
         crate::infrastructure::io::output::emit(stats, config)
-            .map_err(|err| InfrastructureError::OutputError(err.to_string()).into())
+            .map_err(|err| InfrastructureError::OutputError { message: err.to_string(), source: Some(Box::new(err)) }.into())
     }
 }
 
