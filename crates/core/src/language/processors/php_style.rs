@@ -4,20 +4,19 @@
 //! PHP は C系の `//, /* */` に加えて、Perl/Shell系の `#` 行コメントもサポートします。
 //! ヒアドキュメント (Heredoc) `<<<` もサポートします。
 
+use alloc::string::ToString;
 use regex::Regex;
-use std::sync::OnceLock;
 
 use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string;
 
-static PHP_HEREDOC_RE: OnceLock<Regex> = OnceLock::new();
-
 /// PHP プロセッサ
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct PhpProcessor {
     in_block_comment: bool,
     heredoc_ctx: HeredocContext,
+    heredoc_re: Regex,
 }
 
 impl LineProcessor for PhpProcessor {
@@ -32,11 +31,16 @@ impl LineProcessor for PhpProcessor {
 
 impl PhpProcessor {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             in_block_comment: false,
             heredoc_ctx: HeredocContext::new(),
+            heredoc_re: Regex::new(r"<<<(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap(),
         }
+    }
+
+    pub fn default() -> Self {
+        Self::new()
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
@@ -82,8 +86,7 @@ impl PhpProcessor {
         let line_slash = find_outside_string(line, "//");
         let line_hash = find_outside_string(line, "#");
 
-        let re = PHP_HEREDOC_RE
-            .get_or_init(|| Regex::new(r"<<<(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap());
+        // Regex is in self.heredoc_re
 
         // Find earliest comment
         let first_comment = [block_start, line_slash, line_hash]
@@ -93,7 +96,7 @@ impl PhpProcessor {
 
         // Check for heredoc start outside strings
         // And BEFORE any comment
-        for caps in re.captures_iter(line) {
+        for caps in self.heredoc_re.captures_iter(line) {
             if let Some(matches) = caps.get(0) {
                 let start = matches.start();
                 if !is_inside_string(line, start) {

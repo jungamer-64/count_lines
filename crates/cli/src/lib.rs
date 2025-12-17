@@ -9,7 +9,6 @@ pub mod config;
 pub mod engine;
 pub mod error;
 pub mod filesystem;
-pub mod language;
 pub mod options;
 pub mod parsers;
 pub mod presentation;

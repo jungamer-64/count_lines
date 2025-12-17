@@ -10,7 +10,9 @@ pub use processor_trait::{LineProcessor, LineStats};
 use processors::*;
 use string_utils::StringSkipOptions;
 
-use std::collections::HashMap;
+use alloc::boxed::Box;
+use alloc::string::String;
+use hashbrown::HashMap;
 
 fn new_box<T: LineProcessor + 'static>(p: T) -> Box<dyn LineProcessor> {
     Box::new(p)

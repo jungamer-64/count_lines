@@ -39,7 +39,7 @@ pub struct FilterConfig {
 
     pub include_patterns: Vec<String>,
     pub exclude_patterns: Vec<String>,
-    pub map_ext: std::collections::HashMap<String, String>,
+    pub map_ext: hashbrown::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]

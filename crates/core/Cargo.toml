@@ -15,7 +15,7 @@ regex = { version = "1", default-features = false, features = [
 # Ideally we want NO std. 
 # "regex" crate with `default-features = false` and `features = ["perf"]` uses `alloc` but not `std`.
 
-hashbrown = "0.14"
+hashbrown = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
 
 [dev-dependencies]

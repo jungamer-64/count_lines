@@ -6,21 +6,20 @@
 //! - POD: `=pod`, `=head1` 等 ～ `=cut` (行頭必須)
 //! - ヒアドキュメント: `<<EOF`, `<<'EOF'`, `<<"EOF"`
 
+use alloc::string::ToString;
 use regex::Regex;
-use std::sync::OnceLock;
-
-static PERL_HEREDOC_RE: OnceLock<Regex> = OnceLock::new();
 
 use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 use super::simple_hash_style::find_hash_outside_simple_string;
 
 /// Perlプロセッサ
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct PerlProcessor {
     in_pod: bool,
     line_count: usize,
     heredoc_ctx: HeredocContext,
+    heredoc_re: Regex,
 }
 
 impl LineProcessor for PerlProcessor {
@@ -35,12 +34,17 @@ impl LineProcessor for PerlProcessor {
 
 impl PerlProcessor {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             in_pod: false,
             line_count: 0,
             heredoc_ctx: HeredocContext::new(),
+            heredoc_re: Regex::new(r"<<\s*(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap(),
         }
+    }
+
+    pub fn default() -> Self {
+        Self::new()
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
@@ -91,10 +95,7 @@ impl PerlProcessor {
         // ヒアドキュメント開始検出
         // Perl: <<\s*(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)
 
-        let re = PERL_HEREDOC_RE
-            .get_or_init(|| Regex::new(r"<<\s*(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap());
-
-        for caps in re.captures_iter(line) {
+        for caps in self.heredoc_re.captures_iter(line) {
             if let Some(matches) = caps.get(0) {
                 let start = matches.start();
                 if !is_inside_string(line, start) {

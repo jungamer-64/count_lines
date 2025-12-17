@@ -3,6 +3,7 @@
 //! Handles //, /* */, "...", '...', `...` (template literal with ${}), /.../ (regex)
 
 use super::super::processor_trait::LineProcessor;
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum JsScope {

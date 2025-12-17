@@ -390,10 +390,10 @@ mod tests {
     fn test_very_long_lines() {
         let mut p = CStyleProcessor::new(StringSkipOptions::default());
         // Very long comment
-        let long_comment = format!("// {}", "x".repeat(10000));
+        let long_comment = alloc::format!("// {}", "x".repeat(10000));
         assert_eq!(p.process(&long_comment), 0);
         // Very long code
-        let long_code = format!("int {} = 1;", "x".repeat(10000));
+        let long_code = alloc::format!("int {} = 1;", "x".repeat(10000));
         assert_eq!(p.process(&long_code), 1);
     }
 

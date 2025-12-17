@@ -7,8 +7,10 @@
 //! - 複合プレフィックス: `fr"..."`, `rf"..."` 等
 //! - shebang行の除外
 
-use std::iter::Peekable;
-use std::str::CharIndices;
+use core::iter::Peekable;
+use core::str::CharIndices;
+
+use alloc::vec::Vec;
 
 use super::super::processor_trait::LineProcessor;
 

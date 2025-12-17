@@ -3,6 +3,9 @@
 //!
 //! 複数行にわたる文字リテラル（ヒアドキュメント）の状態管理を提供します。
 
+use alloc::string::String;
+use alloc::vec::Vec;
+
 /// ヒアドキュメントのエントリ情報
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeredocEntry {
@@ -79,6 +82,7 @@ impl HeredocContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::string::ToString;
 
     #[test]
     fn test_heredoc_context() {

@@ -469,10 +469,10 @@ mod tests {
     fn test_very_long_lines() {
         let p = SimplePrefixProcessor::vhdl();
         // Very long comment
-        let long_comment = format!("-- {}", "x".repeat(10000));
+        let long_comment = alloc::format!("-- {}", "x".repeat(10000));
         assert_eq!(p.process(&long_comment), 0);
         // Very long code
-        let long_code = format!("signal {} : integer;", "x".repeat(10000));
+        let long_code = alloc::format!("signal {} : integer;", "x".repeat(10000));
         assert_eq!(p.process(&long_code), 1);
     }
 
@@ -623,13 +623,13 @@ mod tests {
     fn test_stress_repetition() {
         let p = SimplePrefixProcessor::vhdl();
         // Many dashes
-        let many_dashes = format!("--{}", "-".repeat(1000));
+        let many_dashes = alloc::format!("--{}", "-".repeat(1000));
         assert_eq!(p.process(&many_dashes), 0);
         // Many spaces before prefix
-        let many_spaces = format!("{}-- comment", " ".repeat(1000));
+        let many_spaces = alloc::format!("{}-- comment", " ".repeat(1000));
         assert_eq!(p.process(&many_spaces), 0);
         // Many tabs before prefix
-        let many_tabs = format!("{}-- comment", "\t".repeat(100));
+        let many_tabs = alloc::format!("{}-- comment", "\t".repeat(100));
         assert_eq!(p.process(&many_tabs), 0);
     }
 

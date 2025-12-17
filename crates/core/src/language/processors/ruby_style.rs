@@ -7,10 +7,9 @@
 //! - ヒアドキュメント: `<<EOF`, `<<-EOF`, `<<~EOF`
 //! - 多重行文字列・変数の埋め込み (`#{...}`) 対応
 
+use alloc::string::ToString;
+use alloc::vec::Vec;
 use regex::Regex;
-use std::sync::OnceLock;
-
-static RUBY_HEREDOC_RE: OnceLock<Regex> = OnceLock::new();
 
 use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
@@ -22,11 +21,12 @@ enum RubyScope {
 }
 
 /// Rubyプロセッサ
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct RubyProcessor {
     in_embedded_doc: bool,
     heredoc_ctx: HeredocContext,
     stack: Vec<RubyScope>,
+    heredoc_re: Regex,
 }
 
 impl LineProcessor for RubyProcessor {
@@ -42,7 +42,17 @@ impl LineProcessor for RubyProcessor {
 impl RubyProcessor {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            in_embedded_doc: false,
+            heredoc_ctx: HeredocContext::default(),
+            stack: Vec::new(),
+            heredoc_re: Regex::new(r"^<<([-~]?)(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap(),
+        }
+    }
+
+    /// Provide a default implementation manually since Regex doesn't impl Default
+    pub fn default() -> Self {
+        Self::new()
     }
 
     fn is_in_string_scope(&self) -> bool {
@@ -82,9 +92,7 @@ impl RubyProcessor {
         let mut has_code_token = false;
         let mut chars = line.char_indices().peekable();
 
-        let re = RUBY_HEREDOC_RE.get_or_init(|| {
-            Regex::new(r"^<<([-~]?)(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap()
-        });
+        // Regex is now in self.heredoc_re
 
         while let Some((i, c)) = chars.next() {
             // エスケープ処理
@@ -150,7 +158,7 @@ impl RubyProcessor {
                         && *next_c == '<'
                     {
                         // "<<" Detect
-                        if let Some(caps) = re.captures(&line[i..]) {
+                        if let Some(caps) = self.heredoc_re.captures(&line[i..]) {
                             let indent_flag = caps.get(1).map_or("", |m| m.as_str());
                             let allow_indent = indent_flag == "-" || indent_flag == "~";
                             let ident = caps

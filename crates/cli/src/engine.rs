@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
-use crate::language::LineProcessor;
 use crate::stats::{FileStats, RunResult};
+use count_lines_core::language::LineProcessor;
 
 /// Run the file counting engine.
 ///
@@ -103,22 +103,19 @@ fn process_content<R: BufRead>(reader: &mut R, config: &Config, path: &Path) -> 
 }
 
 /// SLOCカウント用の行ベース処理
+/// SLOCカウント用の行ベース処理
 fn process_content_sloc<R: BufRead>(
     reader: &mut R,
     config: &Config,
     path: &Path,
 ) -> Result<FileStats> {
     let mut stats = FileStats::new(path.to_path_buf());
-    let mut lines = 0;
-    let mut chars = 0;
-    let mut words = 0;
-    let mut sloc = 0;
 
     let count_words = config.count_words;
     let count_newlines = config.count_newlines_in_chars;
 
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let mut processor = crate::language::get_processor(ext, &config.filter.map_ext);
+    let mut processor = count_lines_core::language::get_processor(ext, &config.filter.map_ext);
 
     let mut line_buf = Vec::new();
 
@@ -127,7 +124,7 @@ fn process_content_sloc<R: BufRead>(
         match reader.read_until(b'\n', &mut line_buf) {
             Ok(0) => break,
             Ok(_) => {
-                lines += 1;
+                stats.lines += 1;
 
                 // Use lossy conversion to support non-UTF8 text files (mostly)
                 let cow = String::from_utf8_lossy(&line_buf);
@@ -136,23 +133,32 @@ fn process_content_sloc<R: BufRead>(
                 // Single-pass processing for chars, words, and SLOC
                 let l_stats = processor.process_line_stats(line_str, count_words, count_newlines);
 
-                chars += l_stats.chars;
-                sloc += l_stats.sloc;
+                stats.chars += l_stats.chars;
+                if let Some(s) = stats.sloc {
+                    stats.sloc = Some(s + l_stats.sloc);
+                } else {
+                    stats.sloc = Some(l_stats.sloc);
+                }
 
                 if count_words {
-                    words += l_stats.words;
+                    if let Some(w) = stats.words {
+                        stats.words = Some(w + l_stats.words);
+                    } else {
+                        stats.words = Some(l_stats.words);
+                    }
                 }
             }
             Err(e) => return Err(AppError::Io(e)),
         }
     }
 
-    stats.lines = lines;
-    stats.chars = chars;
-    if count_words {
-        stats.words = Some(words);
+    // Initialize Option fields if they were used
+    if stats.sloc.is_none() {
+        stats.sloc = Some(0);
     }
-    stats.sloc = Some(sloc);
+    if count_words && stats.words.is_none() {
+        stats.words = Some(0);
+    }
 
     Ok(stats)
 }

@@ -7,24 +7,34 @@
 //!
 //! ヒアドキュメント内の `#` はコメントとして扱われません。
 
+use alloc::string::{String, ToString};
 use regex::Regex;
-use std::sync::OnceLock;
 
 use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 use super::simple_hash_style::find_hash_outside_simple_string;
 
 /// Shellプロセッサ
-#[derive(Default, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ShellProcessor {
     heredoc_ctx: HeredocContext,
     line_count: usize,
+    heredoc_re: Regex,
 }
 
 impl ShellProcessor {
     #[must_use]
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            heredoc_ctx: HeredocContext::default(),
+            line_count: 0,
+            heredoc_re: Regex::new(r"<<(-?)\s*(?:([^\s\x22'>|&;]+)|'([^']+)'|\x22([^\x22]+)\x22)")
+                .unwrap(),
+        }
+    }
+
+    pub fn default() -> Self {
+        Self::new()
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
@@ -71,7 +81,7 @@ impl ShellProcessor {
 
         // ヒアドキュメント検出 (<<[-] ["']?WORD["']?)
 
-        if let Some(captures) = find_heredoc_start(effective_line) {
+        if let Some(captures) = self.find_heredoc_start(effective_line) {
             let allow_indent = captures.allow_indent;
             let ident = captures.ident;
             self.heredoc_ctx.push(ident, allow_indent);
@@ -94,6 +104,32 @@ impl ShellProcessor {
 
         1
     }
+    fn find_heredoc_start(&self, line: &str) -> Option<HeredocStart> {
+        // Regex pattern using alternation to avoid backreferences:
+        // <<(-?)\s*(?:([^\s"'>|&;]+)|'([^']+)'|"([^"]+)")
+
+        // 見つかった位置が文字列内かチェック
+        for caps in self.heredoc_re.captures_iter(line) {
+            if let Some(matches) = caps.get(0) {
+                let start = matches.start();
+                if !is_inside_string(line, start) {
+                    let allow_indent = caps.get(1).is_some_and(|m| m.as_str() == "-");
+                    let ident = caps
+                        .get(2)
+                        .or_else(|| caps.get(3))
+                        .or_else(|| caps.get(4))
+                        .unwrap()
+                        .as_str()
+                        .to_string();
+                    return Some(HeredocStart {
+                        ident,
+                        allow_indent,
+                    });
+                }
+            }
+        }
+        None
+    }
 }
 
 impl LineProcessor for ShellProcessor {
@@ -114,37 +150,6 @@ impl LineProcessor for ShellProcessor {
 struct HeredocStart {
     ident: String,
     allow_indent: bool,
-}
-
-fn find_heredoc_start(line: &str) -> Option<HeredocStart> {
-    // Regex pattern using alternation to avoid backreferences:
-    // <<(-?)\s*(?:([^\s"'>|&;]+)|'([^']+)'|"([^"]+)")
-    static RE: OnceLock<Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| {
-        Regex::new(r"<<(-?)\s*(?:([^\s\x22'>|&;]+)|'([^']+)'|\x22([^\x22]+)\x22)").unwrap()
-    });
-
-    // 見つかった位置が文字列内かチェック
-    for caps in re.captures_iter(line) {
-        if let Some(matches) = caps.get(0) {
-            let start = matches.start();
-            if !is_inside_string(line, start) {
-                let allow_indent = caps.get(1).is_some_and(|m| m.as_str() == "-");
-                let ident = caps
-                    .get(2)
-                    .or_else(|| caps.get(3))
-                    .or_else(|| caps.get(4))
-                    .unwrap()
-                    .as_str()
-                    .to_string();
-                return Some(HeredocStart {
-                    ident,
-                    allow_indent,
-                });
-            }
-        }
-    }
-    None
 }
 
 /// 指定位置が文字列 ("..." or '...') の中にあるか判定

@@ -1,5 +1,3 @@
-use alloc::string::String;
-use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
 /// Pure analysis result, independent of file system metadata.

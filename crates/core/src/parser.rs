@@ -1,7 +1,6 @@
 use crate::config::AnalysisConfig;
 use crate::language::get_processor;
 use crate::stats::AnalysisResult;
-use alloc::string::String;
 
 /// Count lines/chars/words/sloc in a byte slice.
 ///
@@ -24,7 +23,7 @@ pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> An
 
     // 2. Convert to lossy string
     // We use lossy to handle potential non-UTF8 text files gracefully.
-    let text = String::from_utf8_lossy(input);
+    let text = crate::language::string_utils::from_utf8_lossy(input);
 
     // 3. Process
     let mut processor = get_processor(extension, &config.map_ext);

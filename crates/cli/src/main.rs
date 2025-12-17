@@ -1,8 +1,8 @@
 use clap::Parser;
-use count_lines::args::Args;
-use count_lines::config::Config;
-use count_lines::engine;
-use count_lines::presentation;
+use count_lines_cli::args::Args;
+use count_lines_cli::config::Config;
+use count_lines_cli::engine;
+use count_lines_cli::presentation;
 
 use std::process::ExitCode;
 
@@ -11,7 +11,7 @@ fn main() -> ExitCode {
     let config = Config::from(args);
 
     if let Some((old, new)) = &config.compare {
-        match count_lines::compare::compare_snapshots(old, new) {
+        match count_lines_cli::compare::compare_snapshots(old, new) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("Comparison Error: {e}");
@@ -19,7 +19,7 @@ fn main() -> ExitCode {
             }
         }
     } else if config.watch {
-        if let Err(e) = count_lines::watch::watch_paths(&config) {
+        if let Err(e) = count_lines_cli::watch::watch_paths(&config) {
             eprintln!("Watch Error: {e}");
             ExitCode::FAILURE
         } else {

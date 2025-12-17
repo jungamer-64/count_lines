@@ -21,6 +21,8 @@
 //! }
 //! ```
 
+use alloc::boxed::Box;
+
 /// 行統計情報
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct LineStats {
