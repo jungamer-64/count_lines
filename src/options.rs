@@ -21,7 +21,7 @@ pub enum WatchOutput {
     Jsonl,
 }
 
-/// 出力モード（summary_only/total_onlyの代替）
+/// 出力モード（`summary_only`/`total_only`の代替）
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, ValueEnum, Serialize, Deserialize)]
 #[value(rename_all = "kebab-case")]
 pub enum OutputMode {
