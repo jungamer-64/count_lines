@@ -17,7 +17,7 @@ pub enum CommentStyle {
     /// 単純な Hash スタイル (#) - Shell, YAML, Config系等
     /// 複雑な文字列処理不要、# のみでコメント判定
     SimpleHash,
-    /// PowerShell: # と <# #>
+    /// `PowerShell`: # と <# #>
     PowerShell,
     /// Lua: -- と --[[ ]]
     Lua,

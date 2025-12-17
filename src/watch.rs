@@ -44,12 +44,12 @@ pub fn watch_paths(config: &Config) -> Result<()> {
 
             // Clear screen and re-run
             presentation::print_clear_screen(&config.watch_output);
-            run_cycle(config)?;
+            run_cycle(config);
         }
     }
 }
 
-fn run_cycle(config: &Config) -> Result<()> {
+fn run_cycle(config: &Config) {
     // Clear screen for full output
     if matches!(config.watch_output, WatchOutput::Full) {
         // ANSI clear screen
@@ -68,5 +68,4 @@ fn run_cycle(config: &Config) -> Result<()> {
         }
         Err(e) => eprintln!("Error in watch cycle: {e}"),
     }
-    Ok(())
 }

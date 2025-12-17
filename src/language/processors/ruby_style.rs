@@ -10,6 +10,8 @@
 use regex::Regex;
 use std::sync::OnceLock;
 
+static RUBY_HEREDOC_RE: OnceLock<Regex> = OnceLock::new();
+
 use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 
@@ -76,11 +78,7 @@ impl RubyProcessor {
         let mut has_code_token = false;
         let mut chars = line.char_indices().peekable();
 
-        // 正規表現の準備 (Heredoc開始検出用)
-        // <<([-~]?)(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)
-        // 行の特定位置からマッチさせるために ^ を付与
-        static RE: OnceLock<Regex> = OnceLock::new();
-        let re = RE.get_or_init(|| {
+        let re = RUBY_HEREDOC_RE.get_or_init(|| {
             Regex::new(r"^<<([-~]?)(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap()
         });
 
@@ -143,15 +141,11 @@ impl RubyProcessor {
                         && matches!(self.stack.last(), Some(RubyScope::Interpolation))
                     {
                         self.stack.pop();
-                    }
-                    // Heredoc開始 check (<<)
-                    else if c == '<'
+                    } else if c == '<'
                         && let Some((_, next_c)) = chars.peek()
                         && *next_c == '<'
                     {
                         // "<<" Detect
-                        // ここで正規表現チェックを行う
-                        // Regexは line[i..] に対してマッチするか？
                         if let Some(caps) = re.captures(&line[i..]) {
                             let indent_flag = caps.get(1).map_or("", |m| m.as_str());
                             let allow_indent = indent_flag == "-" || indent_flag == "~";

@@ -5,7 +5,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-/// Safely convert usize to isize, capping at isize::MAX to avoid wrap-around
+/// Safely convert usize to isize, capping at `isize::MAX` to avoid wrap-around
 fn to_isize(value: usize) -> isize {
     isize::try_from(value).unwrap_or(isize::MAX)
 }
@@ -123,13 +123,11 @@ fn compare_stats<'a>(
     // Sort by path for consistent output
     diffs.sort_by(|a, b| {
         let p1 = match a {
-            FileDiff::Added(s) => &s.path,
-            FileDiff::Removed(s) => &s.path,
+            FileDiff::Added(s) | FileDiff::Removed(s) => &s.path,
             FileDiff::Modified { path, .. } => path,
         };
         let p2 = match b {
-            FileDiff::Added(s) => &s.path,
-            FileDiff::Removed(s) => &s.path,
+            FileDiff::Added(s) | FileDiff::Removed(s) => &s.path,
             FileDiff::Modified { path, .. } => path,
         };
         p1.cmp(p2)

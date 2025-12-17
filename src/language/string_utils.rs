@@ -166,7 +166,7 @@ impl StringSkipOptions {
 
     /// Objective-C 用オプション
     ///
-    /// @"..." 形式の NSString リテラルがあるが、
+    /// @"..." 形式の `NSString` リテラルがあるが、
     /// C# Verbatim String とは異なりエスケープ可能
     pub fn objc() -> Self {
         Self {
@@ -508,11 +508,12 @@ pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
 ///
 /// 閉じクォートが12文字以内に見つからない場合はライフタイムとみなしNoneを返す
 pub fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
+    const MAX_CHAR_LITERAL_LEN: usize = 12; // '\u{10FFFF}' + 余裕
+
     if bytes.is_empty() || bytes[0] != b'\'' {
         return None;
     }
 
-    const MAX_CHAR_LITERAL_LEN: usize = 12; // '\u{10FFFF}' + 余裕
     let search_limit = bytes.len().min(MAX_CHAR_LITERAL_LEN);
 
     let mut i = 1;

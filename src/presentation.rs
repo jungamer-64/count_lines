@@ -43,7 +43,7 @@ pub fn print_results(stats: &[FileStats], config: &Config) {
         OutputFormat::Md => print_markdown(&stats, config),
         OutputFormat::Csv => print_sv(&stats, config, ","),
         OutputFormat::Tsv => print_sv(&stats, config, "\t"),
-        _ => print_table(&stats, config),
+        OutputFormat::Table => print_table(&stats, config),
     }
 }
 
@@ -136,13 +136,14 @@ fn print_jsonl(stats: &[FileStats]) {
         "words": total_words,
         "sloc": total_sloc,
     });
-    println!("{}", total_obj);
+    println!("{total_obj}");
 }
 
 fn print_markdown(stats: &[FileStats], config: &Config) {
     println!("### File Statistics");
     println!();
 
+    use std::fmt::Write;
     let mut header = String::from("| Lines |");
     let mut separator = String::from("|:---:|");
 
@@ -162,26 +163,26 @@ fn print_markdown(stats: &[FileStats], config: &Config) {
     header.push_str(" File |");
     separator.push_str(":---|");
 
-    println!("{}", header);
-    println!("{}", separator);
+    println!("{header}");
+    println!("{separator}");
 
     for s in stats {
         let mut row = format!("| {} |", s.lines);
 
         if config.count_sloc {
-            row.push_str(&format!(" {} |", s.sloc.unwrap_or(0)));
+            write!(row, " {} |", s.sloc.unwrap_or(0)).unwrap();
         }
 
-        row.push_str(&format!(" {} |", s.chars));
+        write!(row, " {} |", s.chars).unwrap();
 
         if config.count_words {
-            row.push_str(&format!(" {} |", s.words.unwrap_or(0)));
+            write!(row, " {} |", s.words.unwrap_or(0)).unwrap();
         }
 
         let path_str = s.path.display().to_string().replace('|', "\\|");
-        row.push_str(&format!(" {} |", path_str));
+        write!(row, " {path_str} |").unwrap();
 
-        println!("{}", row);
+        println!("{row}");
     }
     println!();
 }
@@ -224,12 +225,12 @@ fn print_sv(stats: &[FileStats], config: &Config, delimiter: &str) {
         let path = s.path.display().to_string();
         if delimiter == "," && (path.contains(',') || path.contains('"') || path.contains('\n')) {
             let escaped = path.replace('"', "\"\"");
-            row.push_str(&format!("\"{}\"", escaped));
+            write!(row, "\"{escaped}\"").unwrap();
         } else {
             row.push_str(&path);
         }
 
-        println!("{}", row);
+        println!("{row}");
     }
 
     if config.total_row {
@@ -238,7 +239,7 @@ fn print_sv(stats: &[FileStats], config: &Config, delimiter: &str) {
         let total_chars: usize = stats.iter().map(|s| s.chars).sum();
         let total_words: usize = stats.iter().filter_map(|s| s.words).sum();
 
-        let mut row = format!("{}", total_lines);
+        let mut row = format!("{total_lines}");
         if config.count_sloc {
             row.push_str(delimiter);
             row.push_str(&total_sloc.to_string());
@@ -254,6 +255,6 @@ fn print_sv(stats: &[FileStats], config: &Config, delimiter: &str) {
 
         row.push_str(delimiter);
         row.push_str("TOTAL");
-        println!("{}", row);
+        println!("{row}");
     }
 }

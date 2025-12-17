@@ -9,6 +9,8 @@
 use regex::Regex;
 use std::sync::OnceLock;
 
+static PERL_HEREDOC_RE: OnceLock<Regex> = OnceLock::new();
+
 use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 use super::simple_hash_style::find_hash_outside_simple_string;
@@ -85,9 +87,8 @@ impl PerlProcessor {
         // ヒアドキュメント開始検出
         // Perl: <<\s*(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)
 
-        static RE: OnceLock<Regex> = OnceLock::new();
-        let re =
-            RE.get_or_init(|| Regex::new(r"<<\s*(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap());
+        let re = PERL_HEREDOC_RE
+            .get_or_init(|| Regex::new(r"<<\s*(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap());
 
         for caps in re.captures_iter(line) {
             if let Some(matches) = caps.get(0) {
@@ -96,8 +97,8 @@ impl PerlProcessor {
                     // Group 1: unquoted, Group 2: single, Group 3: double
                     let ident = caps
                         .get(1)
-                        .or(caps.get(2))
-                        .or(caps.get(3))
+                        .or_else(|| caps.get(2))
+                        .or_else(|| caps.get(3))
                         .unwrap()
                         .as_str()
                         .to_string();

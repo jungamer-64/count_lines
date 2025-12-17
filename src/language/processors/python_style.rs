@@ -112,9 +112,7 @@ impl PythonProcessor {
 
         // Check for string end
         if c == quote_char {
-            if let Some(ended) = self.check_string_end(chars, state)
-                && ended
-            {
+            if Self::check_string_end(chars, state) {
                 self.stack.pop();
                 if !state.is_doc_comment {
                     has_code_token = true;
@@ -130,7 +128,7 @@ impl PythonProcessor {
 
         // Escape handling
         if c == '\\' {
-            has_code_token = self.handle_escape(chars, state, has_code_token);
+            has_code_token = Self::handle_escape(chars, state, has_code_token);
             return has_code_token;
         }
 
@@ -148,12 +146,8 @@ impl PythonProcessor {
     }
 
     /// 文字列終端のチェック
-    /// Returns Some(true) if string ended, Some(false) if quote matched but not triple end, None if no quote match
-    fn check_string_end(
-        &self,
-        chars: &mut Peekable<CharIndices<'_>>,
-        state: &PythonStringState,
-    ) -> Option<bool> {
+    /// Returns true if string ended, false if quote matched but not triple end.
+    fn check_string_end(chars: &mut Peekable<CharIndices<'_>>, state: &PythonStringState) -> bool {
         let quote_char = state.quote as char;
 
         if state.triple {
@@ -162,21 +156,20 @@ impl PythonProcessor {
                 chars.next(); // consume 2nd
                 if chars.peek().is_some_and(|&(_, c3)| c3 == quote_char) {
                     chars.next(); // consume 3rd
-                    return Some(true); // Triple quote end
+                    return true; // Triple quote end
                 }
                 // Only 2 quotes - not end of triple
-                return Some(false);
+                return false;
             }
-            Some(false)
+            false
         } else {
             // Single quote end
-            Some(true)
+            true
         }
     }
 
     /// エスケープ文字の処理
     fn handle_escape(
-        &self,
         chars: &mut Peekable<CharIndices<'_>>,
         state: &PythonStringState,
         mut has_code_token: bool,
@@ -258,7 +251,7 @@ impl PythonProcessor {
         let is_prefix = matches!(lower_c, 'f' | 'r' | 'u' | 'b');
 
         if c == '"' || c == '\'' || is_prefix {
-            if let Some(string_state) = self.try_parse_string_start(chars, c, has_code_token) {
+            if let Some(string_state) = Self::try_parse_string_start(chars, c, has_code_token) {
                 self.stack.push(PythonScope::String(string_state.clone()));
                 if !string_state.is_doc_comment {
                     has_code_token = true;
@@ -278,12 +271,11 @@ impl PythonProcessor {
 
     /// 文字列開始のパース試行
     fn try_parse_string_start(
-        &self,
         chars: &mut Peekable<CharIndices<'_>>,
         first_char: char,
         has_code_token: bool,
     ) -> Option<PythonStringState> {
-        let prefix = self.parse_prefix(chars, first_char)?;
+        let prefix = Self::parse_prefix(chars, first_char)?;
         let quote = prefix.quote?;
 
         // Check for triple quote
@@ -315,7 +307,6 @@ impl PythonProcessor {
 
     /// 文字列プレフィックスのパース
     fn parse_prefix(
-        &self,
         chars: &mut Peekable<CharIndices<'_>>,
         first_char: char,
     ) -> Option<PrefixParseResult> {

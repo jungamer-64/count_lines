@@ -11,6 +11,8 @@ use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string;
 
+static PHP_HEREDOC_RE: OnceLock<Regex> = OnceLock::new();
+
 /// PHP プロセッサ
 #[derive(Default, Clone, Debug)]
 pub struct PhpProcessor {
@@ -71,17 +73,13 @@ impl PhpProcessor {
             return 0;
         }
 
-        // PHP Heredoc: <<<['"]?IDENT['"]?
-        // Reuse Perl/Shell style regex logic without backreferences
-        // <<< (?: (IDENT) | 'IDENT' | "IDENT" )
-        static RE: OnceLock<Regex> = OnceLock::new();
-        let re =
-            RE.get_or_init(|| Regex::new(r"<<<(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap());
-
         // Find comment start positions
         let block_start = find_outside_string(line, "/*");
         let line_slash = find_outside_string(line, "//");
         let line_hash = find_outside_string(line, "#");
+
+        let re = PHP_HEREDOC_RE
+            .get_or_init(|| Regex::new(r"<<<(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap());
 
         // Find earliest comment
         let first_comment = [block_start, line_slash, line_hash]

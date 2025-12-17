@@ -235,18 +235,15 @@ fn process_content_streaming<R: BufRead>(
 
         // Count words with UTF-8 validation
         if count_words {
-            match std::str::from_utf8(buf) {
-                Ok(text) => {
-                    // Unicode-aware word counting using split_whitespace
-                    words += text.split_whitespace().count();
-                }
-                Err(_) => {
-                    // Invalid UTF-8 detected - mark as binary and stop processing
-                    stats.is_binary = true;
-                    stats.lines = lines;
-                    stats.chars = chars;
-                    return Ok(stats);
-                }
+            if let Ok(text) = std::str::from_utf8(buf) {
+                // Unicode-aware word counting using split_whitespace
+                words += text.split_whitespace().count();
+            } else {
+                // Invalid UTF-8 detected - mark as binary and stop processing
+                stats.is_binary = true;
+                stats.lines = lines;
+                stats.chars = chars;
+                return Ok(stats);
             }
         }
 
@@ -256,9 +253,10 @@ fn process_content_streaming<R: BufRead>(
 
     // 末尾に改行がない場合の行カウント補正
     if let Some(b) = last_byte
-        && b != b'\n' {
-            lines += 1;
-        }
+        && b != b'\n'
+    {
+        lines += 1;
+    }
 
     stats.lines = lines;
     stats.chars = chars;
@@ -281,9 +279,14 @@ mod tests {
         write!(file, "abc \nde \r\nfg ").unwrap();
         let path = file.path().to_path_buf();
 
-        let mut config = Config::default();
-        config.count_newlines_in_chars = false;
-        config.filter.allow_ext.clear();
+        let config = Config {
+            count_newlines_in_chars: false,
+            filter: crate::config::FilterConfig {
+                allow_ext: vec![],
+                ..crate::config::FilterConfig::default()
+            },
+            ..Config::default()
+        };
 
         let meta = std::fs::metadata(&path).unwrap();
         let stats = process_file((path, meta), &config).unwrap();

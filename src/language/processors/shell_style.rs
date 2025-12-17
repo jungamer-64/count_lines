@@ -127,8 +127,8 @@ fn find_heredoc_start(line: &str) -> Option<HeredocStart> {
                 let allow_indent = caps.get(1).is_some_and(|m| m.as_str() == "-");
                 let ident = caps
                     .get(2)
-                    .or(caps.get(3))
-                    .or(caps.get(4))
+                    .or_else(|| caps.get(3))
+                    .or_else(|| caps.get(4))
                     .unwrap()
                     .as_str()
                     .to_string();

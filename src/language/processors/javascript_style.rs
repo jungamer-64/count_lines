@@ -45,16 +45,10 @@ impl JavaScriptProcessor {
         }
         self.line_count += 1;
 
-        let mut has_code_token = false;
-
-        // Initial state logic
-        match self.stack.last() {
-            Some(JsScope::String(_) | JsScope::Regex { .. }) => has_code_token = true,
-            _ => {
-                // Code, Interpolation, BlockComment
-                // BlockComment continuation doesn't start with code token
-            }
-        }
+        let mut has_code_token = matches!(
+            self.stack.last(),
+            Some(JsScope::String(_) | JsScope::Regex { .. })
+        );
 
         let mut chars = line.char_indices().peekable();
 
