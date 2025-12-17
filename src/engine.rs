@@ -186,8 +186,14 @@ fn process_content_sloc<R: BufRead>(
 
 /// 高速処理用のストリーミング処理
 ///
-/// Note: Word counting in streaming mode uses ASCII whitespace only for performance.
-/// For accurate Unicode word counting, use SLOC mode which processes line-by-line.
+/// Binary detection strategy:
+/// 1. Initial check: Look for NUL bytes in first buffer (done in `process_file`)
+/// 2. Streaming check: Detect invalid UTF-8 during word counting
+///
+/// Word counting:
+/// - When word counting is enabled, we validate UTF-8 and use Unicode-aware splitting
+/// - If invalid UTF-8 is detected, the file is marked as binary
+/// - When word counting is disabled, we use fast byte counting without UTF-8 validation
 fn process_content_streaming<R: BufRead>(
     reader: &mut R,
     config: &Config,
@@ -201,7 +207,6 @@ fn process_content_streaming<R: BufRead>(
     let count_words = config.count_words;
     let count_newlines = config.count_newlines_in_chars;
 
-    let mut in_word = false;
     let mut last_byte: Option<u8> = None;
 
     loop {
@@ -231,25 +236,25 @@ fn process_content_streaming<R: BufRead>(
             }
         }
 
-        // Count words (ASCII whitespace only for streaming performance)
+        // Count words with UTF-8 validation
         if count_words {
-            for &b in buf {
-                let is_whitespace = b.is_ascii_whitespace();
-                if in_word && is_whitespace {
-                    words += 1;
-                    in_word = false;
-                } else if !in_word && !is_whitespace {
-                    in_word = true;
+            match std::str::from_utf8(buf) {
+                Ok(text) => {
+                    // Unicode-aware word counting using split_whitespace
+                    words += text.split_whitespace().count();
+                }
+                Err(_) => {
+                    // Invalid UTF-8 detected - mark as binary and stop processing
+                    stats.is_binary = true;
+                    stats.lines = lines;
+                    stats.chars = chars;
+                    return Ok(stats);
                 }
             }
         }
 
         let len = buf.len();
         reader.consume(len);
-    }
-
-    if in_word {
-        words += 1;
     }
 
     // 末尾に改行がない場合の行カウント補正
