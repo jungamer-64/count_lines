@@ -1,0 +1,21 @@
+[package]
+name = "count_lines_core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+# no_std dependencies
+regex = { version = "1", default-features = false, features = [
+    "std",
+    "perf",
+] } # Enable std/perf for now as regex 1.x often needs std for full perfs, but logic is separable. 
+# Actually strict no_std regex might be tricky. regex-automata is lower level. 
+# But let's try regex with default-features=false. 'std' feature is usually enabled for Error impls etc.
+# Ideally we want NO std. 
+# "regex" crate with `default-features = false` and `features = ["perf"]` uses `alloc` but not `std`.
+
+hashbrown = "0.14"
+serde = { workspace = true, features = ["derive", "alloc"] }
+
+[dev-dependencies]
