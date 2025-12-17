@@ -26,7 +26,10 @@ impl FromStr for ByMode {
             "ext" => Ok(Self::Ext),
             "none" => Ok(Self::None),
             _ if s.starts_with("dir") => {
-                let depth = s.strip_prefix("dir=").and_then(|d| d.parse().ok()).unwrap_or(1);
+                let depth = s
+                    .strip_prefix("dir=")
+                    .and_then(|d| d.parse().ok())
+                    .unwrap_or(1);
                 Ok(Self::Dir(depth))
             }
             _ if s.starts_with("mtime") => {

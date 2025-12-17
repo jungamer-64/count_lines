@@ -45,7 +45,11 @@ pub enum DomainError {
     InvalidSortSpec { spec: String },
 
     #[error("Range validation failed: {field} must be between {min} and {max}")]
-    RangeValidation { field: String, min: String, max: String },
+    RangeValidation {
+        field: String,
+        min: String,
+        max: String,
+    },
 }
 
 pub type DomainResult<T> = std::result::Result<T, DomainError>;
@@ -121,7 +125,11 @@ pub enum PresentationError {
     ArgumentParsing { argument: String, reason: String },
 
     #[error("Invalid CLI value: {flag} = {value} - {reason}")]
-    InvalidValue { flag: String, value: String, reason: String },
+    InvalidValue {
+        flag: String,
+        value: String,
+        reason: String,
+    },
 
     #[error("Configuration building failed: {0}")]
     ConfigBuildFailed(String),
@@ -143,7 +151,10 @@ impl From<std::io::Error> for CountLinesError {
 
 impl From<serde_json::Error> for InfrastructureError {
     fn from(err: serde_json::Error) -> Self {
-        Self::SerializationError { format: "JSON".to_string(), details: err.to_string() }
+        Self::SerializationError {
+            format: "JSON".to_string(),
+            details: err.to_string(),
+        }
     }
 }
 
@@ -156,7 +167,10 @@ impl From<serde_json::Error> for CountLinesError {
 #[cfg(feature = "yaml")]
 impl From<serde_yaml::Error> for InfrastructureError {
     fn from(err: serde_yaml::Error) -> Self {
-        Self::SerializationError { format: "YAML".to_string(), details: err.to_string() }
+        Self::SerializationError {
+            format: "YAML".to_string(),
+            details: err.to_string(),
+        }
     }
 }
 
@@ -170,7 +184,10 @@ impl From<serde_yaml::Error> for CountLinesError {
 #[cfg(feature = "eval")]
 impl From<evalexpr::EvalexprError> for DomainError {
     fn from(err: evalexpr::EvalexprError) -> Self {
-        Self::InvalidFilterExpression { expression: String::new(), details: err.to_string() }
+        Self::InvalidFilterExpression {
+            expression: String::new(),
+            details: err.to_string(),
+        }
     }
 }
 
@@ -187,13 +204,19 @@ where
     E: Into<CountLinesError>,
 {
     fn context(self, context: impl Into<String>) -> Result<T> {
-        self.map_err(|e| CountLinesError::Context { context: context.into(), source: Box::new(e.into()) })
+        self.map_err(|e| CountLinesError::Context {
+            context: context.into(),
+            source: Box::new(e.into()),
+        })
     }
 
     fn with_context<F>(self, f: F) -> Result<T>
     where
         F: FnOnce() -> String,
     {
-        self.map_err(|e| CountLinesError::Context { context: f(), source: Box::new(e.into()) })
+        self.map_err(|e| CountLinesError::Context {
+            context: f(),
+            source: Box::new(e.into()),
+        })
     }
 }

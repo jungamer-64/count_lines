@@ -15,24 +15,24 @@
 /// - 行中の `'` 以降もコメント（文字列リテラル外）
 pub fn process_visual_basic_style(line: &str, count: &mut usize) {
     let trimmed = line.trim();
-    
+
     // ' で始まるコメント行
     if trimmed.starts_with('\'') {
         return;
     }
-    
+
     // REM コメント (大文字小文字不問)
     let upper = trimmed.to_uppercase();
     if upper == "REM" || upper.starts_with("REM ") || upper.starts_with("REM\t") {
         return;
     }
-    
+
     // 文字列リテラル外の ' を探す
     // VBの文字列は "" でエスケープ、\ はエスケープなし
     let bytes = line.as_bytes();
     let mut i = 0;
     let mut in_string = false;
-    
+
     while i < bytes.len() {
         if in_string {
             if bytes[i] == b'"' {
@@ -46,13 +46,13 @@ pub fn process_visual_basic_style(line: &str, count: &mut usize) {
             i += 1;
             continue;
         }
-        
+
         if bytes[i] == b'"' {
             in_string = true;
             i += 1;
             continue;
         }
-        
+
         if bytes[i] == b'\'' {
             // ' 以前にコードがあればカウント
             let before = &line[..i];
@@ -61,10 +61,10 @@ pub fn process_visual_basic_style(line: &str, count: &mut usize) {
             }
             return;
         }
-        
+
         i += 1;
     }
-    
+
     *count += 1;
 }
 

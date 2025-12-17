@@ -10,7 +10,12 @@ use crate::{
     infrastructure::io::output::utils::{escape_field, format_path, limited},
 };
 
-pub fn output_delimited(stats: &[FileStats], config: &Config, sep: char, out: &mut impl Write) -> Result<()> {
+pub fn output_delimited(
+    stats: &[FileStats],
+    config: &Config,
+    sep: char,
+    out: &mut impl Write,
+) -> Result<()> {
     write_delimited_header(config, sep, out)?;
     write_delimited_rows(stats, config, sep, out)?;
     if config.total_row {
@@ -28,11 +33,23 @@ fn write_delimited_header(config: &Config, sep: char, out: &mut impl Write) -> R
     Ok(())
 }
 
-fn write_delimited_rows(stats: &[FileStats], config: &Config, sep: char, out: &mut impl Write) -> Result<()> {
+fn write_delimited_rows(
+    stats: &[FileStats],
+    config: &Config,
+    sep: char,
+    out: &mut impl Write,
+) -> Result<()> {
     for s in limited(stats, config) {
         let path = escape_field(&format_path(s, config), sep);
         if config.words {
-            writeln!(out, "{}{sep}{}{sep}{}{sep}{}", s.lines, s.chars, s.words.unwrap_or(0), path)?;
+            writeln!(
+                out,
+                "{}{sep}{}{sep}{}{sep}{}",
+                s.lines,
+                s.chars,
+                s.words.unwrap_or(0),
+                path
+            )?;
         } else {
             writeln!(out, "{}{sep}{}{sep}{}", s.lines, s.chars, path)?;
         }
@@ -49,9 +66,17 @@ fn write_delimited_total(
     let summary = Summary::from_stats(stats);
     let total_label = escape_field("TOTAL", sep);
     if config.words {
-        writeln!(out, "{}{sep}{}{sep}{}{sep}{}", summary.lines, summary.chars, summary.words, total_label)?;
+        writeln!(
+            out,
+            "{}{sep}{}{sep}{}{sep}{}",
+            summary.lines, summary.chars, summary.words, total_label
+        )?;
     } else {
-        writeln!(out, "{}{sep}{}{sep}{}", summary.lines, summary.chars, total_label)?;
+        writeln!(
+            out,
+            "{}{sep}{}{sep}{}",
+            summary.lines, summary.chars, total_label
+        )?;
     }
     Ok(())
 }
@@ -65,12 +90,23 @@ mod tests {
         config::{Config, Filters},
         model::{FileStats, FileStatsBuilder},
         options::{OutputFormat, SortKey, WatchOutput},
-        value_objects::{CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, WordCount},
+        value_objects::{
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, WordCount,
+        },
     };
 
-    fn sample_stats(path: impl Into<PathBuf>, lines: usize, chars: usize, words: Option<usize>) -> FileStats {
+    fn sample_stats(
+        path: impl Into<PathBuf>,
+        lines: usize,
+        chars: usize,
+        words: Option<usize>,
+    ) -> FileStats {
         let pathbuf: PathBuf = path.into();
-        let ext_str = pathbuf.extension().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let ext_str = pathbuf
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
 
         let mut builder = FileStatsBuilder::new(FilePath::new(pathbuf.clone()))
             .lines(LineCount::new(lines))
@@ -148,8 +184,10 @@ mod tests {
 
     #[test]
     fn writes_words_column_and_total_row() {
-        let stats =
-            vec![sample_stats("src/lib.rs", 10, 100, Some(5)), sample_stats("src/main.rs", 2, 20, Some(1))];
+        let stats = vec![
+            sample_stats("src/lib.rs", 10, 100, Some(5)),
+            sample_stats("src/main.rs", 2, 20, Some(1)),
+        ];
         let mut config = base_config();
         config.words = true;
         config.total_row = true;
@@ -179,7 +217,10 @@ mod tests {
 
         assert!(output.contains("a.rs"));
         assert!(output.contains("b.rs"));
-        assert!(!output.contains("c.rs"), "limited output should omit entries beyond top_n");
+        assert!(
+            !output.contains("c.rs"),
+            "limited output should omit entries beyond top_n"
+        );
     }
 
     #[test]

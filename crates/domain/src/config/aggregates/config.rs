@@ -79,24 +79,36 @@ impl Config {
         let filters = &self.filters;
 
         if !filters.include_patterns.is_empty()
-            && !filters.include_patterns.iter().any(|pattern| pattern.matches(file_name))
+            && !filters
+                .include_patterns
+                .iter()
+                .any(|pattern| pattern.matches(file_name))
         {
             return false;
         }
 
-        !filters.exclude_patterns.iter().any(|pattern| pattern.matches(file_name))
+        !filters
+            .exclude_patterns
+            .iter()
+            .any(|pattern| pattern.matches(file_name))
     }
 
     fn matches_path_patterns(&self, path: &Path) -> bool {
         let filters = &self.filters;
 
         if !filters.include_paths.is_empty()
-            && !filters.include_paths.iter().any(|pattern| pattern.matches_path(path))
+            && !filters
+                .include_paths
+                .iter()
+                .any(|pattern| pattern.matches_path(path))
         {
             return false;
         }
 
-        !filters.exclude_paths.iter().any(|pattern| pattern.matches_path(path))
+        !filters
+            .exclude_paths
+            .iter()
+            .any(|pattern| pattern.matches_path(path))
     }
 
     fn matches_extension(&self, meta: &FileMeta) -> bool {
@@ -113,11 +125,17 @@ impl Config {
             return false;
         }
 
-        if self.mtime_since.is_some_and(|since| meta.mtime.is_some_and(|mtime| mtime < since)) {
+        if self
+            .mtime_since
+            .is_some_and(|since| meta.mtime.is_some_and(|mtime| mtime < since))
+        {
             return false;
         }
 
-        if self.mtime_until.is_some_and(|until| meta.mtime.is_some_and(|mtime| mtime > until)) {
+        if self
+            .mtime_until
+            .is_some_and(|until| meta.mtime.is_some_and(|mtime| mtime > until))
+        {
             return false;
         }
 
@@ -186,8 +204,19 @@ mod tests {
         }
     }
 
-    fn file_meta(name: &str, ext: &str, size: u64, mtime: Option<chrono::DateTime<Local>>) -> FileMeta {
-        FileMeta { size, mtime, is_text: true, ext: ext.to_string(), name: name.to_string() }
+    fn file_meta(
+        name: &str,
+        ext: &str,
+        size: u64,
+        mtime: Option<chrono::DateTime<Local>>,
+    ) -> FileMeta {
+        FileMeta {
+            size,
+            mtime,
+            is_text: true,
+            ext: ext.to_string(),
+            name: name.to_string(),
+        }
     }
 
     #[test]
@@ -288,10 +317,20 @@ mod tests {
         let before = file_meta("old.rs", "rs", 10, Some(now - ChronoDuration::seconds(5)));
         assert!(!config.matches_file(&PathBuf::from("src/old.rs"), &before));
 
-        let after = file_meta("future.rs", "rs", 10, Some(now + ChronoDuration::seconds(120)));
+        let after = file_meta(
+            "future.rs",
+            "rs",
+            10,
+            Some(now + ChronoDuration::seconds(120)),
+        );
         assert!(!config.matches_file(&PathBuf::from("src/future.rs"), &after));
 
-        let within = file_meta("current.rs", "rs", 10, Some(now + ChronoDuration::seconds(30)));
+        let within = file_meta(
+            "current.rs",
+            "rs",
+            10,
+            Some(now + ChronoDuration::seconds(30)),
+        );
         assert!(config.matches_file(&PathBuf::from("src/current.rs"), &within));
     }
 }

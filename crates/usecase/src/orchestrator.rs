@@ -1,6 +1,8 @@
 // crates/usecase/src/orchestrator.rs
 use count_lines_domain::model::FileEntry;
-use count_lines_ports::filesystem::{FileEntryDto as PortFileEntry, FileEnumerationPlan, FileEnumerator};
+use count_lines_ports::filesystem::{
+    FileEntryDto as PortFileEntry, FileEnumerationPlan, FileEnumerator,
+};
 use count_lines_shared_kernel::{Result, value_objects::FileMeta};
 
 use crate::dto::CountEntriesOutput;
@@ -21,7 +23,10 @@ impl<'a> CountPaths<'a> {
 
     fn enumerate(&self, plan: &FileEnumerationPlan) -> Result<Vec<FileEntry>> {
         let ports_entries = self.enumerator.collect(plan)?;
-        Ok(ports_entries.into_iter().map(port_to_domain_entry).collect())
+        Ok(ports_entries
+            .into_iter()
+            .map(port_to_domain_entry)
+            .collect())
     }
 }
 
@@ -33,7 +38,10 @@ fn port_to_domain_entry(entry: PortFileEntry) -> FileEntry {
         ext: entry.ext,
         name: entry.name,
     };
-    FileEntry { path: entry.path, meta }
+    FileEntry {
+        path: entry.path,
+        meta,
+    }
 }
 
 #[cfg(test)]
@@ -51,9 +59,17 @@ mod tests {
 
     impl StubEnumerator {
         fn with_entry(path: &str) -> Self {
-            let dto =
-                PortFileEntry::new(path.into(), true, 42, "txt".into(), "sample".into(), Some(Local::now()));
-            Self { entries: Mutex::new(vec![dto]) }
+            let dto = PortFileEntry::new(
+                path.into(),
+                true,
+                42,
+                "txt".into(),
+                "sample".into(),
+                Some(Local::now()),
+            );
+            Self {
+                entries: Mutex::new(vec![dto]),
+            }
         }
     }
 

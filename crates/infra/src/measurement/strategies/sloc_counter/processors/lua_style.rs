@@ -41,9 +41,9 @@ impl LuaProcessor {
         }
 
         // 行コメント
-        if line.starts_with("--") {
-            if let Some(level) = check_lua_block_start(&line[2..]) {
-                let after_open = skip_lua_block_open(&line[2..]);
+        if let Some(stripped) = line.strip_prefix("--") {
+            if let Some(level) = check_lua_block_start(stripped) {
+                let after_open = skip_lua_block_open(stripped);
                 if find_lua_block_end(after_open, level).is_some() {
                     return 0;
                 }

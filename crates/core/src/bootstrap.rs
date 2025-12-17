@@ -66,13 +66,22 @@ fn run_analysis(config: &Config, show_banner: bool) -> Result<()> {
 
     if config.watch && config.watch_output == WatchOutput::Jsonl {
         let presenter = JsonlWatchEmitter::new();
-        let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
+        let handler =
+            RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
         let outcome = handler.handle(&command)?;
 
         let duration_ms = start.elapsed().as_millis();
         let summary = Summary::from_stats(&outcome.stats);
-        let changed: Vec<_> = outcome.changed_files.iter().map(|p| p.to_string_lossy().to_string()).collect();
-        let removed: Vec<_> = outcome.removed_files.iter().map(|p| p.to_string_lossy().to_string()).collect();
+        let changed: Vec<_> = outcome
+            .changed_files
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+        let removed: Vec<_> = outcome
+            .removed_files
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
 
         let payload = json!({
             "type": "run",
@@ -91,7 +100,8 @@ fn run_analysis(config: &Config, show_banner: bool) -> Result<()> {
         println!("{payload}");
     } else {
         let presenter = OutputEmitter;
-        let handler = RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
+        let handler =
+            RunAnalysisHandler::new(&entry_provider, &processor, &presenter, Some(&notifier));
         handler.handle(&command)?;
     }
     Ok(())
@@ -126,7 +136,9 @@ fn validate_config(config: &Config) -> Result<()> {
 
 fn start_watch_loop(config: &Config) -> Result<()> {
     run_analysis(config, true)?;
-    WatchService::run(config, config.watch_interval, || run_analysis(config, false))?;
+    WatchService::run(config, config.watch_interval, || {
+        run_analysis(config, false)
+    })?;
     Ok(())
 }
 

@@ -126,7 +126,7 @@ impl StringSkipOptions {
     }
 
     /// Swift 用オプション (拡張デリミタ #"..."# 対応)
-    /// 
+    ///
     /// Swift固有の文字列:
     /// - 通常: `"..."`
     /// - 多重引用符: `"""..."""`
@@ -141,7 +141,7 @@ impl StringSkipOptions {
     }
 
     /// Verilog/SystemVerilog 用オプション
-    /// 
+    ///
     /// Verilog は C風の文字列のみ (Raw String なし)
     pub fn verilog() -> Self {
         Self {
@@ -153,7 +153,7 @@ impl StringSkipOptions {
     }
 
     /// Dart 用オプション
-    /// 
+    ///
     /// Dart はバッククォートなし、三重クォートあり
     pub fn dart() -> Self {
         Self {
@@ -165,7 +165,7 @@ impl StringSkipOptions {
     }
 
     /// Objective-C 用オプション
-    /// 
+    ///
     /// @"..." 形式の NSString リテラルがあるが、
     /// C# Verbatim String とは異なりエスケープ可能
     pub fn objc() -> Self {
@@ -190,62 +190,62 @@ impl StringSkipOptions {
         match ext.to_lowercase().as_str() {
             // Rust
             "rs" => Self::rust(),
-            
+
             // C/C++
             "cpp" | "cc" | "cxx" | "c++" | "hpp" | "hh" | "hxx" | "h++" => Self::cpp(),
             "c" | "h" => Self::c(),
-            
+
             // C#
             "cs" => Self::csharp(),
-            
+
             // Java/Kotlin/Scala
             "java" => Self::java_kotlin(),
             "kt" | "kts" => Self::java_kotlin(),
             "scala" | "sc" => Self::java_kotlin(),
-            
+
             // Go (バッククォート対応、正規表現リテラルなし)
             "go" => Self::go(),
-            
+
             // JavaScript/TypeScript (バッククォート + 正規表現リテラル対応)
             "js" | "mjs" | "cjs" | "jsx" => Self::javascript(),
             "ts" | "tsx" | "mts" | "cts" => Self::javascript(),
-            
+
             // Swift
             "swift" => Self::swift(),
-            
+
             // Dart
             "dart" => Self::dart(),
-            
+
             // Objective-C
             "m" | "mm" => Self::objc(),
-            
+
             // Verilog/SystemVerilog
             "v" | "sv" | "svh" => Self::verilog(),
-            
+
             // Groovy (Java-like)
             "groovy" | "gradle" => Self::java_kotlin(),
-            
+
             // Ruby (正規表現リテラル対応)
             "rb" | "rake" | "gemspec" | "podspec" | "jbuilder" | "erb" => Self::ruby(),
-            
+
             // Perl (正規表現リテラル対応)
             "pl" | "pm" | "t" | "psgi" => Self::perl(),
-            
+
             // D言語
             "d" => Self::basic(), // D言語は Raw String あるが専用処理で対応
-            
+
             // Protocol Buffers, Thrift, Solidity, etc.
             "proto" | "thrift" | "sol" => Self::basic(),
-            
+
             // Linker Script
             "ld" | "lds" => Self::basic(),
-            
+
             // Zig
             "zig" => Self::basic(),
-            
+
             // CSS系
             "css" | "scss" | "sass" | "less" => Self::basic(),
-            
+
             // デフォルト
             _ => Self::basic(),
         }
@@ -259,17 +259,17 @@ pub fn is_ident_char(b: u8) -> bool {
 }
 
 /// 文字列リテラル外でパターンを検索 (言語非依存・基本版)
-/// 
+///
 /// 基本的な文字列リテラル ("...", '...') のみをスキップ。
 /// 言語固有の文字列構文は考慮しない。
-/// 
+///
 /// より正確な検索が必要な場合は `find_outside_string_with_options` を使用。
 pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
     find_outside_string_with_options(line, pattern, &StringSkipOptions::rust())
 }
 
 /// 文字列リテラル外でパターンを検索 (オプション指定版)
-/// 
+///
 /// 指定されたオプションに基づいて、言語固有の文字列構文をスキップする。
 /// これにより、異なる言語間での誤検出を防ぐ。
 pub fn find_outside_string_with_options(
@@ -279,7 +279,7 @@ pub fn find_outside_string_with_options(
 ) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();
-    
+
     if pattern_bytes.is_empty() || line_bytes.len() < pattern_bytes.len() {
         return None;
     }
@@ -287,29 +287,27 @@ pub fn find_outside_string_with_options(
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
         // C# Verbatim String: @"..."
-        if options.csharp_verbatim 
-            && line_bytes[i] == b'@' 
-            && i + 1 < line_bytes.len() 
-            && line_bytes[i + 1] == b'"' 
+        if options.csharp_verbatim
+            && line_bytes[i] == b'@'
+            && i + 1 < line_bytes.len()
+            && line_bytes[i + 1] == b'"'
+            && let Some(skip) = try_skip_csharp_verbatim_string(&line_bytes[i..])
         {
-            if let Some(skip) = try_skip_csharp_verbatim_string(&line_bytes[i..]) {
-                i += skip;
-                continue;
-            }
+            i += skip;
+            continue;
         }
-        
+
         // C++ Raw String: R"delimiter(...)delimiter"
-        if options.cpp_raw_string 
-            && line_bytes[i] == b'R' 
-            && i + 1 < line_bytes.len() 
-            && line_bytes[i + 1] == b'"' 
+        if options.cpp_raw_string
+            && line_bytes[i] == b'R'
+            && i + 1 < line_bytes.len()
+            && line_bytes[i + 1] == b'"'
+            && let Some(skip) = try_skip_cpp_raw_string(&line_bytes[i..])
         {
-            if let Some(skip) = try_skip_cpp_raw_string(&line_bytes[i..]) {
-                i += skip;
-                continue;
-            }
+            i += skip;
+            continue;
         }
-        
+
         // Rust raw文字列リテラル: r"...", r#"..."#, r##"..."## など
         if options.rust_raw_string
             && line_bytes[i] == b'r'
@@ -319,32 +317,30 @@ pub fn find_outside_string_with_options(
             i += skip;
             continue;
         }
-        
+
         // Rust byte文字列: b"...", br"...", br#"..."# など
         if options.rust_byte_string
             && line_bytes[i] == b'b'
             && (i == 0 || !is_ident_char(line_bytes[i - 1]))
+            && let Some(skip) = try_skip_byte_string(&line_bytes[i..])
         {
-            if let Some(skip) = try_skip_byte_string(&line_bytes[i..]) {
-                i += skip;
-                continue;
-            }
+            i += skip;
+            continue;
         }
-        
+
         // Java/Kotlin Text Block: """...""" (三重クォート)
         // 通常のダブルクォート処理より先にチェック
-        if options.text_block 
-            && line_bytes[i] == b'"' 
-            && i + 2 < line_bytes.len() 
-            && line_bytes[i + 1] == b'"' 
-            && line_bytes[i + 2] == b'"' 
+        if options.text_block
+            && line_bytes[i] == b'"'
+            && i + 2 < line_bytes.len()
+            && line_bytes[i + 1] == b'"'
+            && line_bytes[i + 2] == b'"'
+            && let Some(skip) = try_skip_text_block(&line_bytes[i..])
         {
-            if let Some(skip) = try_skip_text_block(&line_bytes[i..]) {
-                i += skip;
-                continue;
-            }
+            i += skip;
+            continue;
         }
-        
+
         // ダブルクォート文字列リテラル: "..."
         if options.double_quote && line_bytes[i] == b'"' {
             i += 1;
@@ -361,7 +357,7 @@ pub fn find_outside_string_with_options(
             }
             continue;
         }
-        
+
         // シングルクォート処理
         if options.single_quote && line_bytes[i] == b'\'' {
             if options.rust_lifetime {
@@ -390,7 +386,7 @@ pub fn find_outside_string_with_options(
                 continue;
             }
         }
-        
+
         // バッククォート文字列 (Go Raw String, JS/TS Template Literal)
         if options.backtick_string && line_bytes[i] == b'`' {
             i += 1;
@@ -408,59 +404,60 @@ pub fn find_outside_string_with_options(
             }
             continue;
         }
-        
+
         // 正規表現リテラル: /.../ (JavaScript, TypeScript, Ruby, Perl)
         // コメント開始 (//, /*) との区別が必要
         if options.regex_literal && line_bytes[i] == b'/' {
             // // (行コメント) や /* (ブロックコメント) は除外
             let is_line_comment = i + 1 < line_bytes.len() && line_bytes[i + 1] == b'/';
             let is_block_comment = i + 1 < line_bytes.len() && line_bytes[i + 1] == b'*';
-            
-            if !is_line_comment && !is_block_comment {
-                if let Some(skip) = try_skip_regex_literal(line_bytes, i) {
-                    i += skip;
-                    continue;
-                }
+
+            if !is_line_comment
+                && !is_block_comment
+                && let Some(skip) = try_skip_regex_literal(line_bytes, i)
+            {
+                i += skip;
+                continue;
             }
         }
-        
+
         // パターンとマッチするかチェック
-        if i + pattern_bytes.len() <= line_bytes.len() 
-            && &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes 
+        if i + pattern_bytes.len() <= line_bytes.len()
+            && &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes
         {
             return Some(i);
         }
-        
+
         i += 1;
     }
-    
+
     None
 }
 
 /// Rust raw文字列リテラルをスキップする
-/// 
+///
 /// `r"..."`, `r#"..."#`, `r##"..."##` などの形式を処理
 /// 成功した場合はスキップするバイト数を返す
 pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
     if bytes.is_empty() || bytes[0] != b'r' {
         return None;
     }
-    
+
     let mut i = 1;
-    
+
     // '#' の数をカウント
     let mut hash_count = 0;
     while i < bytes.len() && bytes[i] == b'#' {
         hash_count += 1;
         i += 1;
     }
-    
+
     // '"' で始まる必要がある
     if i >= bytes.len() || bytes[i] != b'"' {
         return None;
     }
     i += 1;
-    
+
     // 終端の '"' + '#' * hash_count を探す
     while i < bytes.len() {
         if bytes[i] == b'"' {
@@ -469,8 +466,8 @@ pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
             if hash_count == 0 {
                 // r"..." の場合
                 return Some(i + 1);
-            } else if remaining.len() >= hash_count 
-                && remaining[..hash_count].iter().all(|&b| b == b'#') 
+            } else if remaining.len() >= hash_count
+                && remaining[..hash_count].iter().all(|&b| b == b'#')
             {
                 // r#"..."# や r##"..."## の場合
                 return Some(i + 1 + hash_count);
@@ -478,24 +475,24 @@ pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
         }
         i += 1;
     }
-    
+
     // 閉じられていない raw 文字列（行末まで）
     Some(bytes.len())
 }
 
 /// Rust byte文字列をスキップする
-/// 
+///
 /// `b"..."`, `br"..."`, `br#"..."#` などの形式を処理
 /// 成功した場合はスキップするバイト数を返す
 pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
     if bytes.is_empty() || bytes[0] != b'b' {
         return None;
     }
-    
+
     if bytes.len() < 2 {
         return None;
     }
-    
+
     // b"..." の場合
     if bytes[1] == b'"' {
         let mut i = 2;
@@ -511,7 +508,7 @@ pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
         }
         return Some(bytes.len());
     }
-    
+
     // br"..." または br#"..."# の場合
     if bytes[1] == b'r' {
         // try_skip_raw_string に &bytes[1..] を渡して、+1 して返す
@@ -519,24 +516,24 @@ pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
             return Some(1 + skip);
         }
     }
-    
+
     None
 }
 
 /// 文字リテラルをスキップする（ライフタイム注釈との区別）
-/// 
+///
 /// 文字リテラル: `'a'`, `'\n'`, `'\u{1234}'` など（最大8文字程度）
 /// ライフタイム: `'a`, `'static` など（閉じクォートがない）
-/// 
+///
 /// 閉じクォートが12文字以内に見つからない場合はライフタイムとみなしNoneを返す
 pub fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
     if bytes.is_empty() || bytes[0] != b'\'' {
         return None;
     }
-    
+
     const MAX_CHAR_LITERAL_LEN: usize = 12; // '\u{10FFFF}' + 余裕
     let search_limit = bytes.len().min(MAX_CHAR_LITERAL_LEN);
-    
+
     let mut i = 1;
     while i < search_limit {
         if bytes[i] == b'\\' && i + 1 < search_limit {
@@ -549,7 +546,7 @@ pub fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
         }
         i += 1;
     }
-    
+
     // 閉じクォートが見つからない = ライフタイム注釈
     None
 }
@@ -561,9 +558,9 @@ pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
     if bytes.len() < 3 || bytes[0] != b'R' || bytes[1] != b'"' {
         return None;
     }
-    
+
     let mut i = 2;
-    
+
     // デリミタを取得 (最大16文字)
     let delimiter_start = i;
     while i < bytes.len() && i - delimiter_start < 16 {
@@ -576,19 +573,19 @@ pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
         }
         i += 1;
     }
-    
+
     if i >= bytes.len() || bytes[i] != b'(' {
         return None;
     }
-    
+
     let delimiter = &bytes[delimiter_start..i];
     i += 1; // '(' をスキップ
-    
+
     // 終端パターン: )delimiter" を探す
     while i < bytes.len() {
         if bytes[i] == b')' {
             let remaining = &bytes[i + 1..];
-            if remaining.len() >= delimiter.len() + 1
+            if remaining.len() > delimiter.len()
                 && &remaining[..delimiter.len()] == delimiter
                 && remaining[delimiter.len()] == b'"'
             {
@@ -597,7 +594,7 @@ pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
         }
         i += 1;
     }
-    
+
     // 行末まで閉じられていない
     Some(bytes.len())
 }
@@ -613,22 +610,22 @@ pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
 pub fn find_hash_outside_string(line: &str) -> Option<usize> {
     let bytes = line.as_bytes();
     let mut i = 0;
-    
+
     while i < bytes.len() {
         // Python の文字列プレフィックスをチェック
         // f, F, u, U, r, R, b, B の組み合わせ (最大2文字)
-        if is_python_string_prefix(bytes[i]) {
-            if let Some(skip) = try_skip_python_string(&bytes[i..]) {
-                i += skip;
-                continue;
-            }
+        if is_python_string_prefix(bytes[i])
+            && let Some(skip) = try_skip_python_string(&bytes[i..])
+        {
+            i += skip;
+            continue;
         }
-        
+
         // 文字列: "..." または '...'
         if bytes[i] == b'"' || bytes[i] == b'\'' {
             let quote = bytes[i];
             i += 1;
-            
+
             // 三重引用符かチェック
             if i + 1 < bytes.len() && bytes[i] == quote && bytes[i + 1] == quote {
                 // 三重引用符: """...""" または '''...'''
@@ -638,7 +635,11 @@ pub fn find_hash_outside_string(line: &str) -> Option<usize> {
                         i += 2;
                         continue;
                     }
-                    if i + 2 < bytes.len() && bytes[i] == quote && bytes[i + 1] == quote && bytes[i + 2] == quote {
+                    if i + 2 < bytes.len()
+                        && bytes[i] == quote
+                        && bytes[i + 1] == quote
+                        && bytes[i + 2] == quote
+                    {
                         i += 3;
                         break;
                     }
@@ -646,7 +647,7 @@ pub fn find_hash_outside_string(line: &str) -> Option<usize> {
                 }
                 continue;
             }
-            
+
             // 通常の文字列
             while i < bytes.len() {
                 if bytes[i] == b'\\' && i + 1 < bytes.len() {
@@ -661,14 +662,14 @@ pub fn find_hash_outside_string(line: &str) -> Option<usize> {
             }
             continue;
         }
-        
+
         if bytes[i] == b'#' {
             return Some(i);
         }
-        
+
         i += 1;
     }
-    
+
     None
 }
 
@@ -687,15 +688,15 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
     if bytes.is_empty() || !is_python_string_prefix(bytes[0]) {
         return None;
     }
-    
+
     let mut prefix_len = 1;
-    
+
     // 2文字目もプレフィックスかチェック (fr, rf, br, rb など)
     if bytes.len() > 1 && is_python_string_prefix(bytes[1]) {
         // 有効な組み合わせかチェック
         let first = bytes[0].to_ascii_lowercase();
         let second = bytes[1].to_ascii_lowercase();
-        
+
         // 有効な2文字プレフィックス: fr, rf, br, rb
         if (first == b'f' && second == b'r')
             || (first == b'r' && second == b'f')
@@ -705,20 +706,20 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
             prefix_len = 2;
         }
     }
-    
+
     // プレフィックスの後にクォートがあるか確認
     if bytes.len() <= prefix_len {
         return None;
     }
-    
+
     let quote_start = prefix_len;
     let quote = bytes[quote_start];
     if quote != b'"' && quote != b'\'' {
         return None;
     }
-    
+
     let mut i = quote_start + 1;
-    
+
     // 三重引用符かチェック
     let is_triple = i + 1 < bytes.len() && bytes[i] == quote && bytes[i + 1] == quote;
     if is_triple {
@@ -728,14 +729,18 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
                 i += 2;
                 continue;
             }
-            if i + 2 < bytes.len() && bytes[i] == quote && bytes[i + 1] == quote && bytes[i + 2] == quote {
+            if i + 2 < bytes.len()
+                && bytes[i] == quote
+                && bytes[i + 1] == quote
+                && bytes[i + 2] == quote
+            {
                 return Some(i + 3);
             }
             i += 1;
         }
         return Some(bytes.len());
     }
-    
+
     // 通常の文字列
     while i < bytes.len() {
         if bytes[i] == b'\\' && i + 1 < bytes.len() {
@@ -747,7 +752,7 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
         }
         i += 1;
     }
-    
+
     Some(bytes.len())
 }
 
@@ -832,9 +837,7 @@ pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
         if bytes[i] == b'\\' {
             // エスケープマーカーとして有効かチェック（ハッシュ数が一致するか）
             let remaining = &bytes[i + 1..];
-            if remaining.len() >= hash_count
-                && remaining[..hash_count].iter().all(|&b| b == b'#')
-            {
+            if remaining.len() >= hash_count && remaining[..hash_count].iter().all(|&b| b == b'#') {
                 // エスケープ有効。ハッシュ分 + 次の文字をスキップ
                 i += 1 + hash_count;
                 if i < bytes.len() {
@@ -865,11 +868,11 @@ pub fn find_outside_string_swift(line: &str, pattern: &str) -> Option<usize> {
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
         // Swift 拡張デリミタ文字列: #"..."#, ##"..."##, #"""..."""# など
-        if line_bytes[i] == b'#' {
-            if let Some(skip) = try_skip_swift_string(&line_bytes[i..]) {
-                i += skip;
-                continue;
-            }
+        if line_bytes[i] == b'#'
+            && let Some(skip) = try_skip_swift_string(&line_bytes[i..])
+        {
+            i += skip;
+            continue;
         }
 
         // 通常/多重引用符文字列: "...", """..."""
@@ -930,7 +933,7 @@ pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
     if bytes.len() < 2 || bytes[0] != b'@' || bytes[1] != b'"' {
         return None;
     }
-    
+
     let mut i = 2;
     while i < bytes.len() {
         if bytes[i] == b'"' {
@@ -944,7 +947,7 @@ pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
         }
         i += 1;
     }
-    
+
     // 行末まで閉じられていない (C# verbatim string は改行を許可するためこれでOK)
     Some(bytes.len())
 }
@@ -953,14 +956,10 @@ pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
 /// 形式: """..."""
 pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
     // 最低でも6文字必要: """ + """
-    if bytes.len() < 6 
-        || bytes[0] != b'"' 
-        || bytes[1] != b'"' 
-        || bytes[2] != b'"' 
-    {
+    if bytes.len() < 6 || bytes[0] != b'"' || bytes[1] != b'"' || bytes[2] != b'"' {
         return None;
     }
-    
+
     let mut i = 3;
     while i < bytes.len() {
         // エスケープシーケンス
@@ -968,18 +967,14 @@ pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
             i += 2;
             continue;
         }
-        
+
         // 終了の """ を探す
-        if bytes[i] == b'"' 
-            && i + 2 < bytes.len() 
-            && bytes[i + 1] == b'"' 
-            && bytes[i + 2] == b'"' 
-        {
+        if bytes[i] == b'"' && i + 2 < bytes.len() && bytes[i + 1] == b'"' && bytes[i + 2] == b'"' {
             return Some(i + 3);
         }
         i += 1;
     }
-    
+
     // 行末まで閉じられていない (複数行文字列の途中)
     Some(bytes.len())
 }
@@ -989,14 +984,14 @@ pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
 // ============================================================================
 
 /// 正規表現リテラルの開始かどうかを判定
-/// 
+///
 /// `/` が正規表現リテラルの開始である可能性が高いかを、
 /// 直前のトークンを分析して判定します。
-/// 
+///
 /// # 引数
 /// * `bytes` - 行全体のバイト列
 /// * `pos` - `/` の位置
-/// 
+///
 /// # 戻り値
 /// * `true` - 正規表現リテラルの可能性が高い
 /// * `false` - 除算演算子の可能性が高い
@@ -1005,7 +1000,7 @@ fn is_likely_regex_start(bytes: &[u8], pos: usize) -> bool {
         // 行頭の `/` は正規表現の可能性が高い
         return true;
     }
-    
+
     // 直前の非空白文字を探す
     let mut prev_pos = pos;
     while prev_pos > 0 {
@@ -1015,41 +1010,41 @@ fn is_likely_regex_start(bytes: &[u8], pos: usize) -> bool {
             break;
         }
     }
-    
+
     // 空白しかなければ正規表現の可能性が高い
     if prev_pos == 0 && (bytes[0] == b' ' || bytes[0] == b'\t') {
         return true;
     }
-    
+
     let prev_char = bytes[prev_pos];
-    
+
     // 正規表現が続く可能性が高い文字
     // これらの後の `/` は正規表現の開始である可能性が高い
     match prev_char {
         // 演算子・区切り文字
-        b'=' | b'!' | b'(' | b'[' | b'{' | b',' | b';' | b':' | b'?' |
-        b'&' | b'|' | b'^' | b'~' | b'<' | b'>' | b'+' | b'-' | b'*' | b'%' => true,
-        
+        b'=' | b'!' | b'(' | b'[' | b'{' | b',' | b';' | b':' | b'?' | b'&' | b'|' | b'^'
+        | b'~' | b'<' | b'>' | b'+' | b'-' | b'*' | b'%' => true,
+
         // 改行直後は正規表現の可能性が高い（実際には発生しにくいが念のため）
         b'\n' | b'\r' => true,
-        
+
         // 識別子・数値・閉じ括弧の後は除算の可能性が高い
         b')' | b']' | b'}' => false,
         b'0'..=b'9' => false,
-        
+
         // 識別子の終わりかキーワードかをチェック
         b'a'..=b'z' | b'A'..=b'Z' | b'_' => {
             // キーワードの後は正規表現の可能性が高い
             is_regex_preceding_keyword(bytes, prev_pos)
         }
-        
+
         // その他は除算と判定（保守的）
         _ => false,
     }
 }
 
 /// 正規表現が続く可能性のあるキーワードかどうかを判定
-/// 
+///
 /// # 引数
 /// * `bytes` - 行全体のバイト列
 /// * `end_pos` - キーワードの最後の文字の位置
@@ -1064,32 +1059,66 @@ fn is_regex_preceding_keyword(bytes: &[u8], end_pos: usize) -> bool {
             break;
         }
     }
-    
+
     let keyword = &bytes[start_pos..=end_pos];
-    
+
     // 正規表現が続く可能性のあるキーワード
     // JavaScript/TypeScript/Ruby/Perl で共通的に使用されるもの
     matches!(
         keyword,
-        b"return" | b"if" | b"else" | b"while" | b"for" | b"do" |
-        b"switch" | b"case" | b"throw" | b"new" | b"delete" | b"typeof" |
-        b"void" | b"in" | b"of" | b"instanceof" | b"yield" | b"await" |
-        b"when" | b"unless" | b"until" | b"and" | b"or" | b"not" |
-        b"eq" | b"ne" | b"lt" | b"gt" | b"le" | b"ge" | b"cmp" |
-        b"split" | b"match" | b"grep" | b"map" | b"sub" | b"gsub" |
-        b"scan" | b"replace" | b"test" | b"exec"
+        b"return"
+            | b"if"
+            | b"else"
+            | b"while"
+            | b"for"
+            | b"do"
+            | b"switch"
+            | b"case"
+            | b"throw"
+            | b"new"
+            | b"delete"
+            | b"typeof"
+            | b"void"
+            | b"in"
+            | b"of"
+            | b"instanceof"
+            | b"yield"
+            | b"await"
+            | b"when"
+            | b"unless"
+            | b"until"
+            | b"and"
+            | b"or"
+            | b"not"
+            | b"eq"
+            | b"ne"
+            | b"lt"
+            | b"gt"
+            | b"le"
+            | b"ge"
+            | b"cmp"
+            | b"split"
+            | b"match"
+            | b"grep"
+            | b"map"
+            | b"sub"
+            | b"gsub"
+            | b"scan"
+            | b"replace"
+            | b"test"
+            | b"exec"
     )
 }
 
 /// 正規表現リテラルをスキップする
-/// 
+///
 /// JavaScript/TypeScript/Ruby/Perl の正規表現リテラル `/pattern/flags` を
 /// スキップします。
-/// 
+///
 /// # 引数
 /// * `bytes` - 行全体のバイト列
 /// * `start_pos` - `/` の開始位置
-/// 
+///
 /// # 戻り値
 /// * `Some(n)` - スキップするバイト数
 /// * `None` - 正規表現リテラルではない
@@ -1098,20 +1127,20 @@ pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
     if !is_likely_regex_start(bytes, start_pos) {
         return None;
     }
-    
+
     let mut i = start_pos + 1; // 開始の `/` をスキップ
-    
+
     // 空の正規表現 `//` は除算と区別がつかないのでスキップしない
     if i >= bytes.len() || bytes[i] == b'/' {
         return None;
     }
-    
+
     // 閉じる `/` を探す
     let mut in_char_class = false; // `[...]` 内かどうか
-    
+
     while i < bytes.len() {
         let c = bytes[i];
-        
+
         match c {
             // バックスラッシュエスケープ
             b'\\' => {
@@ -1120,19 +1149,19 @@ pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
                     i += 1;
                 }
             }
-            
+
             // 文字クラスの開始
             b'[' if !in_char_class => {
                 in_char_class = true;
                 i += 1;
             }
-            
+
             // 文字クラスの終了
             b']' if in_char_class => {
                 in_char_class = false;
                 i += 1;
             }
-            
+
             // 閉じる `/`（文字クラス外のみ）
             b'/' if !in_char_class => {
                 i += 1;
@@ -1142,18 +1171,18 @@ pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
                 }
                 return Some(i - start_pos);
             }
-            
+
             // 行末に達した場合（正規表現は単一行）
             b'\n' | b'\r' => {
                 return None;
             }
-            
+
             _ => {
                 i += 1;
             }
         }
     }
-    
+
     // 閉じる `/` が見つからなかった
     None
 }
@@ -1164,18 +1193,18 @@ fn is_regex_flag_char(b: u8) -> bool {
     // JavaScript: g, i, m, s, u, y, d, v
     // Ruby: i, m, x, o, e, s, u, n
     // Perl: g, i, m, s, x, o, p, a, d, l, u, n, c, e, r
-    matches!(b, b'a'..=b'z')
+    b.is_ascii_lowercase()
 }
 
 /// SQL 文字列リテラル外でパターンを検索
-/// 
+///
 /// SQL の文字列リテラル:
 /// - シングルクォート: '...' ('' でエスケープ)
 /// - ダブルクォート識別子: "..." (一部のDBでは文字列として使用)
 pub fn find_outside_string_sql(line: &str, pattern: &str) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();
-    
+
     if pattern_bytes.is_empty() || line_bytes.len() < pattern_bytes.len() {
         return None;
     }
@@ -1200,7 +1229,7 @@ pub fn find_outside_string_sql(line: &str, pattern: &str) -> Option<usize> {
             }
             continue;
         }
-        
+
         // ダブルクォート識別子/文字列: "..." (一部のDBでは "" でエスケープ)
         if line_bytes[i] == b'"' {
             i += 1;
@@ -1219,17 +1248,17 @@ pub fn find_outside_string_sql(line: &str, pattern: &str) -> Option<usize> {
             }
             continue;
         }
-        
+
         // パターンとマッチするかチェック
-        if i + pattern_bytes.len() <= line_bytes.len() 
-            && &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes 
+        if i + pattern_bytes.len() <= line_bytes.len()
+            && &line_bytes[i..i + pattern_bytes.len()] == pattern_bytes
         {
             return Some(i);
         }
-        
+
         i += 1;
     }
-    
+
     None
 }
 
@@ -1240,14 +1269,14 @@ pub fn find_outside_string_sql(line: &str, pattern: &str) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     // =========================================================================
     // 正規表現リテラルのテスト
     // =========================================================================
-    
+
     mod regex_literal_tests {
         use super::*;
-        
+
         #[test]
         fn test_simple_regex_literal() {
             // 単純な正規表現リテラル
@@ -1255,7 +1284,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 0);
             assert_eq!(result, Some(5));
         }
-        
+
         #[test]
         fn test_regex_with_flags() {
             // フラグ付き正規表現
@@ -1263,7 +1292,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 0);
             assert_eq!(result, Some(7));
         }
-        
+
         #[test]
         fn test_regex_with_escaped_slash() {
             // エスケープされたスラッシュ
@@ -1271,7 +1300,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 0);
             assert_eq!(result, Some(6));
         }
-        
+
         #[test]
         fn test_regex_with_character_class() {
             // 文字クラス内のスラッシュ
@@ -1279,7 +1308,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 0);
             assert_eq!(result, Some(5));
         }
-        
+
         #[test]
         fn test_regex_containing_comment_like_pattern() {
             // 正規表現内の // パターン
@@ -1287,7 +1316,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 0);
             assert_eq!(result, Some(12));
         }
-        
+
         #[test]
         fn test_division_after_number() {
             // 数値の後の除算
@@ -1295,7 +1324,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 2);
             assert_eq!(result, None);
         }
-        
+
         #[test]
         fn test_division_after_identifier() {
             // 識別子の後の除算
@@ -1303,7 +1332,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 1);
             assert_eq!(result, None);
         }
-        
+
         #[test]
         fn test_division_after_closing_paren() {
             // 閉じ括弧の後の除算
@@ -1311,7 +1340,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 5);
             assert_eq!(result, None);
         }
-        
+
         #[test]
         fn test_regex_after_equals() {
             // = の後の正規表現
@@ -1319,7 +1348,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 4);
             assert_eq!(result, Some(5));
         }
-        
+
         #[test]
         fn test_regex_after_return() {
             // return の後の正規表現
@@ -1327,7 +1356,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 7);
             assert_eq!(result, Some(5));
         }
-        
+
         #[test]
         fn test_regex_after_open_paren() {
             // ( の後の正規表現
@@ -1335,7 +1364,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 4);
             assert_eq!(result, Some(5));
         }
-        
+
         #[test]
         fn test_empty_regex_treated_as_division() {
             // 空の正規表現は除算として扱う
@@ -1343,7 +1372,7 @@ mod tests {
             let result = try_skip_regex_literal(bytes, 0);
             assert_eq!(result, None);
         }
-        
+
         #[test]
         fn test_regex_at_line_start() {
             // 行頭の正規表現
@@ -1352,71 +1381,55 @@ mod tests {
             assert_eq!(result, Some(6));
         }
     }
-    
+
     // =========================================================================
     // find_outside_string_with_options のテスト (JavaScript/正規表現)
     // =========================================================================
-    
+
     mod find_outside_string_js_tests {
         use super::*;
-        
+
         #[test]
         fn test_js_regex_not_mistaken_for_comment() {
             // 正規表現内の // が行コメントと誤認されないこと
             let options = StringSkipOptions::javascript();
-            let result = find_outside_string_with_options(
-                "var re = /https:\\/\\//;",
-                "//",
-                &options,
-            );
+            let result =
+                find_outside_string_with_options("var re = /https:\\/\\//;", "//", &options);
             assert_eq!(result, None);
         }
-        
+
         #[test]
         fn test_js_comment_after_regex() {
             // 正規表現の後の行コメント
             let options = StringSkipOptions::javascript();
-            let result = find_outside_string_with_options(
-                "var re = /abc/g; // comment",
-                "//",
-                &options,
-            );
+            let result =
+                find_outside_string_with_options("var re = /abc/g; // comment", "//", &options);
             assert_eq!(result, Some(17));
         }
-        
+
         #[test]
         fn test_js_block_comment_in_regex() {
             // 正規表現内の /* */ がブロックコメントと誤認されないこと
             let options = StringSkipOptions::javascript();
-            let result = find_outside_string_with_options(
-                "var re = /a*b/g;",
-                "/*",
-                &options,
-            );
+            let result = find_outside_string_with_options("var re = /a*b/g;", "/*", &options);
             assert_eq!(result, None);
         }
-        
+
         #[test]
         fn test_js_division_not_regex() {
             // 除算演算子の後のコメント
             let options = StringSkipOptions::javascript();
-            let result = find_outside_string_with_options(
-                "var x = a/b; // division",
-                "//",
-                &options,
-            );
+            let result =
+                find_outside_string_with_options("var x = a/b; // division", "//", &options);
             assert_eq!(result, Some(13));
         }
-        
+
         #[test]
         fn test_js_template_string_with_regex() {
             // テンプレート文字列内の正規表現パターン
             let options = StringSkipOptions::javascript();
-            let result = find_outside_string_with_options(
-                "var s = `pattern: /abc/`;",
-                "//",
-                &options,
-            );
+            let result =
+                find_outside_string_with_options("var s = `pattern: /abc/`;", "//", &options);
             assert_eq!(result, None);
         }
     }

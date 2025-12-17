@@ -88,7 +88,9 @@ impl ConfigQueryService {
     }
 
     fn determine_jobs(query: &ConfigOptions) -> usize {
-        let detected = thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+        let detected = thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1);
         let wanted = query.jobs.unwrap_or(detected);
         wanted.clamp(1, MAX_THREADS)
     }
@@ -100,7 +102,7 @@ impl ConfigQueryService {
     }
 
     fn watch_interval(query: &ConfigOptions) -> Duration {
-        let secs = query.watch_interval.unwrap_or(1).max(1).min(MAX_WATCH_SECS);
+        let secs = query.watch_interval.unwrap_or(1).clamp(1, MAX_WATCH_SECS);
         Duration::from_secs(secs)
     }
 
@@ -181,7 +183,9 @@ impl ConfigQueryService {
     }
 
     fn sort_uses_sloc(sort_specs: &[(crate::domain::options::SortKey, bool)]) -> bool {
-        sort_specs.iter().any(|(key, _)| matches!(key, crate::domain::options::SortKey::Sloc))
+        sort_specs
+            .iter()
+            .any(|(key, _)| matches!(key, crate::domain::options::SortKey::Sloc))
     }
 
     /// Lightweight detection for builds without the `eval` feature: look for `sloc` tokens.
@@ -193,7 +197,10 @@ impl ConfigQueryService {
 
     #[cfg(feature = "eval")]
     fn filter_uses_words(filters: &Filters) -> bool {
-        filters.filter_ast.as_ref().is_some_and(|ast| ast.iter_variable_identifiers().any(|id| id == "words"))
+        filters
+            .filter_ast
+            .as_ref()
+            .is_some_and(|ast| ast.iter_variable_identifiers().any(|id| id == "words"))
     }
 
     #[cfg(not(feature = "eval"))]
@@ -202,7 +209,9 @@ impl ConfigQueryService {
     }
 
     fn sort_uses_words(sort_specs: &[(crate::domain::options::SortKey, bool)]) -> bool {
-        sort_specs.iter().any(|(key, _)| matches!(key, crate::domain::options::SortKey::Words))
+        sort_specs
+            .iter()
+            .any(|(key, _)| matches!(key, crate::domain::options::SortKey::Words))
     }
 
     /// Lightweight detection for builds without the `eval` feature: look for `words` tokens.
@@ -213,7 +222,11 @@ impl ConfigQueryService {
     }
 
     fn normalize_paths(paths: Vec<std::path::PathBuf>) -> Vec<std::path::PathBuf> {
-        if paths.is_empty() { vec![std::path::PathBuf::from(".")] } else { paths }
+        if paths.is_empty() {
+            vec![std::path::PathBuf::from(".")]
+        } else {
+            paths
+        }
     }
 
     fn convert_by_modes(modes: &[ByMode]) -> Vec<ByKey> {
@@ -244,8 +257,11 @@ impl ConfigQueryService {
     #[cfg(feature = "eval")]
     fn parse_filter_expression(expr: &str) -> Result<Option<FilterAst>> {
         evalexpr::build_operator_tree(expr).map(Some).map_err(|e| {
-            DomainError::InvalidFilterExpression { expression: expr.to_string(), details: e.to_string() }
-                .into()
+            DomainError::InvalidFilterExpression {
+                expression: expr.to_string(),
+                details: e.to_string(),
+            }
+            .into()
         })
     }
 

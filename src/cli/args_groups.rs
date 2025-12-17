@@ -87,7 +87,11 @@ pub struct FilterOptions {
     pub exclude_dir: Vec<String>,
 
     /// ディレクトリへの降下のみを抑制（ファイルが直接指定された場合は許可）
-    #[arg(long = "exclude-dir-only", value_delimiter = ',', help_heading = "フィルタ")]
+    #[arg(
+        long = "exclude-dir-only",
+        value_delimiter = ',',
+        help_heading = "フィルタ"
+    )]
     pub exclude_dir_only: Vec<String>,
 
     /// 拡張子フィルタ（カンマ区切り/複数指定可, 例: --ext rs,js --ext ts）
@@ -95,11 +99,19 @@ pub struct FilterOptions {
     pub ext: Vec<String>,
 
     /// テキスト扱いを強制する拡張子（カンマ区切り/複数指定可）
-    #[arg(long = "force-text-ext", value_delimiter = ',', help_heading = "フィルタ")]
+    #[arg(
+        long = "force-text-ext",
+        value_delimiter = ',',
+        help_heading = "フィルタ"
+    )]
     pub force_text_ext: Vec<String>,
 
     /// バイナリ扱いを強制する拡張子（カンマ区切り/複数指定可）
-    #[arg(long = "force-binary-ext", value_delimiter = ',', help_heading = "フィルタ")]
+    #[arg(
+        long = "force-binary-ext",
+        value_delimiter = ',',
+        help_heading = "フィルタ"
+    )]
     pub force_binary_ext: Vec<String>,
 
     /// 最大ファイルサイズ (例: 10K, 5MiB)
@@ -211,11 +223,19 @@ pub struct ScanOptions {
     pub no_default_prune: bool,
 
     /// 無視リストで再包含するパターン（gitignore 互換、カンマ区切り/複数指定可）
-    #[arg(long = "override-include", value_delimiter = ',', help_heading = "走査/入力")]
+    #[arg(
+        long = "override-include",
+        value_delimiter = ',',
+        help_heading = "走査/入力"
+    )]
     pub override_include: Vec<String>,
 
     /// 無視リストで追加除外するパターン（gitignore 互換、カンマ区切り/複数指定可）
-    #[arg(long = "override-exclude", value_delimiter = ',', help_heading = "走査/入力")]
+    #[arg(
+        long = "override-exclude",
+        value_delimiter = ',',
+        help_heading = "走査/入力"
+    )]
     pub override_exclude: Vec<String>,
 }
 

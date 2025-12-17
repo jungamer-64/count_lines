@@ -45,7 +45,10 @@ pub fn measure_entries(entries: Vec<FileEntry>, config: &Config) -> Result<Measu
     Ok(MeasurementOutcome::new(stats, changed, Vec::new()))
 }
 
-fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Result<MeasurementOutcome> {
+fn measure_entries_incremental(
+    entries: Vec<FileEntry>,
+    config: &Config,
+) -> Result<MeasurementOutcome> {
     let mut cache = CacheStore::load(config)?;
 
     let (mut processed, pending) = FileMeasurer::collect_cached_entries(entries, &cache, config)?;
@@ -53,7 +56,8 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
     let changed_files = if pending.is_empty() {
         Vec::new()
     } else {
-        let (mut new_processed, new_changed) = FileMeasurer::measure_pending_entries(pending, config)?;
+        let (mut new_processed, new_changed) =
+            FileMeasurer::measure_pending_entries(pending, config)?;
         processed.append(&mut new_processed);
         new_changed
     };
@@ -64,7 +68,12 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
     let mut results = Vec::with_capacity(processed.len());
     for record in processed {
         retain.insert(record.key.clone());
-        cache.update(record.key.clone(), &record.entry, &record.stats, config.cache_verify);
+        cache.update(
+            record.key.clone(),
+            &record.entry,
+            &record.stats,
+            config.cache_verify,
+        );
         results.push(record.stats);
     }
 
@@ -74,7 +83,11 @@ fn measure_entries_incremental(entries: Vec<FileEntry>, config: &Config) -> Resu
         eprintln!("[warn] failed to persist cache: {err}");
     }
 
-    Ok(MeasurementOutcome::new(results, changed_files, removed_files))
+    Ok(MeasurementOutcome::new(
+        results,
+        changed_files,
+        removed_files,
+    ))
 }
 
 #[cfg(feature = "parallel")]
@@ -126,15 +139,22 @@ fn measure_sequential(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<Fi
 /// 並列処理版
 #[cfg(feature = "parallel")]
 fn measure_parallel(entries: Vec<FileEntry>, config: &Config) -> Result<Vec<FileStats>> {
-    let progress = config.progress.then(|| (AtomicUsize::new(0), entries.len()));
+    let progress = config
+        .progress
+        .then(|| (AtomicUsize::new(0), entries.len()));
 
     let pool = rayon::ThreadPoolBuilder::new()
         .num_threads(config.jobs)
         .build()
-        .map_err(|e| InfrastructureError::ThreadPoolCreation { details: e.to_string() })?;
+        .map_err(|e| InfrastructureError::ThreadPoolCreation {
+            details: e.to_string(),
+        })?;
 
     let results: Vec<_> = pool.install(|| {
-        entries.into_par_iter().map(|entry| process_entry(entry, config, progress.as_ref())).collect()
+        entries
+            .into_par_iter()
+            .map(|entry| process_entry(entry, config, progress.as_ref()))
+            .collect()
     });
 
     collect_parallel_results(results, config)
@@ -180,7 +200,11 @@ fn collect_parallel_results(
                     return Err(e);
                 }
                 if config.progress {
-                    eprintln!("[warn] measurement failed for {path}: {err}", path = path.display(), err = e);
+                    eprintln!(
+                        "[warn] measurement failed for {path}: {err}",
+                        path = path.display(),
+                        err = e
+                    );
                 }
                 failure_count += 1;
             }
@@ -258,9 +282,14 @@ impl FileMeasurer {
     #[cfg(feature = "eval")]
     fn eval_filter(stats: &FileStatsV2, ast: &FilterAst) -> Result<bool> {
         let ctx = Self::build_eval_context(stats)?;
-        ast.eval_boolean_with_context(&ctx).map_err(|e: evalexpr::EvalexprError| {
-            DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() }.into()
-        })
+        ast.eval_boolean_with_context(&ctx)
+            .map_err(|e: evalexpr::EvalexprError| {
+                DomainError::InvalidFilterExpression {
+                    expression: String::new(),
+                    details: e.to_string(),
+                }
+                .into()
+            })
     }
     /// Set an integer variable in the eval context from a `usize` value.
     /// Performs safe conversion to `i64` and returns a `DomainError` on overflow or context errors.
@@ -271,9 +300,11 @@ impl FileMeasurer {
             expression: String::new(),
             details: format!("numeric overflow for {key}"),
         })?;
-        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| DomainError::InvalidFilterExpression {
-            expression: String::new(),
-            details: e.to_string(),
+        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| {
+            DomainError::InvalidFilterExpression {
+                expression: String::new(),
+                details: e.to_string(),
+            }
         })?;
         Ok(())
     }
@@ -287,9 +318,11 @@ impl FileMeasurer {
             expression: String::new(),
             details: format!("numeric overflow for {key}"),
         })?;
-        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| DomainError::InvalidFilterExpression {
-            expression: String::new(),
-            details: e.to_string(),
+        ctx.set_value(key.into(), Value::Int(v)).map_err(|e| {
+            DomainError::InvalidFilterExpression {
+                expression: String::new(),
+                details: e.to_string(),
+            }
         })?;
         Ok(())
     }
@@ -297,9 +330,11 @@ impl FileMeasurer {
     /// Set an integer variable in the eval context from an i64 value.
     #[cfg(feature = "eval")]
     fn set_int_direct(ctx: &mut HashMapContext, key: &str, val: i64) -> Result<()> {
-        ctx.set_value(key.into(), Value::Int(val)).map_err(|e| DomainError::InvalidFilterExpression {
-            expression: String::new(),
-            details: e.to_string(),
+        ctx.set_value(key.into(), Value::Int(val)).map_err(|e| {
+            DomainError::InvalidFilterExpression {
+                expression: String::new(),
+                details: e.to_string(),
+            }
         })?;
         Ok(())
     }
@@ -307,9 +342,11 @@ impl FileMeasurer {
     /// Set a string variable in the eval context.
     #[cfg(feature = "eval")]
     fn set_string(ctx: &mut HashMapContext, key: &str, val: &str) -> Result<()> {
-        ctx.set_value(key.into(), Value::String(val.to_string())).map_err(|e| {
-            DomainError::InvalidFilterExpression { expression: String::new(), details: e.to_string() }
-        })?;
+        ctx.set_value(key.into(), Value::String(val.to_string()))
+            .map_err(|e| DomainError::InvalidFilterExpression {
+                expression: String::new(),
+                details: e.to_string(),
+            })?;
         Ok(())
     }
 
@@ -328,7 +365,9 @@ impl FileMeasurer {
         Self::set_int_from_usize(ctx, "lines", stats.lines().value())?;
         Self::set_int_from_usize(ctx, "chars", stats.chars().value())?;
 
-        let words_val = stats.words().map_or(0usize, count_lines_domain::value_objects::WordCount::value);
+        let words_val = stats
+            .words()
+            .map_or(0usize, count_lines_domain::value_objects::WordCount::value);
         Self::set_int_from_usize(ctx, "words", words_val)?;
 
         Self::set_int_from_u64(ctx, "size", stats.size().bytes())?;
@@ -369,10 +408,17 @@ impl FileMeasurer {
             }
 
             let key = CacheStore::path_key(&entry.path);
-            if let Some(mut stats) = cache.get_if_fresh(&key, &entry, config.words, config.cache_verify) {
+            if let Some(mut stats) =
+                cache.get_if_fresh(&key, &entry, config.words, config.cache_verify)
+            {
                 if let Some(filtered) = Self::apply_filters(stats.to_v2(), config)? {
                     stats = FileStats::from_v2(filtered);
-                    processed.push(IndexedResult { index, key, entry, stats });
+                    processed.push(IndexedResult {
+                        index,
+                        key,
+                        entry,
+                        stats,
+                    });
                 } else {
                     // filtered out
                 }
@@ -388,17 +434,25 @@ impl FileMeasurer {
         pending: Vec<PendingEntry>,
         config: &Config,
     ) -> Result<(Vec<IndexedResult>, Vec<PathBuf>)> {
-        let measure_input: Vec<FileEntry> = pending.iter().map(|(_, _, entry)| entry.clone()).collect();
+        let measure_input: Vec<FileEntry> =
+            pending.iter().map(|(_, _, entry)| entry.clone()).collect();
         let measured = measure_all(measure_input, config)?;
-        let mut measured_map: HashMap<PathBuf, FileStats> =
-            measured.into_iter().map(|stat| (stat.path.clone(), stat)).collect();
+        let mut measured_map: HashMap<PathBuf, FileStats> = measured
+            .into_iter()
+            .map(|stat| (stat.path.clone(), stat))
+            .collect();
 
         let mut processed: Vec<IndexedResult> = Vec::with_capacity(measured_map.len());
         let mut changed_files: Vec<PathBuf> = Vec::new();
 
         for (index, key, entry) in pending {
             if let Some(stats) = measured_map.remove(&entry.path) {
-                processed.push(IndexedResult { index, key, entry, stats });
+                processed.push(IndexedResult {
+                    index,
+                    key,
+                    entry,
+                    stats,
+                });
                 changed_files.push(processed.last().unwrap().entry.path.clone());
             }
         }
@@ -439,7 +493,13 @@ mod tests {
 
     fn make_meta(path: &Path) -> FileMeta {
         let size = fs::metadata(path).unwrap().len();
-        FileMeta { size, mtime: None, is_text: true, ext: "txt".to_string(), name: "test.txt".to_string() }
+        FileMeta {
+            size,
+            mtime: None,
+            is_text: true,
+            ext: "txt".to_string(),
+            name: "test.txt".to_string(),
+        }
     }
 
     fn make_config() -> Config {
@@ -535,8 +595,14 @@ mod tests {
         let file2 = TempFile::new("content2\ncontent3");
 
         let entries = vec![
-            FileEntry { path: file1.path.clone(), meta: make_meta(&file1.path) },
-            FileEntry { path: file2.path.clone(), meta: make_meta(&file2.path) },
+            FileEntry {
+                path: file1.path.clone(),
+                meta: make_meta(&file1.path),
+            },
+            FileEntry {
+                path: file2.path.clone(),
+                meta: make_meta(&file2.path),
+            },
         ];
 
         let config = make_config();
@@ -554,8 +620,14 @@ mod tests {
         let file2 = TempFile::new("line3\nline4\nline5");
 
         let entries = vec![
-            FileEntry { path: file1.path.clone(), meta: make_meta(&file1.path) },
-            FileEntry { path: file2.path.clone(), meta: make_meta(&file2.path) },
+            FileEntry {
+                path: file1.path.clone(),
+                meta: make_meta(&file1.path),
+            },
+            FileEntry {
+                path: file2.path.clone(),
+                meta: make_meta(&file2.path),
+            },
         ];
 
         let mut config = make_config();
@@ -579,7 +651,8 @@ mod tests {
         let stats_v2 = measure_by_lines(&file.path, &make_meta(&file.path), &config).unwrap();
         let ctx = FileMeasurer::build_eval_context(&stats_v2).expect("build context");
 
-        let ast = evalexpr::build_operator_tree("lines == 3 && chars == 15 && words == 3").expect("parse");
+        let ast = evalexpr::build_operator_tree("lines == 3 && chars == 15 && words == 3")
+            .expect("parse");
         assert!(ast.eval_boolean_with_context(&ctx).expect("eval"));
     }
 
@@ -627,6 +700,6 @@ mod tests {
         // Line 1: "é" (1 grapheme)
         // Line 2: "👨‍👩‍👧‍👦" (1 grapheme)
         // Total: 2 graphemes
-        assert_eq!(stats.chars().value(), 2); 
+        assert_eq!(stats.chars().value(), 2);
     }
 }

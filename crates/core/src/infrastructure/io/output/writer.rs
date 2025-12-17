@@ -13,8 +13,10 @@ impl OutputWriter {
     pub(crate) fn create(config: &Config) -> Result<Self> {
         let writer: Box<dyn Write> = if let Some(path) = &config.output {
             Box::new(
-                FileWriter::create(path)
-                    .map_err(|source| InfrastructureError::FileWrite { path: path.clone(), source })?,
+                FileWriter::create(path).map_err(|source| InfrastructureError::FileWrite {
+                    path: path.clone(),
+                    source,
+                })?,
             )
         } else {
             Box::new(BufWriter::new(std::io::stdout()))
@@ -121,7 +123,9 @@ mod tests {
 
         match OutputWriter::create(&config) {
             Ok(_) => panic!("creating writer should fail for directory path"),
-            Err(CountLinesError::Infrastructure(InfrastructureError::FileWrite { path, .. })) => {
+            Err(CountLinesError::Infrastructure(InfrastructureError::FileWrite {
+                path, ..
+            })) => {
                 assert_eq!(path, dir.path());
             }
             Err(other) => panic!("expected FileWrite error, got {other:?}"),

@@ -143,7 +143,6 @@ impl SlocProcessor {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -56,8 +56,9 @@ impl FromStr for SortSpec {
 }
 
 fn parse_single_spec(part: &str) -> Result<(SortKey, bool), String> {
-    let (key_str, desc) =
-        part.split_once(':').map_or((part, false), |(k, d)| (k.trim(), matches!(d.trim(), "desc" | "DESC")));
+    let (key_str, desc) = part.split_once(':').map_or((part, false), |(k, d)| {
+        (k.trim(), matches!(d.trim(), "desc" | "DESC"))
+    });
 
     let key = parse_sort_key(key_str)?;
     Ok((key, desc))
@@ -88,26 +89,41 @@ mod tests {
 
     #[test]
     fn rejects_unknown_sort_key() {
-        let err = "invalid".parse::<SortSpec>().expect_err("invalid key should fail");
+        let err = "invalid"
+            .parse::<SortSpec>()
+            .expect_err("invalid key should fail");
         assert!(err.contains("Unknown sort key"));
     }
 
     #[test]
     fn parses_multiple_keys_with_whitespace_and_mixed_case() {
-        let spec: SortSpec = " lines :DESC , chars , NaMe:desc ".parse().expect("sort spec parses");
-        assert_eq!(spec.0, vec![(SortKey::Lines, true), (SortKey::Chars, false), (SortKey::Name, true)]);
+        let spec: SortSpec = " lines :DESC , chars , NaMe:desc "
+            .parse()
+            .expect("sort spec parses");
+        assert_eq!(
+            spec.0,
+            vec![
+                (SortKey::Lines, true),
+                (SortKey::Chars, false),
+                (SortKey::Name, true)
+            ]
+        );
     }
 
     #[test]
     fn unknown_direction_defaults_to_ascending() {
-        let spec: SortSpec = "words:ascending".parse().expect("unexpected direction still parses");
+        let spec: SortSpec = "words:ascending"
+            .parse()
+            .expect("unexpected direction still parses");
         assert_eq!(spec.0, vec![(SortKey::Words, false)]);
     }
 
     #[test]
     fn empty_spec_is_rejected() {
         for input in ["", " , ", " \t ,  "] {
-            let err = input.parse::<SortSpec>().expect_err("empty sort spec should fail");
+            let err = input
+                .parse::<SortSpec>()
+                .expect_err("empty sort spec should fail");
             assert!(err.contains("empty sort spec"));
         }
     }

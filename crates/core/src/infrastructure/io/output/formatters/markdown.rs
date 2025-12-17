@@ -8,7 +8,9 @@ use crate::{
         model::{FileStats, Summary},
     },
     error::Result,
-    infrastructure::io::output::utils::{format_path, format_ratio, limited, safe_key_label, truncate_rows},
+    infrastructure::io::output::utils::{
+        format_path, format_ratio, limited, safe_key_label, truncate_rows,
+    },
 };
 
 pub fn output_markdown(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
@@ -26,10 +28,16 @@ fn write_markdown_header(config: &Config, out: &mut impl Write) -> Result<()> {
                 "| LINES% | LINES | CHARS% | CHARS | WORDS | FILE |\n|---:|---:|---:|---:|---:|:---|"
             )?;
         } else {
-            writeln!(out, "| LINES | CHARS | WORDS | FILE |\n|---:|---:|---:|:---|")?;
+            writeln!(
+                out,
+                "| LINES | CHARS | WORDS | FILE |\n|---:|---:|---:|:---|"
+            )?;
         }
     } else if config.ratio {
-        writeln!(out, "| LINES% | LINES | CHARS% | CHARS | FILE |\n|---:|---:|---:|---:|:---|")?;
+        writeln!(
+            out,
+            "| LINES% | LINES | CHARS% | CHARS | FILE |\n|---:|---:|---:|---:|:---|"
+        )?;
     } else {
         writeln!(out, "| LINES | CHARS | FILE |\n|---:|---:|:---|")?;
     }
@@ -50,7 +58,12 @@ fn write_markdown_rows(stats: &[FileStats], config: &Config, out: &mut impl Writ
     Ok(())
 }
 
-fn write_row_words_ratio(out: &mut impl Write, s: &FileStats, summary: &Summary, path: &str) -> Result<()> {
+fn write_row_words_ratio(
+    out: &mut impl Write,
+    s: &FileStats,
+    summary: &Summary,
+    path: &str,
+) -> Result<()> {
     writeln!(
         out,
         "| {} | {} | {} | {} | {} | {} |",
@@ -65,11 +78,23 @@ fn write_row_words_ratio(out: &mut impl Write, s: &FileStats, summary: &Summary,
 }
 
 fn write_row_words(out: &mut impl Write, s: &FileStats, path: &str) -> Result<()> {
-    writeln!(out, "| {} | {} | {} | {} |", s.lines, s.chars, s.words.unwrap_or(0), path)?;
+    writeln!(
+        out,
+        "| {} | {} | {} | {} |",
+        s.lines,
+        s.chars,
+        s.words.unwrap_or(0),
+        path
+    )?;
     Ok(())
 }
 
-fn write_row_ratio(out: &mut impl Write, s: &FileStats, summary: &Summary, path: &str) -> Result<()> {
+fn write_row_ratio(
+    out: &mut impl Write,
+    s: &FileStats,
+    summary: &Summary,
+    path: &str,
+) -> Result<()> {
     writeln!(
         out,
         "| {} | {} | {} | {} | {} |",
@@ -87,11 +112,18 @@ fn write_row_basic(out: &mut impl Write, s: &FileStats, path: &str) -> Result<()
     Ok(())
 }
 
-fn write_markdown_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write) -> Result<()> {
+fn write_markdown_aggregations(
+    stats: &[FileStats],
+    config: &Config,
+    out: &mut impl Write,
+) -> Result<()> {
     let groups = Aggregator::aggregate(stats, &config.by_modes);
     for (label, mut rows) in groups {
         writeln!(out, "\n### {label}\n")?;
-        writeln!(out, "| LINES | CHARS | KEY | COUNT |\n|---:|---:|:---|---:|")?;
+        writeln!(
+            out,
+            "| LINES | CHARS | KEY | COUNT |\n|---:|---:|:---|---:|"
+        )?;
         truncate_rows(&mut rows, config.by_limit);
         for g in rows {
             let key = safe_key_label(&g.key);
@@ -110,12 +142,23 @@ mod tests {
         config::{ByKey, Config, Filters},
         model::{FileStats, FileStatsBuilder},
         options::{OutputFormat, SortKey, WatchOutput},
-        value_objects::{CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, WordCount},
+        value_objects::{
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, WordCount,
+        },
     };
 
-    fn sample_stats(path: impl Into<PathBuf>, lines: usize, chars: usize, words: Option<usize>) -> FileStats {
+    fn sample_stats(
+        path: impl Into<PathBuf>,
+        lines: usize,
+        chars: usize,
+        words: Option<usize>,
+    ) -> FileStats {
         let pathbuf: PathBuf = path.into();
-        let ext_str = pathbuf.extension().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let ext_str = pathbuf
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
 
         let mut builder = FileStatsBuilder::new(FilePath::new(pathbuf.clone()))
             .lines(LineCount::new(lines))
@@ -193,8 +236,10 @@ mod tests {
 
     #[test]
     fn markdown_with_words_and_ratio_formats_columns() {
-        let stats =
-            vec![sample_stats("src/lib.rs", 8, 80, Some(4)), sample_stats("src/main.rs", 2, 20, Some(1))];
+        let stats = vec![
+            sample_stats("src/lib.rs", 8, 80, Some(4)),
+            sample_stats("src/main.rs", 2, 20, Some(1)),
+        ];
         let mut config = base_config();
         config.words = true;
         config.ratio = true;
@@ -228,9 +273,15 @@ mod tests {
         let mut buffer = Vec::new();
         output_markdown(&stats, &config, &mut buffer).expect("markdown output succeeds");
         let markdown = String::from_utf8(buffer).expect("utf8");
-        assert!(markdown.contains("### By Extension"), "aggregation header should appear");
+        assert!(
+            markdown.contains("### By Extension"),
+            "aggregation header should appear"
+        );
         assert!(markdown.contains("| LINES | CHARS | KEY | COUNT |"));
-        assert!(markdown.contains("| 60 | 600 | special\\|key | 1 |"), "top extension should be listed");
+        assert!(
+            markdown.contains("| 60 | 600 | special\\|key | 1 |"),
+            "top extension should be listed"
+        );
         // Ensure the aggregation block respects by_limit (only check the aggregation section)
         if let Some(idx) = markdown.find("### By Extension") {
             let aggr = &markdown[idx..];

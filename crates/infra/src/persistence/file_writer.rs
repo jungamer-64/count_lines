@@ -19,13 +19,17 @@ impl FileWriter {
     /// Best-effort fsync is attempted where available to reduce corruption on crash.
     pub fn atomic_write<P: AsRef<Path>>(path: P, data: &[u8]) -> std::io::Result<()> {
         let path = path.as_ref();
-        let parent = path.parent().ok_or_else(|| std::io::Error::other("path has no parent"))?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| std::io::Error::other("path has no parent"))?;
 
         // Create a unique temp file name in the same directory to allow atomic rename.
         // Use PID + current time nanos to avoid an allocation loop while keeping
         // the name creation inexpensive.
-        let nanos =
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
         let tmp = parent.join(format!(".{}.{}.tmp", std::process::id(), nanos));
 
         let file = File::create(&tmp)?;

@@ -7,8 +7,8 @@
 //! - 複合プレフィックス: `fr"..."`, `rf"..."` 等
 //! - shebang行の除外
 
-use super::super::string_utils::{check_docstring_start, find_hash_outside_string};
 use super::super::processor_trait::LineProcessor;
+use super::super::string_utils::{check_docstring_start, find_hash_outside_string};
 
 /// Pythonプロセッサ
 #[derive(Default)]
@@ -47,7 +47,7 @@ impl PythonProcessor {
             return 0;
         }
         self.line_count += 1;
-        
+
         // #で始まる行はコメント
         if trimmed.starts_with('#') {
             return 0;
@@ -73,7 +73,7 @@ impl PythonProcessor {
             }
             return 0;
         }
-        
+
         1
     }
 }

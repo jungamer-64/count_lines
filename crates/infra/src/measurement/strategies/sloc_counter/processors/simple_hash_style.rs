@@ -27,7 +27,7 @@ impl SimpleHashProcessor {
             return 0;
         }
         self.line_count += 1;
-        
+
         // #で始まる行はコメント
         if trimmed.starts_with('#') {
             return 0;
@@ -41,7 +41,7 @@ impl SimpleHashProcessor {
             }
             return 0;
         }
-        
+
         1
     }
 }

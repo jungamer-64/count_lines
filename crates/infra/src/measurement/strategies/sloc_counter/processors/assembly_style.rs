@@ -25,7 +25,9 @@ impl LineProcessor for GasAssemblyProcessor {
 
 impl GasAssemblyProcessor {
     pub const fn new() -> Self {
-        Self { in_block_comment: false }
+        Self {
+            in_block_comment: false,
+        }
     }
 
     pub fn process(&mut self, line: &str) -> usize {

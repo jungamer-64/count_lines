@@ -67,7 +67,10 @@ fn build_sets_defaults_and_enables_words_when_required() {
     options.sort_specs = vec![(SortKey::Lines, true)];
 
     let config = ConfigQueryService::build(options).expect("config builds");
-    assert!(config.words, "word counting should activate for min_words filter");
+    assert!(
+        config.words,
+        "word counting should activate for min_words filter"
+    );
     assert!(config.abs_path, "abs_canonical should imply abs_path");
     assert_eq!(config.paths, vec![PathBuf::from(".")]);
     assert!(matches!(config.by_modes.as_slice(), [ByKey::Ext]));
@@ -90,7 +93,10 @@ fn size_sort_does_not_enable_word_counting() {
     options.sort_specs = vec![(SortKey::Size, true)];
 
     let config = ConfigQueryService::build(options).expect("config builds");
-    assert!(!config.words, "size sorting should not enable word counting");
+    assert!(
+        !config.words,
+        "size sorting should not enable word counting"
+    );
     assert_eq!(config.sort_specs, vec![(SortKey::Size, true)]);
 }
 
@@ -102,7 +108,10 @@ fn watch_enables_incremental_and_defaults_interval() {
 
     let config = ConfigQueryService::build(options).expect("config builds");
     assert!(config.watch, "watch should be enabled");
-    assert!(config.incremental, "watch mode should force incremental execution");
+    assert!(
+        config.incremental,
+        "watch mode should force incremental execution"
+    );
     assert_eq!(config.watch_interval, std::time::Duration::from_secs(3));
 }
 
@@ -140,7 +149,10 @@ fn watch_interval_is_capped_to_24h() {
     options.watch = true;
     options.watch_interval = Some(1_000_000);
     let config = ConfigQueryService::build(options).expect("config builds");
-    assert_eq!(config.watch_interval, std::time::Duration::from_secs(86_400));
+    assert_eq!(
+        config.watch_interval,
+        std::time::Duration::from_secs(86_400)
+    );
 }
 
 #[test]
@@ -172,11 +184,22 @@ fn enumerator_controls_are_populated() {
     assert!(config.use_ignore_overrides);
     assert_eq!(config.max_depth, Some(5));
     assert_eq!(config.enumerator_threads, Some(7));
-    assert_eq!(config.filters.overrides_include, vec!["dist/**".to_string()]);
-    assert_eq!(config.filters.overrides_exclude, vec!["build/**".to_string()]);
+    assert_eq!(
+        config.filters.overrides_include,
+        vec!["dist/**".to_string()]
+    );
+    assert_eq!(
+        config.filters.overrides_exclude,
+        vec!["build/**".to_string()]
+    );
     assert_eq!(config.filters.force_text_exts, vec!["md".to_string()]);
     assert_eq!(config.filters.force_binary_exts, vec!["data".to_string()]);
-    let dir_only: Vec<_> = config.filters.exclude_dirs_only.iter().map(|g| g.pattern().to_string()).collect();
+    let dir_only: Vec<_> = config
+        .filters
+        .exclude_dirs_only
+        .iter()
+        .map(|g| g.pattern().to_string())
+        .collect();
     assert_eq!(dir_only, vec!["**/generated/**".to_string()]);
 }
 
@@ -187,10 +210,18 @@ fn cache_dir_is_normalised_and_extensions_are_lowercased() {
     options.filters.ext = vec![".rs,  .JS ,, ".into()];
 
     let config = ConfigQueryService::build(options).expect("config builds");
-    let ext_filters: std::collections::HashSet<_> = config.filters.ext_filters.iter().cloned().collect();
-    let expected: std::collections::HashSet<_> = ["rs", "js"].into_iter().map(String::from).collect();
+    let ext_filters: std::collections::HashSet<_> =
+        config.filters.ext_filters.iter().cloned().collect();
+    let expected: std::collections::HashSet<_> =
+        ["rs", "js"].into_iter().map(String::from).collect();
 
-    assert!(config.cache_dir.as_ref().map(|p| p.is_absolute()).unwrap_or(false));
+    assert!(
+        config
+            .cache_dir
+            .as_ref()
+            .map(|p| p.is_absolute())
+            .unwrap_or(false)
+    );
     assert_eq!(ext_filters, expected);
 }
 
@@ -200,7 +231,10 @@ fn paths_are_preserved_when_provided() {
     options.paths = vec![PathBuf::from("src"), PathBuf::from("tests")];
 
     let config = ConfigQueryService::build(options).expect("config builds");
-    assert_eq!(config.paths, vec![PathBuf::from("src"), PathBuf::from("tests")]);
+    assert_eq!(
+        config.paths,
+        vec![PathBuf::from("src"), PathBuf::from("tests")]
+    );
 }
 
 #[test]

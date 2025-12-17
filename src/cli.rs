@@ -42,10 +42,13 @@ fn make_filter_options(args: &Args) -> FilterOptions {
 }
 
 fn make_compare_tuple(args: &Args) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
-    args.comparison
-        .compare
-        .as_ref()
-        .and_then(|v| if v.len() == 2 { Some((v[0].clone(), v[1].clone())) } else { None })
+    args.comparison.compare.as_ref().and_then(|v| {
+        if v.len() == 2 {
+            Some((v[0].clone(), v[1].clone()))
+        } else {
+            None
+        }
+    })
 }
 
 /// Build `ConfigOptions` from CLI args and precomputed pieces.
@@ -146,21 +149,30 @@ mod tests {
     fn sort_by_words_enables_word_counting() {
         let args = Args::parse_from(["count_lines", "--sort", "words:desc"]);
         let config = build_config(&args).expect("config builds");
-        assert!(config.words, "sorting by words should trigger word counting");
+        assert!(
+            config.words,
+            "sorting by words should trigger word counting"
+        );
     }
 
     #[test]
     fn filter_expression_mentioning_words_enables_word_counting() {
         let args = Args::parse_from(["count_lines", "--filter", "words > 10"]);
         let config = build_config(&args).expect("config builds");
-        assert!(config.words, "filter expressions referencing words should trigger word counting");
+        assert!(
+            config.words,
+            "filter expressions referencing words should trigger word counting"
+        );
     }
 
     #[test]
     fn sort_by_size_is_accepted_without_enabling_words() {
         let args = Args::parse_from(["count_lines", "--sort", "size:desc"]);
         let config = build_config(&args).expect("config builds");
-        assert!(!config.words, "sorting by size should not enable word counting");
+        assert!(
+            !config.words,
+            "sorting by size should not enable word counting"
+        );
         assert_eq!(config.sort_specs, vec![(SortKey::Size, true)]);
     }
 
@@ -169,14 +181,20 @@ mod tests {
         let args = Args::parse_from(["count_lines", "--abs-canonical"]);
         let config = build_config(&args).expect("config builds");
         assert!(config.abs_canonical);
-        assert!(config.abs_path, "--abs-canonical should imply absolute path formatting");
+        assert!(
+            config.abs_path,
+            "--abs-canonical should imply absolute path formatting"
+        );
     }
 
     #[test]
     fn incremental_flag_enables_cache_usage() {
         let args = Args::parse_from(["count_lines", "--incremental"]);
         let config = build_config(&args).expect("config builds");
-        assert!(config.incremental, "--incremental should enable incremental mode");
+        assert!(
+            config.incremental,
+            "--incremental should enable incremental mode"
+        );
     }
 
     #[test]
@@ -184,14 +202,18 @@ mod tests {
         let args = Args::parse_from(["count_lines", "--cache-dir", "./tmp/cache"]);
         let config = build_config(&args).expect("config builds");
         let cache_dir = config.cache_dir.expect("cache dir should be set");
-        assert!(cache_dir.is_absolute(), "cache dir should be normalised to an absolute path");
+        assert!(
+            cache_dir.is_absolute(),
+            "cache dir should be normalised to an absolute path"
+        );
     }
 
     #[test]
     fn ext_flag_accepts_multiple_forms() {
         let args = Args::parse_from(["count_lines", "--ext", "rs,JS", "--ext", ".ts"]);
         let config = build_config(&args).expect("config builds");
-        let exts: std::collections::HashSet<_> = config.filters.ext_filters.iter().cloned().collect();
+        let exts: std::collections::HashSet<_> =
+            config.filters.ext_filters.iter().cloned().collect();
         let expected = ["rs", "js", "ts"]
             .into_iter()
             .map(std::string::String::from)
@@ -222,17 +244,36 @@ mod tests {
         ]);
         let config = build_config(&args).expect("config builds");
 
-        assert!(!config.respect_gitignore, "--no-gitignore should disable respect_gitignore");
-        assert!(config.case_insensitive_dedup, "case insensitive dedup flag should propagate");
+        assert!(
+            !config.respect_gitignore,
+            "--no-gitignore should disable respect_gitignore"
+        );
+        assert!(
+            config.case_insensitive_dedup,
+            "case insensitive dedup flag should propagate"
+        );
         assert_eq!(config.max_depth, Some(3));
         assert_eq!(config.enumerator_threads, Some(4));
-        assert!(config.use_ignore_overrides, "override patterns should enable overrides");
-        assert_eq!(config.filters.overrides_include, vec!["dist/**".to_string()]);
-        assert_eq!(config.filters.overrides_exclude, vec!["build/**".to_string()]);
+        assert!(
+            config.use_ignore_overrides,
+            "override patterns should enable overrides"
+        );
+        assert_eq!(
+            config.filters.overrides_include,
+            vec!["dist/**".to_string()]
+        );
+        assert_eq!(
+            config.filters.overrides_exclude,
+            vec!["build/**".to_string()]
+        );
         assert_eq!(config.filters.force_text_exts, vec!["log".to_string()]);
         assert_eq!(config.filters.force_binary_exts, vec!["dat".to_string()]);
-        let dir_only: Vec<_> =
-            config.filters.exclude_dirs_only.iter().map(|g| g.pattern().to_string()).collect();
+        let dir_only: Vec<_> = config
+            .filters
+            .exclude_dirs_only
+            .iter()
+            .map(|g| g.pattern().to_string())
+            .collect();
         assert_eq!(dir_only, vec!["generated/**".to_string()]);
     }
 
@@ -247,7 +288,8 @@ mod tests {
 
     #[test]
     fn clap_rejects_zero_top() {
-        let err = Args::try_parse_from(["count_lines", "--top", "0"]).expect_err("clap should reject zero");
+        let err = Args::try_parse_from(["count_lines", "--top", "0"])
+            .expect_err("clap should reject zero");
         assert_eq!(err.kind(), ErrorKind::ValueValidation);
     }
 
@@ -256,7 +298,8 @@ mod tests {
         let zero = Args::try_parse_from(["count_lines", "--jobs", "0"]).expect_err("zero invalid");
         assert_eq!(zero.kind(), ErrorKind::ValueValidation);
 
-        let high = Args::try_parse_from(["count_lines", "--jobs", "999"]).expect_err("too many jobs invalid");
+        let high = Args::try_parse_from(["count_lines", "--jobs", "999"])
+            .expect_err("too many jobs invalid");
         assert_eq!(high.kind(), ErrorKind::ValueValidation);
     }
 
@@ -265,7 +308,10 @@ mod tests {
         let mut args = Args::parse_from(["count_lines"]);
         args.comparison.compare = Some(vec![PathBuf::from("only.json")]);
 
-        assert!(make_compare_tuple(&args).is_none(), "single compare path should be ignored");
+        assert!(
+            make_compare_tuple(&args).is_none(),
+            "single compare path should be ignored"
+        );
     }
 
     #[test]

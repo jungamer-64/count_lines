@@ -25,7 +25,9 @@ impl LineProcessor for OCamlProcessor {
 
 impl OCamlProcessor {
     pub const fn new() -> Self {
-        Self { block_comment_depth: 0 }
+        Self {
+            block_comment_depth: 0,
+        }
     }
 
     pub fn process(&mut self, line: &str) -> usize {
@@ -40,7 +42,11 @@ impl OCamlProcessor {
             self.block_comment_depth = 1;
             let rest = &line[block_start + 2..];
             let rest_has_code = self.process_nesting_block(rest);
-            return if has_code_before || rest_has_code { 1 } else { 0 };
+            return if has_code_before || rest_has_code {
+                1
+            } else {
+                0
+            };
         }
 
         1

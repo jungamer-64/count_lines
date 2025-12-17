@@ -13,10 +13,14 @@ use crate::{
 /// Compare two JSON snapshot files and return a formatted diff. The
 /// snapshots must be compatible with the output of `count_lines --format json`.
 pub fn run(old_path: &Path, new_path: &Path) -> Result<String> {
-    let old_file = FileReader::open(old_path)
-        .map_err(|source| InfrastructureError::FileRead { path: old_path.to_path_buf(), source })?;
-    let new_file = FileReader::open(new_path)
-        .map_err(|source| InfrastructureError::FileRead { path: new_path.to_path_buf(), source })?;
+    let old_file = FileReader::open(old_path).map_err(|source| InfrastructureError::FileRead {
+        path: old_path.to_path_buf(),
+        source,
+    })?;
+    let new_file = FileReader::open(new_path).map_err(|source| InfrastructureError::FileRead {
+        path: new_path.to_path_buf(),
+        source,
+    })?;
     let old: Snapshot = serde_json::from_reader(old_file).map_err(InfrastructureError::from)?;
     let new: Snapshot = serde_json::from_reader(new_file).map_err(InfrastructureError::from)?;
     let comparison = SnapshotComparison::new(old, new);
@@ -71,7 +75,12 @@ impl SnapshotComparison {
             self.calculate_diff(self.new.summary.files, self.old.summary.files)
         ));
         if let (Some(ow), Some(nw)) = (self.old.summary.words, self.new.summary.words) {
-            output.push_str(&format!("Words: {} -> {} (Δ {})\n", ow, nw, self.calculate_diff(nw, ow)));
+            output.push_str(&format!(
+                "Words: {} -> {} (Δ {})\n",
+                ow,
+                nw,
+                self.calculate_diff(nw, ow)
+            ));
         }
         output
     }
@@ -81,7 +90,12 @@ impl SnapshotComparison {
     /// Added files are indicated explicitly.
     fn format_file_diffs(&self) -> String {
         // Build a lookup table from file name to its entry in the old snapshot
-        let old_map: HashMap<&str, &FileItem> = self.old.files.iter().map(|f| (f.file.as_str(), f)).collect();
+        let old_map: HashMap<&str, &FileItem> = self
+            .old
+            .files
+            .iter()
+            .map(|f| (f.file.as_str(), f))
+            .collect();
         let mut output = String::new();
         for new_file in &self.new.files {
             if let Some(old_file) = old_map.get(new_file.file.as_str()) {

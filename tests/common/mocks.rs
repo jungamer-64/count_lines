@@ -30,7 +30,10 @@ pub struct MockFileEntryProvider {
 
 impl MockFileEntryProvider {
     pub fn new(entries: Vec<FileEntry>) -> Self {
-        Self { entries, should_fail: false }
+        Self {
+            entries,
+            should_fail: false,
+        }
     }
 
     pub fn empty() -> Self {
@@ -49,7 +52,7 @@ impl FileEntryProvider for MockFileEntryProvider {
             Err(InfrastructureError::FileSystemOperation {
                 operation: "collect".to_string(),
                 path: Path::new(".").to_path_buf(),
-                source: std::io::Error::new(std::io::ErrorKind::Other, "mock failure"),
+                source: std::io::Error::other("mock failure"),
             }
             .into())
         } else {
@@ -73,11 +76,19 @@ pub struct MockFileStatisticsProcessor {
 
 impl MockFileStatisticsProcessor {
     pub fn success(stats: Vec<FileStats>) -> Self {
-        Self { behavior: ProcessorBehavior::Success(MeasurementOutcome::new(stats, Vec::new(), Vec::new())) }
+        Self {
+            behavior: ProcessorBehavior::Success(MeasurementOutcome::new(
+                stats,
+                Vec::new(),
+                Vec::new(),
+            )),
+        }
     }
 
     pub fn failure(message: impl Into<String>) -> Self {
-        Self { behavior: ProcessorBehavior::Failure(message.into()) }
+        Self {
+            behavior: ProcessorBehavior::Failure(message.into()),
+        }
     }
 
     pub fn empty() -> Self {
@@ -115,7 +126,9 @@ pub struct PresentCall {
 
 impl RecordingPresenter {
     pub fn new() -> Self {
-        Self { calls: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            calls: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     pub fn calls(&self) -> Vec<PresentCall> {
@@ -143,10 +156,10 @@ impl Default for RecordingPresenter {
 
 impl FileStatisticsPresenter for RecordingPresenter {
     fn present(&self, stats: &[FileStats], config: &Config) -> Result<()> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push(PresentCall { stats: stats.to_vec(), config_format: format!("{:?}", config.format) });
+        self.calls.lock().unwrap().push(PresentCall {
+            stats: stats.to_vec(),
+            config_format: format!("{:?}", config.format),
+        });
         Ok(())
     }
 }
@@ -163,7 +176,10 @@ pub struct RecordingNotifier {
 
 impl RecordingNotifier {
     pub fn new() -> Self {
-        Self { infos: Arc::new(Mutex::new(Vec::new())), warnings: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            infos: Arc::new(Mutex::new(Vec::new())),
+            warnings: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 
     pub fn info_messages(&self) -> Vec<String> {
@@ -179,7 +195,11 @@ impl RecordingNotifier {
     }
 
     pub fn has_warning(&self, msg: &str) -> bool {
-        self.warnings.lock().unwrap().iter().any(|m| m.contains(msg))
+        self.warnings
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|m| m.contains(msg))
     }
 
     pub fn info_count(&self) -> usize {
@@ -218,7 +238,10 @@ pub struct MockSnapshotComparator {
 
 impl MockSnapshotComparator {
     pub fn new(result: impl Into<String>) -> Self {
-        Self { result: result.into(), should_fail: false }
+        Self {
+            result: result.into(),
+            should_fail: false,
+        }
     }
 
     pub fn with_failure(mut self) -> Self {
@@ -358,7 +381,10 @@ mod tests {
         let stats = vec![FileStatsBuilder::new("a.rs").lines(10).build()];
         let setup = MockSetup::new().with_stats(stats);
 
-        let outcome = setup.processor.measure(vec![], &ConfigBuilder::new().build()).unwrap();
+        let outcome = setup
+            .processor
+            .measure(vec![], &ConfigBuilder::new().build())
+            .unwrap();
         assert_eq!(outcome.stats.len(), 1);
     }
 }

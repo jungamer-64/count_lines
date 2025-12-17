@@ -12,7 +12,9 @@ use serde::{Deserialize, Serialize};
 /// - `+` / `+=` mirror plain `usize` arithmetic for speed.
 /// - `saturating_*` helpers protect against overflow without leaving the type.
 /// - Implements `Sum`, `FromIterator`, and `num_traits::Zero` so it blends into generic code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[must_use]
 #[repr(transparent)]
 #[serde(transparent)]
@@ -22,49 +24,41 @@ impl LineCount {
     pub const ZERO: Self = Self(0);
 
     #[inline]
-    #[must_use]
     pub const fn new(value: usize) -> Self {
         Self(value)
     }
 
     #[inline]
-    #[must_use]
     pub const fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    #[must_use]
     pub const fn value(self) -> usize {
         self.0
     }
 
     #[inline]
-    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add(self, rhs: usize) -> Self {
         Self(self.0.saturating_add(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub(self, rhs: usize) -> Self {
         Self(self.0.saturating_sub(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_add(rhs.0))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_sub(rhs.0))
     }
@@ -174,7 +168,9 @@ impl Sum<usize> for LineCount {
 }
 
 /// Tracks character counts with the same semantics as `LineCount`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[must_use]
 #[repr(transparent)]
 #[serde(transparent)]
@@ -184,49 +180,41 @@ impl CharCount {
     pub const ZERO: Self = Self(0);
 
     #[inline]
-    #[must_use]
     pub const fn new(value: usize) -> Self {
         Self(value)
     }
 
     #[inline]
-    #[must_use]
     pub const fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    #[must_use]
     pub const fn value(self) -> usize {
         self.0
     }
 
     #[inline]
-    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add(self, rhs: usize) -> Self {
         Self(self.0.saturating_add(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub(self, rhs: usize) -> Self {
         Self(self.0.saturating_sub(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_add(rhs.0))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_sub(rhs.0))
     }
@@ -323,7 +311,9 @@ impl Sum<usize> for CharCount {
 }
 
 /// Represents word totals while preserving the ergonomic arithmetic helpers.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[must_use]
 #[repr(transparent)]
 #[serde(transparent)]
@@ -333,49 +323,41 @@ impl WordCount {
     pub const ZERO: Self = Self(0);
 
     #[inline]
-    #[must_use]
     pub const fn new(value: usize) -> Self {
         Self(value)
     }
 
     #[inline]
-    #[must_use]
     pub const fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    #[must_use]
     pub const fn value(self) -> usize {
         self.0
     }
 
     #[inline]
-    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add(self, rhs: usize) -> Self {
         Self(self.0.saturating_add(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub(self, rhs: usize) -> Self {
         Self(self.0.saturating_sub(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_add(rhs.0))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_sub(rhs.0))
     }
@@ -472,7 +454,9 @@ impl Sum<usize> for WordCount {
 }
 
 /// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数を表す値オブジェクト
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[must_use]
 #[repr(transparent)]
 #[serde(transparent)]
@@ -482,49 +466,41 @@ impl SlocCount {
     pub const ZERO: Self = Self(0);
 
     #[inline]
-    #[must_use]
     pub const fn new(value: usize) -> Self {
         Self(value)
     }
 
     #[inline]
-    #[must_use]
     pub const fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    #[must_use]
     pub const fn value(self) -> usize {
         self.0
     }
 
     #[inline]
-    #[must_use]
     pub const fn is_zero(self) -> bool {
         self.0 == 0
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add(self, rhs: usize) -> Self {
         Self(self.0.saturating_add(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub(self, rhs: usize) -> Self {
         Self(self.0.saturating_sub(rhs))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_add_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_add(rhs.0))
     }
 
     #[inline]
-    #[must_use]
     pub const fn saturating_sub_count(self, rhs: Self) -> Self {
         Self(self.0.saturating_sub(rhs.0))
     }

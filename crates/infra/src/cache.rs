@@ -58,7 +58,6 @@ impl CacheHasherTrait for ahash::AHasher {
 #[cfg(all(not(feature = "hash-xx"), not(feature = "hash-a")))]
 impl CacheHasherTrait for std::collections::hash_map::DefaultHasher {
     fn new() -> Self {
-        use std::hash::Hasher;
         std::collections::hash_map::DefaultHasher::new()
     }
 
@@ -68,7 +67,6 @@ impl CacheHasherTrait for std::collections::hash_map::DefaultHasher {
     }
 
     fn finish(self) -> u64 {
-        use std::hash::Hasher;
         std::hash::Hasher::finish(&self)
     }
 }
@@ -134,20 +132,24 @@ impl CacheStore {
 
         if let Some(path) = path.clone() {
             match fs::read_to_string(&path) {
-                Ok(contents) if !contents.is_empty() => match serde_json::from_str::<CacheFile>(&contents) {
-                    Ok(file) if file.version == CACHE_VERSION && file.signature == signature => {
-                        entries = file.entries;
+                Ok(contents) if !contents.is_empty() => {
+                    match serde_json::from_str::<CacheFile>(&contents) {
+                        Ok(file)
+                            if file.version == CACHE_VERSION && file.signature == signature =>
+                        {
+                            entries = file.entries;
+                        }
+                        Ok(_) => {
+                            eprintln!(
+                                "[warn] cache signature mismatch for {}; discarding cached data",
+                                path.display()
+                            );
+                        }
+                        Err(err) => {
+                            eprintln!("[warn] failed to parse cache {}: {}", path.display(), err);
+                        }
                     }
-                    Ok(_) => {
-                        eprintln!(
-                            "[warn] cache signature mismatch for {}; discarding cached data",
-                            path.display()
-                        );
-                    }
-                    Err(err) => {
-                        eprintln!("[warn] failed to parse cache {}: {}", path.display(), err);
-                    }
-                },
+                }
                 Ok(_) => {}
                 Err(err) if err.kind() != io::ErrorKind::NotFound => {
                     eprintln!("[warn] failed to read cache {}: {}", path.display(), err);
@@ -156,7 +158,11 @@ impl CacheStore {
             }
         }
 
-        Ok(Self { path, signature, entries })
+        Ok(Self {
+            path,
+            signature,
+            entries,
+        })
     }
 
     pub fn path_key(path: &Path) -> String {
@@ -178,11 +184,17 @@ impl CacheStore {
 
     pub fn update(&mut self, key: String, entry: &FileEntry, stats: &FileStats, verify_hash: bool) {
         let hash_hex = verify_hash.then(|| hash_file(&entry.path)).flatten();
-        self.entries.insert(key, CacheEntry::from_result(entry, stats, hash_hex));
+        self.entries
+            .insert(key, CacheEntry::from_result(entry, stats, hash_hex));
     }
 
     pub fn prune_except(&mut self, retain: &HashSet<String>) -> Vec<String> {
-        let to_remove: Vec<String> = self.entries.keys().filter(|k| !retain.contains(*k)).cloned().collect();
+        let to_remove: Vec<String> = self
+            .entries
+            .keys()
+            .filter(|k| !retain.contains(*k))
+            .cloned()
+            .collect();
         for key in &to_remove {
             self.entries.remove(key);
         }
@@ -194,13 +206,20 @@ impl CacheStore {
             return Ok(());
         };
 
-        let file =
-            CacheFileRef { version: CACHE_VERSION, signature: &self.signature, entries: &self.entries };
+        let file = CacheFileRef {
+            version: CACHE_VERSION,
+            signature: &self.signature,
+            entries: &self.entries,
+        };
         let tmp_path = path.with_extension("tmp");
         if let Some(parent) = path.parent()
             && let Err(err) = fs::create_dir_all(parent)
         {
-            return Err(InfrastructureError::FileWrite { path: parent.to_path_buf(), source: err }.into());
+            return Err(InfrastructureError::FileWrite {
+                path: parent.to_path_buf(),
+                source: err,
+            }
+            .into());
         }
         // Acquire an exclusive lock to prevent concurrent writers from corrupting the cache.
         let lock_path = path.with_extension("lock");
@@ -209,31 +228,48 @@ impl CacheStore {
             .write(true)
             .truncate(true)
             .open(&lock_path)
-            .map_err(|err| InfrastructureError::FileWrite { path: lock_path.clone(), source: err })?;
+            .map_err(|err| InfrastructureError::FileWrite {
+                path: lock_path.clone(),
+                source: err,
+            })?;
 
         lock_file
             .lock_exclusive()
-            .map_err(|err| InfrastructureError::FileWrite { path: lock_path.clone(), source: err })?;
+            .map_err(|err| InfrastructureError::FileWrite {
+                path: lock_path.clone(),
+                source: err,
+            })?;
 
-        let mut tmp_file = fs::File::create(&tmp_path)
-            .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
+        let mut tmp_file =
+            fs::File::create(&tmp_path).map_err(|err| InfrastructureError::FileWrite {
+                path: tmp_path.clone(),
+                source: err,
+            })?;
         {
             let mut writer = io::BufWriter::new(&mut tmp_file);
             serde_json::to_writer_pretty(&mut writer, &file).map_err(|err| {
                 InfrastructureError::FileWrite {
                     path: tmp_path.clone(),
-                    source: io::Error::new(io::ErrorKind::Other, err),
+                    source: io::Error::other(err),
                 }
             })?;
             writer
                 .flush()
-                .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
+                .map_err(|err| InfrastructureError::FileWrite {
+                    path: tmp_path.clone(),
+                    source: err,
+                })?;
         }
         tmp_file
             .sync_all()
-            .map_err(|err| InfrastructureError::FileWrite { path: tmp_path.clone(), source: err })?;
-        fs::rename(&tmp_path, path)
-            .map_err(|err| InfrastructureError::FileWrite { path: path.clone(), source: err })?;
+            .map_err(|err| InfrastructureError::FileWrite {
+                path: tmp_path.clone(),
+                source: err,
+            })?;
+        fs::rename(&tmp_path, path).map_err(|err| InfrastructureError::FileWrite {
+            path: path.clone(),
+            source: err,
+        })?;
 
         // release lock and remove lock file if possible
         let _ = lock_file.unlock();
@@ -251,7 +287,11 @@ impl CacheEntry {
             return false;
         }
         if self.mtime_millis
-            != entry.meta.mtime.as_ref().map(|dt: &chrono::DateTime<chrono::Local>| dt.timestamp_millis())
+            != entry
+                .meta
+                .mtime
+                .as_ref()
+                .map(|dt: &chrono::DateTime<chrono::Local>| dt.timestamp_millis())
         {
             return false;
         }
@@ -267,7 +307,11 @@ impl CacheEntry {
     fn from_result(entry: &FileEntry, stats: &FileStats, hash_hex: Option<String>) -> Self {
         Self {
             size: entry.meta.size,
-            mtime_millis: entry.meta.mtime.as_ref().map(chrono::DateTime::timestamp_millis),
+            mtime_millis: entry
+                .meta
+                .mtime
+                .as_ref()
+                .map(chrono::DateTime::timestamp_millis),
             lines: stats.lines as u64,
             chars: stats.chars as u64,
             words: stats.words.map(|w| w as u64),
@@ -325,8 +369,11 @@ fn workspace_hash(config: &Config) -> u64 {
     // Use a stable, cross-process hash so the cache filename is deterministic
     // for the same workspace paths.
     let mut hasher = CacheHasher::new();
-    let mut paths: Vec<String> =
-        config.paths.iter().map(|path| logical_absolute(path).to_string_lossy().into_owned()).collect();
+    let mut paths: Vec<String> = config
+        .paths
+        .iter()
+        .map(|path| logical_absolute(path).to_string_lossy().into_owned())
+        .collect();
     paths.sort();
     for path in paths {
         hasher.update(path.as_bytes());
@@ -356,7 +403,11 @@ impl CacheStore {
         if let Some(path) = store.path {
             // Try to acquire lock before removing to avoid racing with a writer
             let lock_path = path.with_extension("lock");
-            if let Ok(lock_file) = fs::OpenOptions::new().create(true).append(true).open(&lock_path) {
+            if let Ok(lock_file) = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&lock_path)
+            {
                 let _ = lock_file.lock_exclusive();
                 let res = fs::remove_file(&path);
                 let _ = lock_file.unlock();

@@ -16,8 +16,8 @@ pub mod processors;
 mod string_utils;
 
 pub use comment_style::CommentStyle;
-pub use processor_trait::LineProcessor;
 use processor_state::SlocProcessor;
+pub use processor_trait::LineProcessor;
 
 /// SLOCカウンター
 ///
@@ -46,7 +46,10 @@ impl SlocCounter {
     /// * `extension` - ファイル拡張子（例: "rs", "py", "cpp"）
     pub fn new(extension: &str) -> Self {
         let processor = SlocProcessor::from_extension(extension);
-        Self { processor, count: 0 }
+        Self {
+            processor,
+            count: 0,
+        }
     }
 
     /// 行を処理してSLOCかどうかを判定

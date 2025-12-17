@@ -13,7 +13,10 @@ impl GlobPattern {
     pub fn new(pattern: &str) -> Result<Self, globset::Error> {
         let glob = Glob::new(pattern)?;
         let matcher = glob.compile_matcher();
-        Ok(Self { original: pattern.to_string(), matcher })
+        Ok(Self {
+            original: pattern.to_string(),
+            matcher,
+        })
     }
 
     pub fn matches(&self, value: &str) -> bool {

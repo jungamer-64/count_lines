@@ -30,8 +30,11 @@ struct FileMetaLight {
 // follow_links flag. When follow_links is false we use symlink_metadata and
 // explicitly exclude symlinks from being treated as regular files.
 fn build_meta_light(path: &Path, follow_links: bool) -> Option<FileMetaLight> {
-    let metadata =
-        if follow_links { std::fs::metadata(path).ok()? } else { std::fs::symlink_metadata(path).ok()? };
+    let metadata = if follow_links {
+        std::fs::metadata(path).ok()?
+    } else {
+        std::fs::symlink_metadata(path).ok()?
+    };
 
     // If the caller requested not to follow links, treat symlinks as not-a-file.
     if !follow_links && metadata.file_type().is_symlink() {
@@ -46,9 +49,20 @@ fn build_meta_light(path: &Path, follow_links: bool) -> Option<FileMetaLight> {
 
     let size = metadata.len();
     let mtime = metadata.modified().ok().map(DateTime::<Utc>::from);
-    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    Some(FileMetaLight { size, mtime, ext, name })
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    Some(FileMetaLight {
+        size,
+        mtime,
+        ext,
+        name,
+    })
 }
 
 fn is_definitely_binary_ext(ext: &str) -> bool {
@@ -217,10 +231,18 @@ fn is_definitely_text_name(name: &str) -> bool {
 }
 
 fn detect_text(path: &Path, fast: bool, size: u64, ext: &str, plan: &FileEnumerationPlan) -> bool {
-    if plan.force_binary_exts.iter().any(|pattern| pattern.eq_ignore_ascii_case(ext)) {
+    if plan
+        .force_binary_exts
+        .iter()
+        .any(|pattern| pattern.eq_ignore_ascii_case(ext))
+    {
         return false;
     }
-    if plan.force_text_exts.iter().any(|pattern| pattern.eq_ignore_ascii_case(ext)) {
+    if plan
+        .force_text_exts
+        .iter()
+        .any(|pattern| pattern.eq_ignore_ascii_case(ext))
+    {
         return true;
     }
 
@@ -233,17 +255,21 @@ fn detect_text(path: &Path, fast: bool, size: u64, ext: &str, plan: &FileEnumera
         return true;
     }
 
-    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-        if is_definitely_text_name(name) {
-            return true;
-        }
+    if let Some(name) = path.file_name().and_then(|s| s.to_str())
+        && is_definitely_text_name(name)
+    {
+        return true;
     }
 
     // For very large files prefer quick sniff to avoid O(file_size) reads.
     if size >= LARGE_TEXT_SNIFF_THRESHOLD {
         return quick_text_check(path);
     }
-    if fast { quick_text_check(path) } else { strict_text_check(path) }
+    if fast {
+        quick_text_check(path)
+    } else {
+        strict_text_check(path)
+    }
 }
 
 /// Filesystem adapter implementing the `FileEnumerator` port based on the enumeration plan.
@@ -277,17 +303,19 @@ fn enumerate_plan(plan: &FileEnumerationPlan) -> Result<Vec<FileEntryDto>> {
         // For walk-based collection (multiple roots, git lists, etc.) ensure a
         // deterministic order and remove duplicates from overlapping roots.
         let mut walk_entries = walk_roots(plan, matcher)?;
-        
+
         // Platform-aware normalization for sorting and deduplication.
         // Use the platform abstraction to handle case sensitivity differences.
-        use crate::platform::{default_path_normalizer, PathNormalizer};
+        use crate::platform::{PathNormalizer, default_path_normalizer};
         let normalizer = default_path_normalizer();
-        
+
         #[cfg(windows)]
         {
             // Windows: always case-insensitive
-            let mut keyed: Vec<(_, FileEntryDto)> =
-                walk_entries.into_iter().map(|e| (normalizer.normalize(&e.path), e)).collect();
+            let mut keyed: Vec<(_, FileEntryDto)> = walk_entries
+                .into_iter()
+                .map(|e| (normalizer.normalize(&e.path), e))
+                .collect();
             keyed.sort_by(|a, b| a.0.cmp(&b.0));
             keyed.dedup_by(|a, b| a.0 == b.0);
             walk_entries = keyed.into_iter().map(|(_, e)| e).collect();
@@ -296,8 +324,10 @@ fn enumerate_plan(plan: &FileEnumerationPlan) -> Result<Vec<FileEntryDto>> {
         {
             if plan.case_insensitive_dedup {
                 // User requested case-insensitive dedup on case-sensitive filesystem
-                let mut keyed: Vec<(String, FileEntryDto)> =
-                    walk_entries.into_iter().map(|e| (e.path.to_string_lossy().to_lowercase(), e)).collect();
+                let mut keyed: Vec<(String, FileEntryDto)> = walk_entries
+                    .into_iter()
+                    .map(|e| (e.path.to_string_lossy().to_lowercase(), e))
+                    .collect();
                 keyed.sort_by(|a, b| a.0.cmp(&b.0));
                 keyed.dedup_by(|a, b| a.0 == b.0);
                 walk_entries = keyed.into_iter().map(|(_, e)| e).collect();
@@ -335,9 +365,9 @@ fn materialise_paths(
     // duplicates. This keeps user-supplied ordering stable while removing
     // redundant work.
     {
-        use crate::platform::{default_path_normalizer, PathNormalizer};
+        use crate::platform::{PathNormalizer, default_path_normalizer};
         let normalizer = default_path_normalizer();
-        
+
         #[cfg(windows)]
         {
             // Windows: always case-insensitive
@@ -465,17 +495,22 @@ fn collect_entries_from_root(
     if let Some(depth) = plan.max_depth {
         builder.max_depth(Some(depth));
     }
-    if let Some(thread_count) = plan.threads {
-        if thread_count > 0 {
-            builder.threads(thread_count);
-        }
+    if let Some(thread_count) = plan.threads
+        && thread_count > 0
+    {
+        builder.threads(thread_count);
     }
 
-    if plan.use_ignore_overrides && (!plan.overrides_include.is_empty() || !plan.overrides_exclude.is_empty())
+    if plan.use_ignore_overrides
+        && (!plan.overrides_include.is_empty() || !plan.overrides_exclude.is_empty())
     {
         let mut ob = OverrideBuilder::new(root);
         for pattern in &plan.overrides_include {
-            let pat = if pattern.starts_with('!') { pattern.clone() } else { format!("!{}", pattern) };
+            let pat = if pattern.starts_with('!') {
+                pattern.clone()
+            } else {
+                format!("!{}", pattern)
+            };
             if let Err(err) = ob.add(&pat) {
                 warn_msg(&format!("invalid include override '{}': {}", pattern, err));
             }
@@ -489,7 +524,11 @@ fn collect_entries_from_root(
             Ok(overrides) => {
                 builder.overrides(overrides);
             }
-            Err(err) => warn_msg(&format!("building overrides failed for {}: {}", root.display(), err)),
+            Err(err) => warn_msg(&format!(
+                "building overrides failed for {}: {}",
+                root.display(),
+                err
+            )),
         }
     }
 
@@ -497,13 +536,14 @@ fn collect_entries_from_root(
     let include_hidden = plan.include_hidden;
     let no_default_prune = plan.no_default_prune;
     let follow_links = plan.follow_links;
-    
+
     // Lightweight visited set to avoid following directory symlink loops when
     // follow_links is enabled. Use platform-appropriate tracking.
     use crate::platform::DirectoryLoopDetector;
-    let visited_dirs: Arc<Mutex<DirectoryLoopDetector>> = Arc::new(Mutex::new(DirectoryLoopDetector::new()));
+    let visited_dirs: Arc<Mutex<DirectoryLoopDetector>> =
+        Arc::new(Mutex::new(DirectoryLoopDetector::new()));
     let visited_dirs_cloned = Arc::clone(&visited_dirs);
-    
+
     builder.filter_entry(move |entry| {
         if let Some(ft) = entry.file_type() {
             // Prepare to optionally fetch metadata once and reuse it to
@@ -537,7 +577,11 @@ fn collect_entries_from_root(
                     }
                 }
 
-                return matcher_for_dirs.should_visit_dir(entry.path(), include_hidden, no_default_prune);
+                return matcher_for_dirs.should_visit_dir(
+                    entry.path(),
+                    include_hidden,
+                    no_default_prune,
+                );
             }
         }
         true
@@ -604,18 +648,30 @@ fn walk_roots(plan: &FileEnumerationPlan, matcher: PlanMatcher) -> Result<Vec<Fi
 
 fn to_port_entry(path: PathBuf, meta: FileMetadata) -> FileEntryDto {
     let mtime_local = meta.mtime.map(|dt| dt.with_timezone(&Local));
-    FileEntryDto::new(path, meta.is_text, meta.size, meta.ext, meta.name, mtime_local)
+    FileEntryDto::new(
+        path,
+        meta.is_text,
+        meta.size,
+        meta.ext,
+        meta.name,
+        mtime_local,
+    )
 }
 
 fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
-    let reader = FileReader::open_buffered(path)
-        .map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
+    let reader =
+        FileReader::open_buffered(path).map_err(|source| InfrastructureError::FileRead {
+            path: path.to_path_buf(),
+            source,
+        })?;
     let mut files = Vec::new();
     let mut is_first = true;
     let base = path.parent().unwrap_or(Path::new(""));
     for line in reader.lines() {
-        let mut line =
-            line.map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
+        let mut line = line.map_err(|source| InfrastructureError::FileRead {
+            path: path.to_path_buf(),
+            source,
+        })?;
         if is_first {
             // Strip BOM (U+FEFF) only on the very first line if present.
             if let Some(s) = line.strip_prefix('\u{feff}') {
@@ -628,18 +684,27 @@ fn read_files_from_lines(path: &Path) -> Result<Vec<PathBuf>> {
         let s = line.trim_end_matches('\r');
         if !s.is_empty() {
             let candidate = Path::new(s);
-            files.push(if candidate.is_absolute() { candidate.to_path_buf() } else { base.join(candidate) });
+            files.push(if candidate.is_absolute() {
+                candidate.to_path_buf()
+            } else {
+                base.join(candidate)
+            });
         }
     }
     Ok(files)
 }
 
 fn read_files_from_null(path: &Path) -> Result<Vec<PathBuf>> {
-    let mut file = FileReader::open(path)
-        .map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
+    let mut file = FileReader::open(path).map_err(|source| InfrastructureError::FileRead {
+        path: path.to_path_buf(),
+        source,
+    })?;
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)
-        .map_err(|source| InfrastructureError::FileRead { path: path.to_path_buf(), source })?;
+        .map_err(|source| InfrastructureError::FileRead {
+            path: path.to_path_buf(),
+            source,
+        })?;
     let base = path.parent().unwrap_or(Path::new(""));
     Ok(buf
         .split(|&b| b == 0)
@@ -649,7 +714,11 @@ fn read_files_from_null(path: &Path) -> Result<Vec<PathBuf>> {
             }
             // Convert raw bytes to PathBuf preserving non-UTF-8 paths on Unix.
             let candidate = path_from_bytes(chunk);
-            Some(if candidate.is_absolute() { candidate } else { base.join(candidate) })
+            Some(if candidate.is_absolute() {
+                candidate
+            } else {
+                base.join(candidate)
+            })
         })
         .collect())
 }
@@ -678,7 +747,10 @@ fn collect_git_files(roots: &[PathBuf]) -> Result<Vec<PathBuf>> {
             })?;
         if !output.status.success() {
             // Skip roots that are not git repositories rather than erroring the whole operation.
-            warn_msg(&format!("{} is not a git repo (git ls-files skipped)", root.display()));
+            warn_msg(&format!(
+                "{} is not a git repo (git ls-files skipped)",
+                root.display()
+            ));
             continue;
         }
         for chunk in output.stdout.split(|&b| b == 0) {
@@ -717,7 +789,10 @@ struct LocalCollector {
 }
 impl LocalCollector {
     fn with_capacity(shared: Arc<Mutex<Vec<FileEntryDto>>>) -> Self {
-        Self { buf: Vec::with_capacity(FLUSH_THRESHOLD), shared }
+        Self {
+            buf: Vec::with_capacity(FLUSH_THRESHOLD),
+            shared,
+        }
     }
 }
 impl Drop for LocalCollector {
@@ -740,10 +815,26 @@ fn build_metadata(path: &Path, fast_text_detect: bool) -> Option<FileMetadata> {
     let metadata = std::fs::metadata(path).ok()?;
     let size = metadata.len();
     let mtime = metadata.modified().ok().map(DateTime::<Utc>::from);
-    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-    let name = path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-    let is_text = if fast_text_detect { quick_text_check(path) } else { strict_text_check(path) };
-    Some(FileMetadata { size, mtime, is_text, ext, name })
+    let ext = path
+        .extension()
+        .map(|e| e.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    let name = path
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let is_text = if fast_text_detect {
+        quick_text_check(path)
+    } else {
+        strict_text_check(path)
+    };
+    Some(FileMetadata {
+        size,
+        mtime,
+        is_text,
+        ext,
+        name,
+    })
 }
 
 fn quick_text_check(path: &Path) -> bool {
@@ -771,7 +862,11 @@ fn quick_text_check(path: &Path) -> bool {
                     }
                 }
                 Err(err) => {
-                    warn_msg(&format!("quick_text_check read error for {}: {}", path.display(), err));
+                    warn_msg(&format!(
+                        "quick_text_check read error for {}: {}",
+                        path.display(),
+                        err
+                    ));
                     false
                 }
             }
@@ -795,7 +890,7 @@ fn looks_like_utf16_no_bom(s: &[u8]) -> bool {
             } else {
                 nul_odd += 1;
             }
-        } else if b == b'\n' || b == b'\r' || b == b'\t' || (b >= 0x20 && b <= 0x7E) {
+        } else if b == b'\n' || b == b'\r' || b == b'\t' || (0x20..=0x7E).contains(&b) {
             ascii_like += 1;
         }
     }
@@ -823,11 +918,15 @@ fn looks_like_utf32_no_bom(s: &[u8]) -> bool {
         lane_total[lane] += 1;
         if b == 0 {
             nul_lane[lane] += 1;
-        } else if b == b'\n' || b == b'\r' || b == b'\t' || (b >= 0x20 && b <= 0x7E) {
+        } else if b == b'\n' || b == b'\r' || b == b'\t' || (0x20..=0x7E).contains(&b) {
             ascii_lane[lane] += 1;
         }
     }
-    let (ascii_lane_idx, &ascii_max) = ascii_lane.iter().enumerate().max_by_key(|(_, v)| *v).unwrap();
+    let (ascii_lane_idx, &ascii_max) = ascii_lane
+        .iter()
+        .enumerate()
+        .max_by_key(|(_, v)| *v)
+        .unwrap();
     if ascii_max == 0 {
         return false;
     }
@@ -895,7 +994,11 @@ fn strict_text_check(path: &Path) -> bool {
                         }
                     }
                     Err(err) => {
-                        warn_msg(&format!("strict_text_check read error for {}: {}", path.display(), err));
+                        warn_msg(&format!(
+                            "strict_text_check read error for {}: {}",
+                            path.display(),
+                            err
+                        ));
                         return false;
                     }
                 }
@@ -938,13 +1041,19 @@ impl PlanMatcher {
         // Normalize pattern strings on Windows (replace backslashes) so that
         // path-like detection (contains '/') behaves as expected.
         #[cfg(windows)]
-        let include_pattern_strings =
-            plan.include_patterns.iter().map(|p| p.replace('\\', "/")).collect::<Vec<_>>();
+        let include_pattern_strings = plan
+            .include_patterns
+            .iter()
+            .map(|p| p.replace('\\', "/"))
+            .collect::<Vec<_>>();
         #[cfg(not(windows))]
         let include_pattern_strings = plan.include_patterns.clone();
         #[cfg(windows)]
-        let exclude_pattern_strings =
-            plan.exclude_patterns.iter().map(|p| p.replace('\\', "/")).collect::<Vec<_>>();
+        let exclude_pattern_strings = plan
+            .exclude_patterns
+            .iter()
+            .map(|p| p.replace('\\', "/"))
+            .collect::<Vec<_>>();
         #[cfg(not(windows))]
         let exclude_pattern_strings = plan.exclude_patterns.clone();
 
@@ -957,7 +1066,11 @@ impl PlanMatcher {
             exclude_paths: compile_patterns(&plan.exclude_paths)?,
             exclude_dirs: compile_patterns(&plan.exclude_dirs)?,
             exclude_dirs_only: compile_patterns(&plan.exclude_dirs_only)?,
-            ext_filters: plan.ext_filters.iter().map(|ext| ext.to_lowercase()).collect(),
+            ext_filters: plan
+                .ext_filters
+                .iter()
+                .map(|ext| ext.to_lowercase())
+                .collect(),
             size_min: lo,
             size_max: hi,
             mtime_since: since,
@@ -975,7 +1088,9 @@ impl PlanMatcher {
 
         if !no_default_prune && let Some(name) = path.file_name().and_then(|n| n.to_str()) {
             #[cfg(windows)]
-            let hit = DEFAULT_PRUNE_DIRS.iter().any(|d| d.eq_ignore_ascii_case(name));
+            let hit = DEFAULT_PRUNE_DIRS
+                .iter()
+                .any(|d| d.eq_ignore_ascii_case(name));
             #[cfg(not(windows))]
             let hit = DEFAULT_PRUNE_DIRS.contains(&name);
             if hit {
@@ -983,11 +1098,18 @@ impl PlanMatcher {
             }
         }
 
-        if self.exclude_dirs_only.iter().any(|matcher| matcher.is_match(path)) {
+        if self
+            .exclude_dirs_only
+            .iter()
+            .any(|matcher| matcher.is_match(path))
+        {
             return false;
         }
 
-        !self.exclude_dirs.iter().any(|matcher| matcher.is_match(path))
+        !self
+            .exclude_dirs
+            .iter()
+            .any(|matcher| matcher.is_match(path))
     }
 
     fn matches_file(&self, path: &Path, meta: &FileMetadata) -> bool {
@@ -1004,7 +1126,9 @@ impl PlanMatcher {
             return false;
         };
 
-        if !self.include_patterns.is_empty() && !self.include_patterns.iter().any(|m| m.is_match(name)) {
+        if !self.include_patterns.is_empty()
+            && !self.include_patterns.iter().any(|m| m.is_match(name))
+        {
             return false;
         }
 
@@ -1023,7 +1147,11 @@ impl PlanMatcher {
         if self.include_patterns.is_empty() {
             return true;
         }
-        for (pat, matcher) in self.include_pattern_strings.iter().zip(self.include_patterns.iter()) {
+        for (pat, matcher) in self
+            .include_pattern_strings
+            .iter()
+            .zip(self.include_patterns.iter())
+        {
             let looks_like_path = pat.contains('/') || pat.contains("**");
             if looks_like_path {
                 if matcher.is_match(path) {
@@ -1037,7 +1165,11 @@ impl PlanMatcher {
     }
 
     fn exclude_patterns_match(&self, path: &Path, fname: &str) -> bool {
-        for (pat, matcher) in self.exclude_pattern_strings.iter().zip(self.exclude_patterns.iter()) {
+        for (pat, matcher) in self
+            .exclude_pattern_strings
+            .iter()
+            .zip(self.exclude_patterns.iter())
+        {
             let looks_like_path = pat.contains('/') || pat.contains("**");
             if looks_like_path {
                 if matcher.is_match(path) {
@@ -1073,10 +1205,12 @@ impl PlanMatcher {
             }
         }
 
-        let include_by_name = !self.include_patterns.is_empty() && self.include_patterns_match(path, fname);
+        let include_by_name =
+            !self.include_patterns.is_empty() && self.include_patterns_match(path, fname);
         let include_by_path =
             !self.include_paths.is_empty() && self.include_paths.iter().any(|m| m.is_match(path));
-        let include_filters_active = !self.include_patterns.is_empty() || !self.include_paths.is_empty();
+        let include_filters_active =
+            !self.include_patterns.is_empty() || !self.include_paths.is_empty();
 
         if include_filters_active && !(include_by_name || include_by_path) {
             return false;
@@ -1185,7 +1319,9 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
                     .case_insensitive(true)
                     .build()
                     .map_err(|err| {
-                        InfrastructureError::OutputError(format!("invalid glob pattern '{pattern}': {err}"))
+                        InfrastructureError::OutputError(format!(
+                            "invalid glob pattern '{pattern}': {err}"
+                        ))
                     })
                     .map(|glob| glob.compile_matcher())
             })
@@ -1199,7 +1335,9 @@ fn compile_patterns(patterns: &[String]) -> Result<Vec<GlobMatcher>> {
             .map(|pattern| {
                 Glob::new(pattern)
                     .map_err(|err| {
-                        InfrastructureError::OutputError(format!("invalid glob pattern '{pattern}': {err}"))
+                        InfrastructureError::OutputError(format!(
+                            "invalid glob pattern '{pattern}': {err}"
+                        ))
                     })
                     .map(|glob| glob.compile_matcher())
             })
@@ -1256,7 +1394,10 @@ mod tests {
         let matcher = PlanMatcher::new(&plan).expect("build matcher");
         let since = matcher.mtime_since.expect("since");
         let until = matcher.mtime_until.expect("until");
-        assert!(since <= until, "expected mtime_since <= mtime_until after normalization");
+        assert!(
+            since <= until,
+            "expected mtime_since <= mtime_until after normalization"
+        );
     }
 
     #[test]
@@ -1276,9 +1417,24 @@ mod tests {
         plan.size_range = (Some(10), Some(100));
         let matcher = PlanMatcher::new(&plan).expect("build matcher");
 
-        let meta_small = FileMetaLight { size: 5, mtime: None, ext: "rs".into(), name: "a.rs".into() };
-        let meta_ok = FileMetaLight { size: 50, mtime: None, ext: "rs".into(), name: "b.rs".into() };
-        let meta_large = FileMetaLight { size: 500, mtime: None, ext: "rs".into(), name: "c.rs".into() };
+        let meta_small = FileMetaLight {
+            size: 5,
+            mtime: None,
+            ext: "rs".into(),
+            name: "a.rs".into(),
+        };
+        let meta_ok = FileMetaLight {
+            size: 50,
+            mtime: None,
+            ext: "rs".into(),
+            name: "b.rs".into(),
+        };
+        let meta_large = FileMetaLight {
+            size: 500,
+            mtime: None,
+            ext: "rs".into(),
+            name: "c.rs".into(),
+        };
 
         assert!(!matcher.matches_size_light(&meta_small));
         assert!(matcher.matches_size_light(&meta_ok));
@@ -1316,7 +1472,8 @@ mod tests {
         plan.exclude_dirs = vec!["**/build/**".into()];
         let matcher = PlanMatcher::new(&plan).expect("build matcher");
 
-        let entries = materialise_paths(vec![artifact.clone()], &plan, &matcher).expect("materialise");
+        let entries =
+            materialise_paths(vec![artifact.clone()], &plan, &matcher).expect("materialise");
         assert!(
             entries.is_empty(),
             "expected explicit list honouring exclude_dirs to drop {}",
@@ -1345,8 +1502,8 @@ mod tests {
             "exclude_dirs_only should prevent traversal into matching directories"
         );
 
-        let entries =
-            materialise_paths(vec![artifact.clone()], &plan, &matcher).expect("materialise succeeds");
+        let entries = materialise_paths(vec![artifact.clone()], &plan, &matcher)
+            .expect("materialise succeeds");
         assert_eq!(
             entries.len(),
             1,
@@ -1384,15 +1541,19 @@ mod tests {
         let mut plan = base_plan();
         plan.exclude_paths = vec!["**/dist/**".into()];
         let matcher = PlanMatcher::new(&plan).expect("build matcher");
-        let entries =
-            materialise_paths(vec![dist_file.clone()], &plan, &matcher).expect("materialise excludes");
-        assert!(entries.is_empty(), "expected exclude_paths to hide {}", dist_file.display());
+        let entries = materialise_paths(vec![dist_file.clone()], &plan, &matcher)
+            .expect("materialise excludes");
+        assert!(
+            entries.is_empty(),
+            "expected exclude_paths to hide {}",
+            dist_file.display()
+        );
 
         plan.use_ignore_overrides = true;
         plan.overrides_include = vec!["**/dist/**".into()];
         let matcher = PlanMatcher::new(&plan).expect("build matcher with overrides");
-        let entries =
-            materialise_paths(vec![dist_file.clone()], &plan, &matcher).expect("materialise overrides");
+        let entries = materialise_paths(vec![dist_file.clone()], &plan, &matcher)
+            .expect("materialise overrides");
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].path, dist_file);
     }
@@ -1413,25 +1574,40 @@ mod tests {
         plan.include_paths = vec!["dist/**".into()];
         plan.respect_gitignore = true;
 
-        let matcher = Arc::new(PlanMatcher::new(&plan).expect("build matcher respecting gitignore"));
-        let entries = super::collect_entries_from_root(dir.path(), &plan, &matcher).expect("collect entries");
-        assert!(entries.is_empty(), "gitignore-respecting plan should hide files under dist/");
+        let matcher =
+            Arc::new(PlanMatcher::new(&plan).expect("build matcher respecting gitignore"));
+        let entries =
+            super::collect_entries_from_root(dir.path(), &plan, &matcher).expect("collect entries");
+        assert!(
+            entries.is_empty(),
+            "gitignore-respecting plan should hide files under dist/"
+        );
 
         let mut plan_no_git = plan.clone();
         plan_no_git.respect_gitignore = false;
-        let matcher = Arc::new(PlanMatcher::new(&plan_no_git).expect("build matcher without gitignore"));
-        let entries =
-            super::collect_entries_from_root(dir.path(), &plan_no_git, &matcher).expect("collect entries");
-        assert_eq!(entries.len(), 1, "disabling gitignore should reveal the file");
+        let matcher =
+            Arc::new(PlanMatcher::new(&plan_no_git).expect("build matcher without gitignore"));
+        let entries = super::collect_entries_from_root(dir.path(), &plan_no_git, &matcher)
+            .expect("collect entries");
+        assert_eq!(
+            entries.len(),
+            1,
+            "disabling gitignore should reveal the file"
+        );
         assert_eq!(entries[0].path, dist_file);
 
         let mut plan_with_override = plan.clone();
         plan_with_override.use_ignore_overrides = true;
         plan_with_override.overrides_include = vec!["dist/**".into()];
-        let matcher = Arc::new(PlanMatcher::new(&plan_with_override).expect("build matcher with overrides"));
+        let matcher =
+            Arc::new(PlanMatcher::new(&plan_with_override).expect("build matcher with overrides"));
         let entries = super::collect_entries_from_root(dir.path(), &plan_with_override, &matcher)
             .expect("collect entries");
-        assert_eq!(entries.len(), 1, "override include should bring gitignored files back into the walk");
+        assert_eq!(
+            entries.len(),
+            1,
+            "override include should bring gitignored files back into the walk"
+        );
         assert_eq!(entries[0].path, dist_file);
     }
 
@@ -1572,11 +1748,27 @@ mod tests {
     fn windows_dedup_ignores_case_after_sort() {
         use std::path::PathBuf;
         let mut v = vec![
-            FileEntryDto::new(PathBuf::from("SRC\\A.TXT"), false, 0, "txt".into(), "A.TXT".into(), None),
-            FileEntryDto::new(PathBuf::from("src\\a.txt"), false, 0, "txt".into(), "a.txt".into(), None),
+            FileEntryDto::new(
+                PathBuf::from("SRC\\A.TXT"),
+                false,
+                0,
+                "txt".into(),
+                "A.TXT".into(),
+                None,
+            ),
+            FileEntryDto::new(
+                PathBuf::from("src\\a.txt"),
+                false,
+                0,
+                "txt".into(),
+                "a.txt".into(),
+                None,
+            ),
         ];
         v.sort_by_cached_key(|e| e.path.to_string_lossy().to_lowercase());
-        v.dedup_by(|a, b| a.path.to_string_lossy().to_lowercase() == b.path.to_string_lossy().to_lowercase());
+        v.dedup_by(|a, b| {
+            a.path.to_string_lossy().to_lowercase() == b.path.to_string_lossy().to_lowercase()
+        });
         assert_eq!(v.len(), 1);
     }
 
@@ -1842,7 +2034,12 @@ mod tests {
         plan.mtime_since = Some(now - chrono::Duration::hours(1));
         let m = PlanMatcher::new(&plan).unwrap();
 
-        let meta = FileMetaLight { size: 1, mtime: None, ext: "txt".into(), name: "a.txt".into() };
+        let meta = FileMetaLight {
+            size: 1,
+            mtime: None,
+            ext: "txt".into(),
+            name: "a.txt".into(),
+        };
         assert!(!m.matches_mtime_light(&meta));
     }
 
@@ -1853,7 +2050,13 @@ mod tests {
         std::fs::write(&p, "x").unwrap();
         // Passing an explicit size larger than the sniff threshold should force quick_text_check
         let plan = base_plan();
-        assert!(detect_text(&p, /*fast*/ false, LARGE_TEXT_SNIFF_THRESHOLD + 1, "", &plan));
+        assert!(detect_text(
+            &p,
+            /*fast*/ false,
+            LARGE_TEXT_SNIFF_THRESHOLD + 1,
+            "",
+            &plan
+        ));
     }
 
     #[test]
@@ -1871,7 +2074,13 @@ mod tests {
         let p = dir.path().join("huge.log");
         std::fs::write(&p, "x").unwrap();
         let plan = base_plan();
-        assert!(detect_text(&p, /*fast*/ false, LARGE_TEXT_SNIFF_THRESHOLD + 10, "log", &plan));
+        assert!(detect_text(
+            &p,
+            /*fast*/ false,
+            LARGE_TEXT_SNIFF_THRESHOLD + 10,
+            "log",
+            &plan
+        ));
     }
 
     #[test]
@@ -1913,7 +2122,10 @@ mod tests {
 
     #[test]
     fn normalize_size_range_swaps() {
-        assert_eq!(normalize_size_range((Some(20), Some(10))), (Some(10), Some(20)));
+        assert_eq!(
+            normalize_size_range((Some(20), Some(10))),
+            (Some(10), Some(20))
+        );
     }
 
     #[test]
@@ -1960,12 +2172,15 @@ fn is_hidden(path: &Path) -> bool {
     // Use symlink_metadata so that when `path` is itself a symlink we inspect
     // the symlink entry's attributes rather than following the link and
     // inspecting the target's attributes.
-    if let Ok(md) = std::fs::symlink_metadata(path) {
-        if (md.file_attributes() & FILE_ATTRIBUTE_HIDDEN) != 0 {
-            return true;
-        }
+    if let Ok(md) = std::fs::symlink_metadata(path)
+        && (md.file_attributes() & FILE_ATTRIBUTE_HIDDEN) != 0
+    {
+        return true;
     }
-    path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with('.')).unwrap_or(false)
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.starts_with('.'))
+        .unwrap_or(false)
 }
 
 #[cfg(target_os = "macos")]
@@ -1978,12 +2193,18 @@ fn is_hidden(path: &Path) -> bool {
             return true;
         }
     }
-    path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with('.')).unwrap_or(false)
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.starts_with('.'))
+        .unwrap_or(false)
 }
 
 #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
 fn is_hidden(path: &Path) -> bool {
-    path.file_name().and_then(|name| name.to_str()).map(|name| name.starts_with('.')).unwrap_or(false)
+    path.file_name()
+        .and_then(|name| name.to_str())
+        .map(|name| name.starts_with('.'))
+        .unwrap_or(false)
 }
 
 const DEFAULT_PRUNE_DIRS: &[&str] = &[
@@ -2092,5 +2313,6 @@ fn has_known_binary_signature(s: &[u8]) -> bool {
         || s.starts_with(b"Cr24")
         || s.starts_with(b"RIFX")
         || (s.len() >= 2 && s[0] == 0xFF && (s[1] & 0xE0) == 0xE0)
-        || (s.len() >= 263 && (s.get(257..263) == Some(b"ustar\0") || s.get(257..263) == Some(b"ustar ")))
+        || (s.len() >= 263
+            && (s.get(257..263) == Some(b"ustar\0") || s.get(257..263) == Some(b"ustar ")))
 }

@@ -252,7 +252,14 @@ impl FileEntryDto {
         name: String,
         mtime: Option<DateTime<Local>>,
     ) -> Self {
-        Self { path, is_text, size, ext, name, mtime }
+        Self {
+            path,
+            is_text,
+            size,
+            ext,
+            name,
+            mtime,
+        }
     }
 }
 

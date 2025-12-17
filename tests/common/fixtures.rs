@@ -18,9 +18,15 @@ pub struct TempWorkspace {
 #[allow(dead_code)]
 impl TempWorkspace {
     pub fn new(_prefix: &str) -> Self {
-        let td = TempBuilder::new().prefix("count_lines_test_").tempdir().expect("create temp workspace");
+        let td = TempBuilder::new()
+            .prefix("count_lines_test_")
+            .tempdir()
+            .expect("create temp workspace");
 
-        Self { tempdir: td, files: Vec::new() }
+        Self {
+            tempdir: td,
+            files: Vec::new(),
+        }
     }
 
     /// ファイルを作成
@@ -71,7 +77,10 @@ name = "test"
 version = "0.1.0"
 "#,
         );
-        self.create_file("src/lib.rs", "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n");
+        self.create_file(
+            "src/lib.rs",
+            "pub fn add(a: i32, b: i32) -> i32 {\n    a + b\n}\n",
+        );
         self.create_file("src/main.rs", "fn main() {\n    println!(\"Hello\");\n}\n");
         self.create_file("README.md", "# Test Project\n\nDescription\n");
         self
@@ -97,8 +106,14 @@ pub struct TempFile {
 
 impl TempFile {
     pub fn new(prefix: &str, content: &str) -> Self {
-        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create temp file dir");
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let td = TempBuilder::new()
+            .prefix(prefix)
+            .tempdir()
+            .expect("create temp file dir");
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let path = td.path().join(format!("{}_{}.tmp", prefix, unique));
         fs::write(&path, content).unwrap();
 

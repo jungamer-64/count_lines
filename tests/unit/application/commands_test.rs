@@ -19,6 +19,10 @@ use count_lines_core::{
     error::{ApplicationError, Result},
 };
 
+// Type aliases to reduce test type complexity
+type Calls = Arc<Mutex<Vec<Vec<(String, usize)>>>>;
+type StringVecLock = Arc<Mutex<Vec<String>>>;
+
 fn base_config() -> Config {
     Config {
         format: OutputFormat::Json,
@@ -71,7 +75,13 @@ fn base_config() -> Config {
 fn make_entry(path: &str) -> FileEntry {
     FileEntry {
         path: PathBuf::from(path),
-        meta: FileMeta { size: 0, mtime: None, is_text: true, ext: "rs".into(), name: "stub.rs".into() },
+        meta: FileMeta {
+            size: 0,
+            mtime: None,
+            is_text: true,
+            ext: "rs".into(),
+            name: "stub.rs".into(),
+        },
     }
 }
 
@@ -81,9 +91,19 @@ fn make_stats(path: &str, lines: usize) -> FileStats {
         mtime: None,
         is_text: true,
         ext: "rs".into(),
-        name: PathBuf::from(path).file_name().unwrap().to_string_lossy().into(),
+        name: PathBuf::from(path)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into(),
     };
-    FileStats::new(PathBuf::from(path), lines, lines * 10, Some(lines / 2), &meta)
+    FileStats::new(
+        PathBuf::from(path),
+        lines,
+        lines * 10,
+        Some(lines / 2),
+        &meta,
+    )
 }
 
 struct StubProvider {
@@ -108,15 +128,25 @@ struct StubProcessor {
 
 impl StubProcessor {
     fn success(stats: Vec<FileStats>) -> Self {
-        Self { outcome: ProcessorOutcome::Success(MeasurementOutcome::new(stats, Vec::new(), Vec::new())) }
+        Self {
+            outcome: ProcessorOutcome::Success(MeasurementOutcome::new(
+                stats,
+                Vec::new(),
+                Vec::new(),
+            )),
+        }
     }
 
     fn failure(message: &str) -> Self {
-        Self { outcome: ProcessorOutcome::Failure(message.into()) }
+        Self {
+            outcome: ProcessorOutcome::Failure(message.into()),
+        }
     }
 
     fn with_outcome(outcome: MeasurementOutcome) -> Self {
-        Self { outcome: ProcessorOutcome::Success(outcome) }
+        Self {
+            outcome: ProcessorOutcome::Success(outcome),
+        }
     }
 }
 
@@ -132,20 +162,27 @@ impl FileStatisticsProcessor for StubProcessor {
 }
 
 struct RecordingPresenter {
-    calls: Arc<Mutex<Vec<Vec<(String, usize)>>>>,
+    calls: Calls,
 }
 
 impl RecordingPresenter {
-    fn new() -> (Self, Arc<Mutex<Vec<Vec<(String, usize)>>>>) {
+    fn new() -> (Self, Calls) {
         let calls = Arc::new(Mutex::new(Vec::new()));
-        (Self { calls: Arc::clone(&calls) }, calls)
+        (
+            Self {
+                calls: Arc::clone(&calls),
+            },
+            calls,
+        )
     }
 }
 
 impl FileStatisticsPresenter for RecordingPresenter {
     fn present(&self, stats: &[FileStats], _config: &Config) -> Result<()> {
-        let snapshot =
-            stats.iter().map(|s| (s.path.to_string_lossy().to_string(), s.lines)).collect::<Vec<_>>();
+        let snapshot = stats
+            .iter()
+            .map(|s| (s.path.to_string_lossy().to_string(), s.lines))
+            .collect::<Vec<_>>();
         self.calls.lock().unwrap().push(snapshot);
         Ok(())
     }
@@ -153,15 +190,22 @@ impl FileStatisticsPresenter for RecordingPresenter {
 
 #[derive(Default)]
 struct RecordingNotifier {
-    infos: Arc<Mutex<Vec<String>>>,
-    warns: Arc<Mutex<Vec<String>>>,
+    infos: StringVecLock,
+    warns: StringVecLock,
 }
 
 impl RecordingNotifier {
-    fn new() -> (Self, Arc<Mutex<Vec<String>>>, Arc<Mutex<Vec<String>>>) {
+    fn new() -> (Self, StringVecLock, StringVecLock) {
         let infos = Arc::new(Mutex::new(Vec::new()));
         let warns = Arc::new(Mutex::new(Vec::new()));
-        (Self { infos: Arc::clone(&infos), warns: Arc::clone(&warns) }, infos, warns)
+        (
+            Self {
+                infos: Arc::clone(&infos),
+                warns: Arc::clone(&warns),
+            },
+            infos,
+            warns,
+        )
     }
 }
 
@@ -188,13 +232,17 @@ fn handler_sorts_results_and_notifies_progress() {
     config.sort_specs = vec![(SortKey::Lines, true)];
     config.progress = true;
 
-    let provider = StubProvider { entries: vec![make_entry("src/lib.rs")] };
+    let provider = StubProvider {
+        entries: vec![make_entry("src/lib.rs")],
+    };
     let processor = StubProcessor::success(vec![make_stats("b.rs", 4), make_stats("a.rs", 12)]);
     let (presenter, calls) = RecordingPresenter::new();
     let (notifier, infos, _) = RecordingNotifier::new();
 
     let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, Some(&notifier));
-    let outcome = handler.handle(&RunAnalysisCommand::new(&config)).expect("handler succeeds");
+    let outcome = handler
+        .handle(&RunAnalysisCommand::new(&config))
+        .expect("handler succeeds");
     assert_eq!(outcome.changed_files.len(), 0);
 
     let recorded = calls.lock().unwrap();
@@ -202,7 +250,11 @@ fn handler_sorts_results_and_notifies_progress() {
     assert_eq!(first_call, &vec![("a.rs".into(), 12), ("b.rs".into(), 4)]);
 
     let info_messages = infos.lock().unwrap();
-    assert!(info_messages.iter().any(|msg| msg.contains("Starting analysis")));
+    assert!(
+        info_messages
+            .iter()
+            .any(|msg| msg.contains("Starting analysis"))
+    );
 }
 
 #[test]
@@ -210,13 +262,20 @@ fn handler_propagates_errors_when_strict() {
     let mut config = base_config();
     config.strict = true;
 
-    let provider = StubProvider { entries: vec![make_entry("src/lib.rs")] };
+    let provider = StubProvider {
+        entries: vec![make_entry("src/lib.rs")],
+    };
     let processor = StubProcessor::failure("boom");
     let (presenter, calls) = RecordingPresenter::new();
 
     let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, None);
-    let err = handler.handle(&RunAnalysisCommand::new(&config)).expect_err("strict mode should fail");
-    assert!(err.to_string().contains("Failed to measure file statistics"));
+    let err = handler
+        .handle(&RunAnalysisCommand::new(&config))
+        .expect_err("strict mode should fail");
+    assert!(
+        err.to_string()
+            .contains("Failed to measure file statistics")
+    );
     let mut current: Option<&dyn std::error::Error> = err.source();
     let mut found = false;
     while let Some(cause) = current {
@@ -233,13 +292,17 @@ fn handler_propagates_errors_when_strict() {
 #[test]
 fn handler_warns_and_continues_when_not_strict() {
     let config = base_config();
-    let provider = StubProvider { entries: vec![make_entry("src/lib.rs")] };
+    let provider = StubProvider {
+        entries: vec![make_entry("src/lib.rs")],
+    };
     let processor = StubProcessor::failure("incomplete data");
     let (presenter, calls) = RecordingPresenter::new();
     let (notifier, _, warns) = RecordingNotifier::new();
 
     let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, Some(&notifier));
-    let outcome = handler.handle(&RunAnalysisCommand::new(&config)).expect("non-strict mode succeeds");
+    let outcome = handler
+        .handle(&RunAnalysisCommand::new(&config))
+        .expect("non-strict mode succeeds");
     assert!(outcome.stats.is_empty());
 
     let warnings = warns.lock().unwrap();
@@ -256,7 +319,9 @@ fn handler_returns_change_metadata() {
     let mut config = base_config();
     config.incremental = true;
 
-    let provider = StubProvider { entries: vec![make_entry("src/lib.rs")] };
+    let provider = StubProvider {
+        entries: vec![make_entry("src/lib.rs")],
+    };
     let measurement = MeasurementOutcome::new(
         vec![make_stats("src/lib.rs", 4)],
         vec![PathBuf::from("src/lib.rs")],
@@ -266,7 +331,9 @@ fn handler_returns_change_metadata() {
     let (presenter, _) = RecordingPresenter::new();
 
     let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, None);
-    let outcome = handler.handle(&RunAnalysisCommand::new(&config)).expect("handler succeeds");
+    let outcome = handler
+        .handle(&RunAnalysisCommand::new(&config))
+        .expect("handler succeeds");
 
     assert_eq!(outcome.changed_files, vec![PathBuf::from("src/lib.rs")]);
     assert_eq!(outcome.removed_files, vec![PathBuf::from("old.rs")]);

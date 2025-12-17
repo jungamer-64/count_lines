@@ -20,7 +20,11 @@ fn make_stats(
         mtime,
         is_text: true,
         ext: ext.to_string(),
-        name: Path::new(path).file_name().unwrap().to_string_lossy().into(),
+        name: Path::new(path)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into(),
     };
     FileStats::new(path.into(), lines, chars, Some(lines / 2), &meta)
 }
@@ -66,7 +70,10 @@ fn aggregates_by_directory_with_depth() {
     let (label, groups) = &aggregated[0];
     assert_eq!(label, "By Directory (depth=1)");
 
-    let summary: HashMap<_, _> = groups.iter().map(|g| (g.key.clone(), (g.lines, g.count))).collect();
+    let summary: HashMap<_, _> = groups
+        .iter()
+        .map(|g| (g.key.clone(), (g.lines, g.count)))
+        .collect();
     assert_eq!(summary.get("tests"), Some(&(20, 1)));
     assert_eq!(summary.get("src"), Some(&(20, 2)));
     assert_eq!(summary.get("."), Some(&(3, 1)));

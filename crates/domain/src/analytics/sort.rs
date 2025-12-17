@@ -26,7 +26,11 @@ impl SortOrder {
 impl From<bool> for SortOrder {
     #[inline]
     fn from(desc: bool) -> Self {
-        if desc { Self::Descending } else { Self::Ascending }
+        if desc {
+            Self::Descending
+        } else {
+            Self::Ascending
+        }
     }
 }
 
@@ -73,7 +77,10 @@ impl SortStrategy {
 
     /// レガシーフォーマットから変換
     pub fn from_legacy(specs: Vec<(SortKey, bool)>) -> Self {
-        let specs = specs.into_iter().map(|(key, desc)| SortSpec::new(key, desc.into())).collect();
+        let specs = specs
+            .into_iter()
+            .map(|(key, desc)| SortSpec::new(key, desc.into()))
+            .collect();
         Self::new(specs)
     }
 
@@ -197,8 +204,11 @@ mod tests {
 
     #[test]
     fn sort_by_lines_descending() {
-        let mut stats =
-            vec![make_stats("a.txt", 10, 100), make_stats("b.txt", 30, 300), make_stats("c.txt", 20, 200)];
+        let mut stats = vec![
+            make_stats("a.txt", 10, 100),
+            make_stats("b.txt", 30, 300),
+            make_stats("c.txt", 20, 200),
+        ];
 
         let strategy = SortStrategy::new(vec![SortSpec::descending(SortKey::Lines)]);
         strategy.apply(&mut stats);
@@ -209,14 +219,22 @@ mod tests {
 
     #[test]
     fn sort_by_multiple_keys() {
-        let mut stats =
-            vec![make_stats("b.txt", 10, 200), make_stats("a.txt", 10, 100), make_stats("c.txt", 20, 300)];
+        let mut stats = vec![
+            make_stats("b.txt", 10, 200),
+            make_stats("a.txt", 10, 100),
+            make_stats("c.txt", 20, 300),
+        ];
 
-        let strategy =
-            SortStrategy::new(vec![SortSpec::ascending(SortKey::Lines), SortSpec::ascending(SortKey::Chars)]);
+        let strategy = SortStrategy::new(vec![
+            SortSpec::ascending(SortKey::Lines),
+            SortSpec::ascending(SortKey::Chars),
+        ]);
         strategy.apply(&mut stats);
 
-        let names: Vec<_> = stats.iter().map(|s| s.path.to_string_lossy().to_string()).collect();
+        let names: Vec<_> = stats
+            .iter()
+            .map(|s| s.path.to_string_lossy().to_string())
+            .collect();
         assert_eq!(names, vec!["a.txt", "b.txt", "c.txt"]);
     }
 
@@ -231,12 +249,18 @@ mod tests {
                 .to_legacy()
         }
 
-        let mut stats = vec![make_stats_with_size("small.txt", 10), make_stats_with_size("large.txt", 100)];
+        let mut stats = vec![
+            make_stats_with_size("small.txt", 10),
+            make_stats_with_size("large.txt", 100),
+        ];
         let strategy = SortStrategy::new(vec![SortSpec::descending(SortKey::Size)]);
 
         strategy.apply(&mut stats);
 
-        let names: Vec<_> = stats.iter().map(|s| s.path.to_string_lossy().to_string()).collect();
+        let names: Vec<_> = stats
+            .iter()
+            .map(|s| s.path.to_string_lossy().to_string())
+            .collect();
         assert_eq!(names, vec!["large.txt", "small.txt"]);
     }
 
@@ -248,20 +272,29 @@ mod tests {
             make_stats("file3.txt", 10, 100),
         ];
 
-        let original_names: Vec<_> = stats.iter().map(|s| s.path.to_string_lossy().to_string()).collect();
+        let original_names: Vec<_> = stats
+            .iter()
+            .map(|s| s.path.to_string_lossy().to_string())
+            .collect();
 
         let strategy = SortStrategy::new(vec![SortSpec::ascending(SortKey::Lines)]);
         strategy.apply(&mut stats);
 
-        let sorted_names: Vec<_> = stats.iter().map(|s| s.path.to_string_lossy().to_string()).collect();
+        let sorted_names: Vec<_> = stats
+            .iter()
+            .map(|s| s.path.to_string_lossy().to_string())
+            .collect();
 
         assert_eq!(original_names, sorted_names);
     }
 
     #[test]
     fn empty_strategy_does_nothing() {
-        let mut stats =
-            vec![make_stats("c.txt", 30, 300), make_stats("a.txt", 10, 100), make_stats("b.txt", 20, 200)];
+        let mut stats = vec![
+            make_stats("c.txt", 30, 300),
+            make_stats("a.txt", 10, 100),
+            make_stats("b.txt", 20, 200),
+        ];
 
         let original_order = stats.clone();
         let strategy = SortStrategy::new(vec![]);
@@ -275,8 +308,11 @@ mod tests {
 
     #[test]
     fn sorted_returns_new_sorted_vector() {
-        let original =
-            vec![make_stats("b.txt", 5, 50), make_stats("a.txt", 10, 100), make_stats("c.txt", 1, 10)];
+        let original = vec![
+            make_stats("b.txt", 5, 50),
+            make_stats("a.txt", 10, 100),
+            make_stats("c.txt", 1, 10),
+        ];
 
         let strategy = SortStrategy::new(vec![SortSpec::ascending(SortKey::Lines)]);
         let sorted = strategy.sorted(original.clone());
@@ -285,7 +321,11 @@ mod tests {
         assert_eq!(sorted_lines, vec![1, 5, 10]);
 
         let original_lines: Vec<_> = original.iter().map(|s| s.lines).collect();
-        assert_eq!(original_lines, vec![5, 10, 1], "sorted should not mutate the input vector copy");
+        assert_eq!(
+            original_lines,
+            vec![5, 10, 1],
+            "sorted should not mutate the input vector copy"
+        );
     }
 
     #[test]
@@ -293,7 +333,10 @@ mod tests {
         let via_assoc = SortStrategy::default();
         let via_trait: SortStrategy = Default::default();
 
-        let mut stats_a = vec![make_stats("alpha.txt", 5, 50), make_stats("beta.txt", 10, 100)];
+        let mut stats_a = vec![
+            make_stats("alpha.txt", 5, 50),
+            make_stats("beta.txt", 10, 100),
+        ];
         let mut stats_b = stats_a.clone();
 
         via_assoc.apply(&mut stats_a);

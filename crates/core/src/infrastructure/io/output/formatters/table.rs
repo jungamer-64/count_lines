@@ -19,7 +19,8 @@ const HEADER_BASIC: &str = "    LINES\t CHARACTERS\tFILE";
 // SLOC付きヘッダー
 const HEADER_SLOC: &str = "    LINES\t     SLOC\t CHARACTERS\tFILE";
 const HEADER_SLOC_WORDS: &str = "    LINES\t     SLOC\t CHARACTERS\t   WORDS\tFILE";
-const HEADER_SLOC_RATIO: &str = "    LINES%\t    LINES\t     SLOC%\t     SLOC\t CHARACTERS%\t CHARACTERS\tFILE";
+const HEADER_SLOC_RATIO: &str =
+    "    LINES%\t    LINES\t     SLOC%\t     SLOC\t CHARACTERS%\t CHARACTERS\tFILE";
 const HEADER_SLOC_WORDS_RATIO: &str =
     "    LINES%\t    LINES\t     SLOC%\t     SLOC\t CHARACTERS%\t CHARACTERS\t   WORDS\tFILE";
 
@@ -94,7 +95,13 @@ fn format_row_words_ratio(s: &FileStats, summary: &Summary, path: &str) -> Strin
 }
 
 fn format_row_words(s: &FileStats, path: &str) -> String {
-    format!("{:>10}\t{:>10}\t{:>7}\t{}", s.lines, s.chars, s.words.unwrap_or(0), path)
+    format!(
+        "{:>10}\t{:>10}\t{:>7}\t{}",
+        s.lines,
+        s.chars,
+        s.words.unwrap_or(0),
+        path
+    )
 }
 
 fn format_row_ratio(s: &FileStats, summary: &Summary, path: &str) -> String {
@@ -114,7 +121,13 @@ fn format_row_basic(s: &FileStats, path: &str) -> String {
 
 // SLOC付きフォーマット関数
 fn format_row_sloc(s: &FileStats, path: &str) -> String {
-    format!("{:>10}\t{:>10}\t{:>10}\t{}", s.lines, s.sloc.unwrap_or(0), s.chars, path)
+    format!(
+        "{:>10}\t{:>10}\t{:>10}\t{}",
+        s.lines,
+        s.sloc.unwrap_or(0),
+        s.chars,
+        path
+    )
 }
 
 fn format_row_sloc_words(s: &FileStats, path: &str) -> String {
@@ -162,7 +175,11 @@ fn write_aggregations(stats: &[FileStats], config: &Config, out: &mut impl Write
         writeln!(out, "{:>10}\t{:>10}\tKEY", "LINES", "CHARACTERS")?;
         truncate_rows(&mut rows, config.by_limit);
         for g in rows {
-            writeln!(out, "{:>10}\t{:>10}\t{} ({} files)", g.lines, g.chars, g.key, g.count)?;
+            writeln!(
+                out,
+                "{:>10}\t{:>10}\t{} ({} files)",
+                g.lines, g.chars, g.key, g.count
+            )?;
         }
         writeln!(out, "---")?;
     }
@@ -187,9 +204,11 @@ fn output_summary(stats: &[FileStats], config: &Config, out: &mut impl Write) ->
             "{:>10}\t{:>10}\t{:>7}\tTOTAL ({} files)\n",
             summary.lines, summary.chars, summary.words, summary.files
         )?,
-        (false, false) => {
-            writeln!(out, "{:>10}\t{:>10}\tTOTAL ({} files)\n", summary.lines, summary.chars, summary.files)?
-        }
+        (false, false) => writeln!(
+            out,
+            "{:>10}\t{:>10}\tTOTAL ({} files)\n",
+            summary.lines, summary.chars, summary.files
+        )?,
     }
     Ok(())
 }
@@ -203,12 +222,23 @@ mod tests {
         config::{Config, Filters},
         model::{FileStats, FileStatsBuilder},
         options::{OutputFormat, SortKey, WatchOutput},
-        value_objects::{CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, WordCount},
+        value_objects::{
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, WordCount,
+        },
     };
 
-    fn sample_stats(path: impl Into<PathBuf>, lines: usize, chars: usize, words: Option<usize>) -> FileStats {
+    fn sample_stats(
+        path: impl Into<PathBuf>,
+        lines: usize,
+        chars: usize,
+        words: Option<usize>,
+    ) -> FileStats {
         let pathbuf: PathBuf = path.into();
-        let ext_str = pathbuf.extension().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let ext_str = pathbuf
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
 
         let mut builder = FileStatsBuilder::new(FilePath::new(pathbuf.clone()))
             .lines(LineCount::new(lines))
@@ -280,15 +310,23 @@ mod tests {
         output_table(&stats, &config, &mut buffer).expect("table output succeeds");
         let output = String::from_utf8(buffer).expect("utf8");
 
-        assert!(output.contains("LINES\t CHARACTERS"), "header should be present");
-        assert!(output.contains("src/lib.rs"), "path should be included in output");
+        assert!(
+            output.contains("LINES\t CHARACTERS"),
+            "header should be present"
+        );
+        assert!(
+            output.contains("src/lib.rs"),
+            "path should be included in output"
+        );
         assert!(output.contains("10"), "line count should be formatted");
     }
 
     #[test]
     fn table_with_words_and_ratio_formats_percentages() {
-        let stats =
-            vec![sample_stats("src/lib.rs", 8, 80, Some(4)), sample_stats("src/main.rs", 2, 20, Some(1))];
+        let stats = vec![
+            sample_stats("src/lib.rs", 8, 80, Some(4)),
+            sample_stats("src/main.rs", 2, 20, Some(1)),
+        ];
         let mut config = base_config();
         config.words = true;
         config.ratio = true;
@@ -297,11 +335,22 @@ mod tests {
         output_table(&stats, &config, &mut buffer).expect("table output succeeds");
         let output = String::from_utf8(buffer).expect("utf8");
 
-        assert!(output.contains("LINES%\t    LINES"), "ratio header should appear");
-        assert!(output.contains("80.0"), "line percentage should be formatted");
-        assert!(output.contains("src/lib.rs"), "first row path should be present");
+        assert!(
+            output.contains("LINES%\t    LINES"),
+            "ratio header should appear"
+        );
+        assert!(
+            output.contains("80.0"),
+            "line percentage should be formatted"
+        );
+        assert!(
+            output.contains("src/lib.rs"),
+            "first row path should be present"
+        );
         // ensure that the line for src/lib.rs contains a word count
-        let has_word_count = output.lines().any(|line| line.contains("src/lib.rs") && line.contains('4'));
+        let has_word_count = output
+            .lines()
+            .any(|line| line.contains("src/lib.rs") && line.contains('4'));
         assert!(has_word_count, "word counts should be present");
     }
 
@@ -315,8 +364,14 @@ mod tests {
         output_table(&stats, &config, &mut buffer).expect("table output succeeds");
         let output = String::from_utf8(buffer).expect("utf8");
 
-        assert!(!output.contains("LINES%\t"), "header should not be printed when summary_only is set");
-        assert!(output.contains("TOTAL (1 files)"), "summary should still be emitted");
+        assert!(
+            !output.contains("LINES%\t"),
+            "header should not be printed when summary_only is set"
+        );
+        assert!(
+            output.contains("TOTAL (1 files)"),
+            "summary should still be emitted"
+        );
     }
 
     #[test]
@@ -330,8 +385,14 @@ mod tests {
         output_table(&stats, &config, &mut buffer).expect("table output succeeds");
         let output = String::from_utf8(buffer).expect("utf8");
 
-        assert!(output.starts_with("        10"), "summary should be first output");
-        assert!(!output.contains("src/lib.rs"), "rows should not be printed in total_only mode");
+        assert!(
+            output.starts_with("        10"),
+            "summary should be first output"
+        );
+        assert!(
+            !output.contains("src/lib.rs"),
+            "rows should not be printed in total_only mode"
+        );
     }
 
     #[test]
@@ -351,8 +412,17 @@ mod tests {
         let mut buffer = Vec::new();
         output_table(&stats, &config, &mut buffer).expect("table output succeeds");
         let output = String::from_utf8(buffer).expect("utf8");
-        assert!(output.contains("[By Extension]"), "aggregation header should be present");
-        assert!(output.contains("rs (2 files)"), "dominant extension should be listed");
-        assert!(!output.contains("(noext)"), "by_limit should truncate to top result");
+        assert!(
+            output.contains("[By Extension]"),
+            "aggregation header should be present"
+        );
+        assert!(
+            output.contains("rs (2 files)"),
+            "dominant extension should be listed"
+        );
+        assert!(
+            !output.contains("(noext)"),
+            "by_limit should truncate to top result"
+        );
     }
 }

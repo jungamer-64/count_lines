@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     model::FileMeta,
     value_objects::{
-        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, SlocCount,
-        WordCount,
+        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime,
+        SlocCount, WordCount,
     },
 };
 
@@ -30,7 +30,13 @@ pub struct FileStats {
 
 impl FileStats {
     /// 既存API互換のコンストラクタ
-    pub fn new(path: PathBuf, lines: usize, chars: usize, words: Option<usize>, meta: &FileMeta) -> Self {
+    pub fn new(
+        path: PathBuf,
+        lines: usize,
+        chars: usize,
+        words: Option<usize>,
+        meta: &FileMeta,
+    ) -> Self {
         Self {
             path,
             lines,
@@ -121,7 +127,17 @@ mod file_stats_v2 {
             ext: FileExtension,
             name: FileName,
         ) -> Self {
-            Self { path, lines, chars, words, sloc, size, mtime, ext, name }
+            Self {
+                path,
+                lines,
+                chars,
+                words,
+                sloc,
+                size,
+                mtime,
+                ext,
+                name,
+            }
         }
 
         pub fn builder(path: FilePath) -> FileStatsBuilder {
@@ -232,7 +248,9 @@ mod file_stats_v2 {
 
     impl FileStatsBuilder {
         pub fn new(path: FilePath) -> Self {
-            let name = path.file_name().unwrap_or_else(|| FileName::new("unknown".to_string()));
+            let name = path
+                .file_name()
+                .unwrap_or_else(|| FileName::new("unknown".to_string()));
             let ext = path.extension().unwrap_or_default();
 
             Self {

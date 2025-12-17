@@ -89,7 +89,9 @@ fn end_to_end_generates_expected_json() {
 
     let json = read_json(&output_path);
 
-    let summary_lines = json["summary"]["lines"].as_u64().expect("summary lines present");
+    let summary_lines = json["summary"]["lines"]
+        .as_u64()
+        .expect("summary lines present");
     assert_eq!(summary_lines, 5);
 
     let files = json["files"].as_array().expect("files array");
@@ -107,7 +109,10 @@ fn end_to_end_generates_expected_json() {
 #[test]
 fn end_to_end_with_value_objects() {
     let workspace = TempWorkspace::new("e2e_value_objects", "count_lines_integration");
-    workspace.create_file("src/main.rs", "fn main() {\n    println!(\"hello world\");\n}\n");
+    workspace.create_file(
+        "src/main.rs",
+        "fn main() {\n    println!(\"hello world\");\n}\n",
+    );
     workspace.create_file("README.md", "# Project\n\nDescription here.\n");
     workspace.create_file("Cargo.toml", "[package]\nname = \"test\"\n");
 
@@ -169,7 +174,10 @@ fn strict_mode_behavior_on_error() {
     let result = run_with_config(config);
 
     #[cfg(unix)]
-    assert!(result.is_err(), "strict mode should fail when unreadable files exist");
+    assert!(
+        result.is_err(),
+        "strict mode should fail when unreadable files exist"
+    );
 
     #[cfg(windows)]
     assert!(result.is_ok(), "Windows fallback path should succeed");
@@ -231,11 +239,23 @@ fn sorting_with_multiple_keys() {
 #[test]
 fn test_with_builder_pattern() {
     let stats = vec![
-        FileStatsBuilder::new("test.rs").lines(100).chars(500).words(75).build(),
-        FileStatsBuilder::new("lib.rs").lines(200).chars(1000).words(150).build(),
+        FileStatsBuilder::new("test.rs")
+            .lines(100)
+            .chars(500)
+            .words(75)
+            .build(),
+        FileStatsBuilder::new("lib.rs")
+            .lines(200)
+            .chars(1000)
+            .words(150)
+            .build(),
     ];
 
-    assert_stats(&stats[0]).has_lines(100).has_chars(500).has_words(Some(75)).has_ext("rs");
+    assert_stats(&stats[0])
+        .has_lines(100)
+        .has_chars(500)
+        .has_words(Some(75))
+        .has_ext("rs");
 
     assert_stats(&stats[1]).has_lines(200).has_chars(1000);
 }
@@ -262,5 +282,9 @@ fn performance_large_file_set() {
     run_with_config(config).unwrap();
     let elapsed = start.elapsed();
 
-    assert!(elapsed.as_secs() < 1, "processing 100 files took {:?}", elapsed);
+    assert!(
+        elapsed.as_secs() < 1,
+        "processing 100 files took {:?}",
+        elapsed
+    );
 }

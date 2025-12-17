@@ -9,7 +9,15 @@ pub struct MeasurementOutcome {
 }
 
 impl MeasurementOutcome {
-    pub fn new(stats: Vec<FileStats>, changed_files: Vec<PathBuf>, removed_files: Vec<PathBuf>) -> Self {
-        Self { stats, changed_files, removed_files }
+    pub fn new(
+        stats: Vec<FileStats>,
+        changed_files: Vec<PathBuf>,
+        removed_files: Vec<PathBuf>,
+    ) -> Self {
+        Self {
+            stats,
+            changed_files,
+            removed_files,
+        }
     }
 }

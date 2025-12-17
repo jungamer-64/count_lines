@@ -12,11 +12,20 @@ pub(crate) fn limited<'a>(stats: &'a [FileStats], config: &Config) -> &'a [FileS
 }
 
 pub(crate) fn format_ratio(val: usize, total: usize) -> String {
-    if total == 0 { "0.0".into() } else { format!("{:.1}", (val as f64) * 100.0 / (total as f64)) }
+    if total == 0 {
+        "0.0".into()
+    } else {
+        format!("{:.1}", (val as f64) * 100.0 / (total as f64))
+    }
 }
 
 pub(crate) fn format_path(stats: &FileStats, config: &Config) -> String {
-    format_entry_path(&stats.path, config.abs_path, config.abs_canonical, config.trim_root.as_deref())
+    format_entry_path(
+        &stats.path,
+        config.abs_path,
+        config.abs_canonical,
+        config.trim_root.as_deref(),
+    )
 }
 
 pub(crate) fn escape_field(s: &str, sep: char) -> String {
@@ -43,11 +52,17 @@ pub(crate) fn safe_key_label(key: &str) -> String {
     key.replace('|', "\\|")
 }
 
-fn format_entry_path(path: &Path, abs_path: bool, abs_canonical: bool, trim_root: Option<&Path>) -> String {
+fn format_entry_path(
+    path: &Path,
+    abs_path: bool,
+    abs_canonical: bool,
+    trim_root: Option<&Path>,
+) -> String {
     // Resolve the path according to configuration flags.
     let mut path_buf = if abs_path {
         if abs_canonical {
-            path.canonicalize().unwrap_or_else(|_| logical_absolute(path))
+            path.canonicalize()
+                .unwrap_or_else(|_| logical_absolute(path))
         } else {
             logical_absolute(path)
         }
@@ -90,7 +105,11 @@ mod tests {
 
     fn sample_stats(path: impl Into<PathBuf>) -> FileStats {
         let pathbuf: PathBuf = path.into();
-        let ext_str = pathbuf.extension().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let ext_str = pathbuf
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
 
         FileStatsBuilder::new(FilePath::new(pathbuf.clone()))
             .lines(LineCount::new(10))
@@ -154,7 +173,11 @@ mod tests {
 
     #[test]
     fn limited_respects_top_n() {
-        let stats = vec![sample_stats("a.rs"), sample_stats("b.rs"), sample_stats("c.rs")];
+        let stats = vec![
+            sample_stats("a.rs"),
+            sample_stats("b.rs"),
+            sample_stats("c.rs"),
+        ];
         let mut config = base_config();
         config.top_n = Some(2);
 
@@ -225,7 +248,9 @@ mod tests {
         let mut config = base_config();
         config.abs_path = true;
         let stats = sample_stats(PathBuf::from("src/lib.rs"));
-        let expected = crate::shared::path::logical_absolute(stats.path.as_path()).display().to_string();
+        let expected = crate::shared::path::logical_absolute(stats.path.as_path())
+            .display()
+            .to_string();
         assert_eq!(format_path(&stats, &config), expected);
     }
 
@@ -243,7 +268,10 @@ mod tests {
         config.abs_canonical = true;
 
         let formatted = format_path(&stats, &config);
-        assert_eq!(formatted, file_path.canonicalize().unwrap().display().to_string());
+        assert_eq!(
+            formatted,
+            file_path.canonicalize().unwrap().display().to_string()
+        );
     }
 
     #[test]

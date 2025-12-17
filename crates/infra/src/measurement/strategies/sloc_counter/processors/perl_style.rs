@@ -51,7 +51,7 @@ impl PerlProcessor {
             return 0;
         }
         self.line_count += 1;
-        
+
         // #で始まる行はコメント
         if trimmed.starts_with('#') {
             return 0;
@@ -65,7 +65,7 @@ impl PerlProcessor {
             }
             return 0;
         }
-        
+
         1
     }
 }
@@ -75,17 +75,17 @@ pub fn is_perl_pod_start(line: &str) -> bool {
     if !line.starts_with('=') {
         return false;
     }
-    
+
     let bytes = line.as_bytes();
     if bytes.len() < 2 {
         return false;
     }
-    
+
     let second = bytes[1];
     if !second.is_ascii_alphabetic() {
         return false;
     }
-    
+
     line.starts_with("=pod")
         || line.starts_with("=head")
         || line.starts_with("=over")

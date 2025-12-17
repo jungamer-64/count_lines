@@ -25,7 +25,10 @@ struct TempDirResource {
 
 impl TempDirResource {
     fn new(prefix: &str) -> Self {
-        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create tempdir");
+        let td = TempBuilder::new()
+            .prefix(prefix)
+            .tempdir()
+            .expect("create tempdir");
         Self { td }
     }
 
@@ -41,7 +44,10 @@ struct TempFile {
 
 impl TempFile {
     fn new(prefix: &str, contents: &[u8]) -> Self {
-        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create tempdir");
+        let td = TempBuilder::new()
+            .prefix(prefix)
+            .tempdir()
+            .expect("create tempdir");
         let path = td.path().join(format!("{prefix}.tmp"));
         fs::write(&path, contents).unwrap();
         Self { _td: td, path }
@@ -103,14 +109,21 @@ fn make_meta(path: &PathBuf) -> FileMeta {
         size,
         mtime: None,
         is_text: true,
-        ext: path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase(),
+        ext: path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase(),
         name: path.file_name().unwrap().to_string_lossy().into(),
     }
 }
 
 fn make_entry(path: &Path, config: &Config) -> FileEntry {
     let meta = FileMetadataLoader::build(path, config.fast_text_detect).expect("metadata loads");
-    FileEntry { path: path.to_path_buf(), meta }
+    FileEntry {
+        path: path.to_path_buf(),
+        meta,
+    }
 }
 
 fn find_cache_file(cache_root: &Path) -> PathBuf {
@@ -127,7 +140,8 @@ fn line_based_measurement_counts_crlf_and_words() {
     let mut config = base_config();
     config.words = true;
 
-    let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
+    let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config)
+        .expect("measurement succeeded");
     assert_eq!(stats.lines().value(), 3);
     assert_eq!(stats.chars().value(), 14);
     assert_eq!(stats.words().map(|w| w.value()), Some(3));
@@ -140,7 +154,8 @@ fn line_based_measurement_counts_newlines_when_requested() {
     config.count_newlines_in_chars = true;
     config.words = true;
 
-    let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config).expect("measurement succeeded");
+    let stats = measure_by_lines(&file.path, &make_meta(&file.path), &config)
+        .expect("measurement succeeded");
     assert_eq!(stats.lines().value(), 2);
     assert_eq!(stats.chars().value(), 7);
     assert_eq!(stats.words().map(|w| w.value()), Some(2));
@@ -175,7 +190,10 @@ fn incremental_measurement_populates_cache() {
     let outcome = measure_entries(vec![entry], &config).expect("incremental run succeeds");
     assert_eq!(outcome.stats.len(), 1);
     assert_eq!(outcome.stats[0].lines, 2);
-    assert_eq!(outcome.changed_files, vec![workspace.path().join("sample.txt")]);
+    assert_eq!(
+        outcome.changed_files,
+        vec![workspace.path().join("sample.txt")]
+    );
     assert!(outcome.removed_files.is_empty());
 
     let cache_file = find_cache_file(&cache_root);
@@ -210,7 +228,10 @@ fn incremental_measurement_updates_changed_files() {
 
     let entry_second = make_entry(&file_path, &config);
     let second_stats = measure_entries(vec![entry_second], &config).expect("second run");
-    assert_eq!(second_stats.stats[0].lines, 3, "updated file should be remeasured");
+    assert_eq!(
+        second_stats.stats[0].lines, 3,
+        "updated file should be remeasured"
+    );
     assert_eq!(second_stats.changed_files, vec![file_path.clone()]);
     assert!(second_stats.removed_files.is_empty());
 
@@ -244,11 +265,17 @@ fn incremental_respects_updated_filters() {
     let stats = measure_entries(vec![entry_again], &config).expect("filtered run");
     assert!(stats.stats.is_empty(), "entry should be filtered out");
     assert!(stats.changed_files.is_empty());
-    assert_eq!(stats.removed_files, vec![workspace.path().join("short.txt")]);
+    assert_eq!(
+        stats.removed_files,
+        vec![workspace.path().join("short.txt")]
+    );
 
     let cache_file = find_cache_file(&cache_root);
     let cache_data = fs::read_to_string(&cache_file).expect("cache readable");
     let json: Value = serde_json::from_str(&cache_data).expect("valid json");
     let entries = json["entries"].as_object().expect("entries object");
-    assert!(entries.is_empty(), "filtered entries should be pruned from cache");
+    assert!(
+        entries.is_empty(),
+        "filtered entries should be pruned from cache"
+    );
 }

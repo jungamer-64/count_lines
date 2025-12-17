@@ -27,7 +27,12 @@ impl<'a> RunAnalysisHandler<'a> {
         presenter: &'a dyn FileStatisticsPresenter,
         notifier: Option<&'a dyn AnalysisNotifier>,
     ) -> Self {
-        Self { entries, processor, presenter, notifier }
+        Self {
+            entries,
+            processor,
+            presenter,
+            notifier,
+        }
     }
 
     pub fn handle(&self, command: &RunAnalysisCommand<'_>) -> Result<RunOutcome> {
@@ -36,18 +41,27 @@ impl<'a> RunAnalysisHandler<'a> {
         self.log_start(config);
 
         let entries = self.collect_entries(config)?;
-        let MeasurementOutcome { stats: mut stats, changed_files, removed_files } =
-            self.measure_statistics(entries, config)?;
+        let MeasurementOutcome {
+            mut stats,
+            changed_files,
+            removed_files,
+        } = self.measure_statistics(entries, config)?;
         self.apply_sorting(&mut stats, config);
         self.present_results(&stats, config)?;
 
         self.log_completion(&stats);
 
-        Ok(RunOutcome { stats, changed_files, removed_files })
+        Ok(RunOutcome {
+            stats,
+            changed_files,
+            removed_files,
+        })
     }
 
     fn collect_entries(&self, config: &Config) -> Result<Vec<crate::domain::model::FileEntry>> {
-        self.entries.collect(config).map_err(|e| ApplicationError::FileCollectionFailed(e.to_string()).into())
+        self.entries
+            .collect(config)
+            .map_err(|e| ApplicationError::FileCollectionFailed(e.to_string()).into())
     }
 
     fn measure_statistics(
@@ -57,7 +71,9 @@ impl<'a> RunAnalysisHandler<'a> {
     ) -> Result<MeasurementOutcome> {
         match self.processor.measure(entries, config) {
             Ok(outcome) => Ok(outcome),
-            Err(err) if config.strict => Err(ApplicationError::MeasurementFailed(err.to_string()).into()),
+            Err(err) if config.strict => {
+                Err(ApplicationError::MeasurementFailed(err.to_string()).into())
+            }
             Err(err) => {
                 self.log_warning(&format!("Measurement warning: {}", err));
                 Ok(MeasurementOutcome::new(Vec::new(), Vec::new(), Vec::new()))
@@ -72,7 +88,11 @@ impl<'a> RunAnalysisHandler<'a> {
         }
     }
 
-    fn present_results(&self, stats: &[crate::domain::model::FileStats], config: &Config) -> Result<()> {
+    fn present_results(
+        &self,
+        stats: &[crate::domain::model::FileStats],
+        config: &Config,
+    ) -> Result<()> {
         self.presenter
             .present(stats, config)
             .map_err(|e| ApplicationError::PresentationFailed(e.to_string()).into())
@@ -88,7 +108,10 @@ impl<'a> RunAnalysisHandler<'a> {
 
     fn log_completion(&self, stats: &[crate::domain::model::FileStats]) {
         if let Some(notifier) = self.notifier {
-            notifier.info(&format!("[count_lines] Completed: {} files processed", stats.len()));
+            notifier.info(&format!(
+                "[count_lines] Completed: {} files processed",
+                stats.len()
+            ));
         }
     }
 
@@ -135,7 +158,9 @@ mod tests {
 
     impl RecordingPresenter {
         fn new() -> Self {
-            Self { calls: Arc::new(Mutex::new(Vec::new())) }
+            Self {
+                calls: Arc::new(Mutex::new(Vec::new())),
+            }
         }
 
         fn call_count(&self) -> usize {
@@ -176,7 +201,10 @@ mod tests {
 
     impl RecordingNotifier {
         fn new() -> Self {
-            Self { infos: Arc::new(Mutex::new(Vec::new())), warnings: Arc::new(Mutex::new(Vec::new())) }
+            Self {
+                infos: Arc::new(Mutex::new(Vec::new())),
+                warnings: Arc::new(Mutex::new(Vec::new())),
+            }
         }
 
         fn info_messages(&self) -> Vec<String> {
@@ -211,11 +239,17 @@ mod tests {
 
     impl StubProvider {
         fn success(entries: Vec<FileEntry>) -> Self {
-            Self { entries, fail: false }
+            Self {
+                entries,
+                fail: false,
+            }
         }
 
         fn failure() -> Self {
-            Self { entries: Vec::new(), fail: true }
+            Self {
+                entries: Vec::new(),
+                fail: true,
+            }
         }
     }
 
@@ -225,7 +259,7 @@ mod tests {
                 Err(InfrastructureError::FileSystemOperation {
                     operation: "collect".to_string(),
                     path: PathBuf::from("."),
-                    source: std::io::Error::new(std::io::ErrorKind::Other, "mock failure"),
+                    source: std::io::Error::other("mock failure"),
                 }
                 .into())
             } else {
@@ -247,7 +281,10 @@ mod tests {
     impl RecordingProcessor {
         fn success(stats: Vec<FileStats>) -> Self {
             let outcome = MeasurementOutcome::new(stats, Vec::new(), Vec::new());
-            Self { mode: ProcessorMode::Success(outcome), received_entries: Arc::new(Mutex::new(Vec::new())) }
+            Self {
+                mode: ProcessorMode::Success(outcome),
+                received_entries: Arc::new(Mutex::new(Vec::new())),
+            }
         }
 
         fn failure(message: impl Into<String>) -> Self {
@@ -383,7 +420,11 @@ mod tests {
         assert_eq!(presented_lines, vec![30, 10]);
 
         let info_messages = notifier.info_messages();
-        assert_eq!(info_messages.len(), 2, "start and completion messages should be emitted");
+        assert_eq!(
+            info_messages.len(),
+            2,
+            "start and completion messages should be emitted"
+        );
         assert!(info_messages[0].contains("Starting analysis"));
         assert!(info_messages[1].contains("Completed"));
     }
@@ -422,8 +463,13 @@ mod tests {
         let handler = RunAnalysisHandler::new(&provider, &processor, &presenter, Some(&notifier));
         let command = RunAnalysisCommand::new(&config);
 
-        let outcome = handler.handle(&command).expect("handler should recover when strict mode is disabled");
-        assert!(outcome.stats.is_empty(), "stats should be empty when measurement failed in non-strict mode");
+        let outcome = handler
+            .handle(&command)
+            .expect("handler should recover when strict mode is disabled");
+        assert!(
+            outcome.stats.is_empty(),
+            "stats should be empty when measurement failed in non-strict mode"
+        );
         assert!(outcome.changed_files.is_empty());
         assert!(outcome.removed_files.is_empty());
 

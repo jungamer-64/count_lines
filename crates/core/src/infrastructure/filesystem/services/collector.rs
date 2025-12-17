@@ -50,7 +50,11 @@ fn enumerate(config: &Config, mode: EnumerateMode) -> Result<Vec<FileEntry>> {
 
 fn build_plan(config: &Config) -> FileEnumerationPlan {
     let filters = &config.filters;
-    let mut ext_filters: Vec<_> = filters.ext_filters.iter().map(|ext| ext.to_lowercase()).collect();
+    let mut ext_filters: Vec<_> = filters
+        .ext_filters
+        .iter()
+        .map(|ext| ext.to_lowercase())
+        .collect();
     ext_filters.sort();
     let mut plan = FileEnumerationPlan::new();
     plan.roots = config.paths.clone();
@@ -85,7 +89,9 @@ fn build_plan(config: &Config) -> FileEnumerationPlan {
     plan
 }
 
-fn patterns_to_strings(patterns: &[crate::domain::config::value_objects::GlobPattern]) -> Vec<String> {
+fn patterns_to_strings(
+    patterns: &[crate::domain::config::value_objects::GlobPattern],
+) -> Vec<String> {
     patterns.iter().map(|p| p.pattern().to_string()).collect()
 }
 

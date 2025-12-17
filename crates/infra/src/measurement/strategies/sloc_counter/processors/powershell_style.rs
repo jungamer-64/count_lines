@@ -69,7 +69,11 @@ impl PowerShellProcessor {
                 let after_close = &after_start[block_end + 2..];
                 let has_code_after = !after_close.trim().is_empty()
                     && find_hash_outside_string(after_close.trim()).is_none_or(|p| p > 0);
-                return if has_code_before || has_code_after { 1 } else { 0 };
+                return if has_code_before || has_code_after {
+                    1
+                } else {
+                    0
+                };
             } else {
                 self.in_block_comment = true;
                 return if has_code_before { 1 } else { 0 };
@@ -104,7 +108,12 @@ fn find_block_comment_start(line: &str) -> Option<usize> {
             in_double = !in_double;
         } else if b == b'\'' && !in_double {
             in_single = !in_single;
-        } else if b == b'<' && !in_single && !in_double && i + 1 < bytes.len() && bytes[i + 1] == b'#' {
+        } else if b == b'<'
+            && !in_single
+            && !in_double
+            && i + 1 < bytes.len()
+            && bytes[i + 1] == b'#'
+        {
             return Some(i);
         }
         i += 1;

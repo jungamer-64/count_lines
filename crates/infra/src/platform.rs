@@ -76,10 +76,10 @@ pub type DefaultPathNormalizer = FallbackPathNormalizer;
 pub fn default_path_normalizer() -> DefaultPathNormalizer {
     #[cfg(windows)]
     return WindowsPathNormalizer;
-    
+
     #[cfg(unix)]
     return UnixPathNormalizer;
-    
+
     #[cfg(all(not(windows), not(unix)))]
     return FallbackPathNormalizer;
 }
@@ -92,7 +92,7 @@ pub fn default_path_normalizer() -> DefaultPathNormalizer {
 pub enum DirectoryLoopDetector {
     #[cfg(unix)]
     Inode(HashSet<(u64, u64)>),
-    
+
     #[cfg(not(unix))]
     Canonical(HashSet<PathBuf>),
 }
@@ -102,7 +102,7 @@ impl DirectoryLoopDetector {
     pub fn new() -> Self {
         #[cfg(unix)]
         return Self::Inode(HashSet::new());
-        
+
         #[cfg(not(unix))]
         return Self::Canonical(HashSet::new());
     }
@@ -113,7 +113,7 @@ impl DirectoryLoopDetector {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            
+
             if let Self::Inode(set) = self {
                 if let Some(md) = _metadata {
                     let key = (md.dev(), md.ino());
@@ -125,7 +125,7 @@ impl DirectoryLoopDetector {
             }
             false
         }
-        
+
         #[cfg(not(unix))]
         {
             let Self::Canonical(set) = self;
@@ -152,12 +152,12 @@ pub struct CacheDirectoryResolver;
 
 impl CacheDirectoryResolver {
     /// Resolve the cache directory for the application.
-    /// 
+    ///
     /// On Unix-like systems:
     /// 1. `$XDG_CACHE_HOME/count_lines` if XDG_CACHE_HOME is set
     /// 2. `$HOME/.cache/count_lines` if HOME is set
     /// 3. `.cache/count_lines` as fallback
-    /// 
+    ///
     /// On Windows:
     /// 1. `%LOCALAPPDATA%\count_lines\cache` if LOCALAPPDATA is set
     /// 2. `%APPDATA%\count_lines\cache` if APPDATA is set
@@ -167,7 +167,7 @@ impl CacheDirectoryResolver {
         {
             Self::resolve_windows()
         }
-        
+
         #[cfg(not(windows))]
         {
             Self::resolve_unix()
@@ -177,7 +177,7 @@ impl CacheDirectoryResolver {
     #[cfg(windows)]
     fn resolve_windows() -> Option<PathBuf> {
         use std::env;
-        
+
         // Try LOCALAPPDATA first (preferred on Windows)
         if let Some(local_app_data) = env::var_os("LOCALAPPDATA") {
             let mut dir = PathBuf::from(local_app_data);
@@ -187,7 +187,7 @@ impl CacheDirectoryResolver {
                 return Some(dir);
             }
         }
-        
+
         // Fall back to APPDATA
         if let Some(app_data) = env::var_os("APPDATA") {
             let mut dir = PathBuf::from(app_data);
@@ -197,7 +197,7 @@ impl CacheDirectoryResolver {
                 return Some(dir);
             }
         }
-        
+
         // Final fallback
         Self::resolve_fallback()
     }
@@ -205,7 +205,7 @@ impl CacheDirectoryResolver {
     #[cfg(not(windows))]
     fn resolve_unix() -> Option<PathBuf> {
         use std::env;
-        
+
         // Try XDG_CACHE_HOME first (XDG Base Directory specification)
         if let Some(cache_home) = env::var_os("XDG_CACHE_HOME") {
             let mut dir = PathBuf::from(cache_home);
@@ -214,7 +214,7 @@ impl CacheDirectoryResolver {
                 return Some(dir);
             }
         }
-        
+
         // Fall back to HOME/.cache
         if let Some(home) = env::var_os("HOME") {
             let mut dir = PathBuf::from(home);
@@ -223,14 +223,14 @@ impl CacheDirectoryResolver {
                 return Some(dir);
             }
         }
-        
+
         // Final fallback
         Self::resolve_fallback()
     }
 
     fn resolve_fallback() -> Option<PathBuf> {
         use count_lines_shared_kernel::path::logical_absolute;
-        
+
         let fallback = logical_absolute(Path::new(".cache/count_lines"));
         if Self::ensure_dir(&fallback).is_ok() {
             Some(fallback)
@@ -318,10 +318,10 @@ mod tests {
         let normalizer = default_path_normalizer();
         let path1 = Path::new("test/path");
         let path2 = Path::new("test/path");
-        
+
         let key1 = normalizer.normalize(path1);
         let key2 = normalizer.normalize(path2);
-        
+
         assert_eq!(key1, key2);
     }
 
@@ -329,11 +329,11 @@ mod tests {
     fn directory_loop_detector_tracks_visits() {
         let mut detector = DirectoryLoopDetector::new();
         let temp_dir = std::env::temp_dir();
-        
+
         // First visit should succeed
         let visited = detector.visit(&temp_dir, None);
         assert!(visited);
-        
+
         // Second visit should fail (already visited)
         let visited_again = detector.visit(&temp_dir, None);
         assert!(!visited_again);

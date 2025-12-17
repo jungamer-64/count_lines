@@ -16,40 +16,39 @@ use serde::{Deserialize, Serialize};
 pub struct FilePath(PathBuf);
 
 impl FilePath {
-    #[must_use]
     pub fn new(path: impl Into<PathBuf>) -> Self {
         Self(path.into())
     }
 
-    #[must_use]
     pub fn as_path(&self) -> &Path {
         &self.0
     }
 
-    #[must_use]
     pub fn to_path_buf(&self) -> PathBuf {
         self.0.clone()
     }
 
-    #[must_use]
     pub fn display(&self) -> std::path::Display<'_> {
         self.0.display()
     }
 
     /// Returns a UTF-8 view suitable for logging and UI; non UTF-8 segments are lossy converted.
-    #[must_use]
     pub fn to_string_lossy(&self) -> Cow<'_, str> {
         self.0.to_string_lossy()
     }
 
-    #[must_use]
     pub fn file_name(&self) -> Option<FileName> {
-        self.0.file_name().and_then(|s| s.to_str()).map(|s| FileName::new(s.to_string()))
+        self.0
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(|s| FileName::new(s.to_string()))
     }
 
-    #[must_use]
     pub fn extension(&self) -> Option<FileExtension> {
-        self.0.extension().and_then(|s| s.to_str()).map(|s| FileExtension::new(s.to_lowercase()))
+        self.0
+            .extension()
+            .and_then(|s| s.to_str())
+            .map(|s| FileExtension::new(s.to_lowercase()))
     }
 }
 
@@ -147,22 +146,18 @@ pub struct FileExtension(String);
 
 impl FileExtension {
     /// Lowercased UTF-8 file extension; non UTF-8 values are dropped during harvesting.
-    #[must_use]
     pub fn new(ext: String) -> Self {
         Self(ext.to_ascii_lowercase())
     }
 
-    #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
     }
 
-    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
-    #[must_use]
     pub fn no_ext() -> Self {
         Self(String::new())
     }
@@ -188,11 +183,17 @@ impl From<&str> for FileExtension {
 
 impl fmt::Display for FileExtension {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.0.is_empty() { write!(f, "(noext)") } else { write!(f, "{}", self.0) }
+        if self.0.is_empty() {
+            write!(f, "(noext)")
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, Default,
+)]
 #[must_use]
 #[repr(transparent)]
 #[serde(transparent)]
@@ -200,31 +201,26 @@ pub struct FileSize(u64);
 
 impl FileSize {
     #[inline]
-    #[must_use]
     pub const fn new(bytes: u64) -> Self {
         Self(bytes)
     }
 
     #[inline]
-    #[must_use]
     pub const fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    #[must_use]
     pub const fn bytes(self) -> u64 {
         self.0
     }
 
     /// Returns the size expressed in kibibytes (KiB).
-    #[must_use]
     pub fn kilobytes(self) -> f64 {
         self.0 as f64 / 1024.0
     }
 
     /// Returns the size expressed in mebibytes (MiB).
-    #[must_use]
     pub fn megabytes(self) -> f64 {
         self.0 as f64 / (1024.0 * 1024.0)
     }
@@ -243,13 +239,16 @@ impl From<FileSize> for u64 {
 
 impl fmt::Display for FileSize {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if f.alternate() { write!(f, "{}", self.to_human()) } else { write!(f, "{}", self.0) }
+        if f.alternate() {
+            write!(f, "{}", self.to_human())
+        } else {
+            write!(f, "{}", self.0)
+        }
     }
 }
 
 impl FileSize {
     /// Returns a base-2 human readable representation (KiB, MiB, GiB, TiB).
-    #[must_use]
     pub fn to_human(self) -> String {
         const KIB: f64 = 1024.0;
         let bytes = self.bytes();
@@ -284,17 +283,14 @@ impl FileSize {
 pub struct ModificationTime(DateTime<Local>);
 
 impl ModificationTime {
-    #[must_use]
     pub fn new(timestamp: DateTime<Local>) -> Self {
         Self(timestamp)
     }
 
-    #[must_use]
     pub fn timestamp(&self) -> &DateTime<Local> {
         &self.0
     }
 
-    #[must_use]
     pub fn to_rfc3339(&self) -> String {
         self.0.to_rfc3339()
     }

@@ -50,7 +50,12 @@ fn build_json_output(stats: &[FileStats], config: &Config) -> JsonOutput {
         files: summary_data.files,
     };
     let by = build_json_groups(stats, config);
-    JsonOutput { version: crate::VERSION, files, summary, by }
+    JsonOutput {
+        version: crate::VERSION,
+        files,
+        summary,
+        by,
+    }
 }
 
 fn build_json_groups(stats: &[FileStats], config: &Config) -> Option<Vec<JsonGroup>> {
@@ -66,9 +71,17 @@ fn build_json_groups(stats: &[FileStats], config: &Config) -> Option<Vec<JsonGro
             }
             let json_rows = rows
                 .into_iter()
-                .map(|g| JsonGroupRow { key: g.key, lines: g.lines, chars: g.chars, count: g.count })
+                .map(|g| JsonGroupRow {
+                    key: g.key,
+                    lines: g.lines,
+                    chars: g.chars,
+                    count: g.count,
+                })
                 .collect();
-            JsonGroup { label, rows: json_rows }
+            JsonGroup {
+                label,
+                rows: json_rows,
+            }
         })
         .collect();
     Some(json_groups)
@@ -87,7 +100,8 @@ mod tests {
         model::{FileStats, FileStatsBuilder},
         options::{OutputFormat, SortKey, WatchOutput},
         value_objects::{
-            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime,
+            WordCount,
         },
     };
 
@@ -99,7 +113,11 @@ mod tests {
         mtime: Option<chrono::DateTime<chrono::Local>>,
     ) -> FileStats {
         let pathbuf: PathBuf = path.into();
-        let ext_str = pathbuf.extension().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let ext_str = pathbuf
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
 
         let mut builder = FileStatsBuilder::new(FilePath::new(pathbuf.clone()))
             .lines(LineCount::new(lines))
@@ -179,8 +197,14 @@ mod tests {
         assert_eq!(value["files"].as_array().unwrap().len(), 1);
         assert_eq!(value["files"][0]["file"], "src/lib.rs");
         assert_eq!(value["summary"]["lines"], 10);
-        assert!(value["summary"]["words"].is_null(), "words should be omitted when disabled");
-        assert!(value.get("by").is_none(), "by should be absent when no aggregations requested");
+        assert!(
+            value["summary"]["words"].is_null(),
+            "words should be omitted when disabled"
+        );
+        assert!(
+            value.get("by").is_none(),
+            "by should be absent when no aggregations requested"
+        );
     }
 
     #[test]
@@ -210,8 +234,10 @@ mod tests {
 
     #[test]
     fn json_output_includes_mtime_when_present() {
-        let mtime =
-            chrono::Local.with_ymd_and_hms(2024, 5, 1, 12, 0, 0).single().expect("valid local datetime");
+        let mtime = chrono::Local
+            .with_ymd_and_hms(2024, 5, 1, 12, 0, 0)
+            .single()
+            .expect("valid local datetime");
         let stats = vec![sample_stats("src/lib.rs", 10, 100, None, Some(mtime))];
         let config = base_config();
         let mut buffer = Vec::new();
@@ -220,7 +246,10 @@ mod tests {
         let json_str = String::from_utf8(buffer).expect("utf8");
         let value: Value = serde_json::from_str(&json_str).expect("parse json");
 
-        assert_eq!(value["files"][0]["mtime"], serde_json::json!(mtime.to_rfc3339()));
+        assert_eq!(
+            value["files"][0]["mtime"],
+            serde_json::json!(mtime.to_rfc3339())
+        );
     }
 
     #[cfg(feature = "yaml")]

@@ -54,7 +54,11 @@ impl HtmlProcessor {
 
             if let Some(end_offset) = line[start + 4..].find("-->") {
                 let after = &line[start + 4 + end_offset + 3..];
-                return if has_code_before || !after.trim().is_empty() { 1 } else { 0 };
+                return if has_code_before || !after.trim().is_empty() {
+                    1
+                } else {
+                    0
+                };
             } else {
                 self.in_comment = true;
                 return if has_code_before { 1 } else { 0 };

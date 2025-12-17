@@ -3,7 +3,10 @@ use count_lines_shared_kernel::{CharCount, LineCount, WordCount};
 
 #[test]
 fn linecount_sum() {
-    let total = [1usize, 2, 3].into_iter().map(LineCount::from).sum::<LineCount>();
+    let total = [1usize, 2, 3]
+        .into_iter()
+        .map(LineCount::from)
+        .sum::<LineCount>();
     assert_eq!(usize::from(total), 6);
 }
 
@@ -39,7 +42,9 @@ fn collect_from_usize_iterator() {
     let collected: LineCount = [1usize, 2, 3].into_iter().collect();
     assert_eq!(usize::from(collected), 6);
 
-    let collected_counts: CharCount = [CharCount::from(1), CharCount::from(2)].into_iter().collect();
+    let collected_counts: CharCount = [CharCount::from(1), CharCount::from(2)]
+        .into_iter()
+        .collect();
     assert_eq!(usize::from(collected_counts), 3);
 }
 

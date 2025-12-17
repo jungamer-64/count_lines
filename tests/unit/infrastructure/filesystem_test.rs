@@ -22,7 +22,10 @@ struct TempDir {
 
 impl TempDir {
     fn new(prefix: &str) -> Self {
-        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create tempdir");
+        let td = TempBuilder::new()
+            .prefix(prefix)
+            .tempdir()
+            .expect("create tempdir");
         let path = td.path().to_path_buf();
         Self { _td: td, path }
     }

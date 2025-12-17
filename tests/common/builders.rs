@@ -6,7 +6,8 @@ use chrono::{DateTime, Local};
 use count_lines_core::domain::{
     model::{FileEntry, FileMeta, FileStats, FileStatsV2},
     value_objects::{
-        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime,
+        WordCount,
     },
 };
 
@@ -27,10 +28,27 @@ pub struct FileStatsBuilder {
 impl FileStatsBuilder {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         let path: PathBuf = path.into();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("test.txt").to_string();
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("test.txt")
+            .to_string();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_string();
 
-        Self { path, lines: 0, chars: 0, words: None, size: 0, mtime: None, ext, name }
+        Self {
+            path,
+            lines: 0,
+            chars: 0,
+            words: None,
+            size: 0,
+            mtime: None,
+            ext,
+            name,
+        }
     }
 
     pub fn lines(mut self, lines: usize) -> Self {
@@ -95,10 +113,25 @@ pub struct FileEntryBuilder {
 impl FileEntryBuilder {
     pub fn new(path: impl Into<PathBuf>) -> Self {
         let path: PathBuf = path.into();
-        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("test.txt").to_string();
-        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_string();
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("test.txt")
+            .to_string();
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_string();
 
-        Self { path, size: 0, mtime: None, is_text: true, ext, name }
+        Self {
+            path,
+            size: 0,
+            mtime: None,
+            is_text: true,
+            ext,
+            name,
+        }
     }
 
     pub fn size(mut self, size: u64) -> Self {

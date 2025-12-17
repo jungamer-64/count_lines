@@ -13,28 +13,31 @@
 /// - `::` で始まる行 (ラベルの特殊用法としてのコメント)
 pub fn process_batch_style(line: &str, count: &mut usize) {
     let trimmed = line.trim();
-    
+
     // REM コメント (大文字小文字不問)
     // "REM" の後にスペースか行末が必要
     let upper = trimmed.to_uppercase();
     if upper == "REM" || upper.starts_with("REM ") || upper.starts_with("REM\t") {
         return;
     }
-    
+
     // :: コメント (ラベルの特殊用法)
     if trimmed.starts_with("::") {
         return;
     }
-    
+
     // @ プレフィックス付きの REM
-    if trimmed.starts_with('@') {
-        let after_at = trimmed[1..].trim_start();
+    if let Some(stripped) = trimmed.strip_prefix('@') {
+        let after_at = stripped.trim_start();
         let upper_after = after_at.to_uppercase();
-        if upper_after == "REM" || upper_after.starts_with("REM ") || upper_after.starts_with("REM\t") {
+        if upper_after == "REM"
+            || upper_after.starts_with("REM ")
+            || upper_after.starts_with("REM\t")
+        {
             return;
         }
     }
-    
+
     *count += 1;
 }
 

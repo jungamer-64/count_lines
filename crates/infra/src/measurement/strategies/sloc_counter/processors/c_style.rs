@@ -5,21 +5,13 @@
 //! `//` 行コメントと `/* */` ブロックコメントを処理します。
 
 use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::{find_outside_string_with_options, StringSkipOptions};
+use super::super::string_utils::{StringSkipOptions, find_outside_string_with_options};
 
 /// C系言語プロセッサ (//, /* */) - ネスト非対応
+#[derive(Default)]
 pub struct CStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
-}
-
-impl Default for CStyleProcessor {
-    fn default() -> Self {
-        Self {
-            options: StringSkipOptions::default(),
-            in_block_comment: false,
-        }
-    }
 }
 
 impl LineProcessor for CStyleProcessor {
@@ -52,7 +44,8 @@ impl CStyleProcessor {
             return 0;
         }
 
-        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", &self.options) {
+        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", &self.options)
+        {
             let before = &line[..line_comment_pos];
             if before.trim().is_empty() {
                 return 0;
@@ -63,11 +56,12 @@ impl CStyleProcessor {
         if let Some(block_start) = find_outside_string_with_options(line, "/*", &self.options) {
             let before = &line[..block_start];
             let has_code_before = !before.trim().is_empty();
-            
+
             if let Some(block_end) = line[block_start + 2..].find("*/") {
                 let after = &line[block_start + 2 + block_end + 2..];
-                let has_code_after = !after.trim().is_empty() 
-                    && find_outside_string_with_options(after, "//", &self.options).is_none_or(|p| p > 0);
+                let has_code_after = !after.trim().is_empty()
+                    && find_outside_string_with_options(after, "//", &self.options)
+                        .is_none_or(|p| p > 0);
                 if has_code_before || has_code_after {
                     return 1;
                 }
@@ -86,20 +80,11 @@ impl CStyleProcessor {
 }
 
 /// C系言語プロセッサ - ネスト対応 (Rust, Kotlin, Scala)
+#[derive(Default)]
 pub struct NestingCStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
     block_comment_depth: usize,
-}
-
-impl Default for NestingCStyleProcessor {
-    fn default() -> Self {
-        Self {
-            options: StringSkipOptions::default(),
-            in_block_comment: false,
-            block_comment_depth: 0,
-        }
-    }
 }
 
 impl LineProcessor for NestingCStyleProcessor {
@@ -133,7 +118,8 @@ impl NestingCStyleProcessor {
             return;
         }
 
-        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", &self.options) {
+        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", &self.options)
+        {
             let before = &line[..line_comment_pos];
             if before.trim().is_empty() {
                 return;

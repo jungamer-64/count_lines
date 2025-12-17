@@ -52,7 +52,8 @@ mod tests {
         model::{FileStats, FileStatsBuilder},
         options::{OutputFormat, SortKey, WatchOutput},
         value_objects::{
-            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+            CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime,
+            WordCount,
         },
     };
 
@@ -64,7 +65,11 @@ mod tests {
         mtime: Option<chrono::DateTime<chrono::Local>>,
     ) -> FileStats {
         let pathbuf: PathBuf = path.into();
-        let ext_str = pathbuf.extension().and_then(|s| s.to_str()).unwrap_or("").to_string();
+        let ext_str = pathbuf
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
 
         let mut builder = FileStatsBuilder::new(FilePath::new(pathbuf.clone()))
             .lines(LineCount::new(lines))
@@ -146,7 +151,10 @@ mod tests {
         assert_eq!(file_item["file"], "src/lib.rs");
         let total_item: Value = serde_json::from_str(lines[1]).expect("parse total line");
         assert_eq!(total_item["type"], "total");
-        assert!(total_item["words"].is_null(), "words should be null when disabled");
+        assert!(
+            total_item["words"].is_null(),
+            "words should be null when disabled"
+        );
     }
 
     #[test]
@@ -170,8 +178,10 @@ mod tests {
 
     #[test]
     fn jsonl_includes_mtime_when_available() {
-        let mtime =
-            chrono::Local.with_ymd_and_hms(2024, 5, 1, 12, 34, 56).single().expect("valid local datetime");
+        let mtime = chrono::Local
+            .with_ymd_and_hms(2024, 5, 1, 12, 34, 56)
+            .single()
+            .expect("valid local datetime");
         let stats = vec![sample_stats("src/lib.rs", 10, 100, None, Some(mtime))];
         let config = base_config();
 

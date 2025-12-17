@@ -8,8 +8,8 @@ use count_lines_domain::{
     config::Config,
     model::{FileMeta, FileStatsV2},
     value_objects::{
-        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, SlocCount,
-        WordCount,
+        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime,
+        SlocCount, WordCount,
     },
 };
 
@@ -36,7 +36,7 @@ pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option
             return None;
         }
         line_count += 1;
-        
+
         // Grapheme counting requires full string slice, so we handle newlines carefully.
         let mut without_newline = line.as_str();
         if without_newline.ends_with('\n') {
@@ -47,7 +47,7 @@ pub fn measure_by_lines(path: &Path, meta: &FileMeta, config: &Config) -> Option
         }
 
         let base_chars = without_newline.graphemes(true).count();
-        
+
         if config.count_newlines_in_chars {
             // Count newline characters separately as simple chars since they are control chars
             // and we want to preserve the behavior of "chars" (which usually means scalar values for control chars)

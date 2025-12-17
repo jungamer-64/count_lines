@@ -15,8 +15,14 @@ struct TempFile {
 
 impl TempFile {
     fn new(prefix: &str, contents: &str) -> Self {
-        let td = TempBuilder::new().prefix(prefix).tempdir().expect("create tempdir");
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let td = TempBuilder::new()
+            .prefix(prefix)
+            .tempdir()
+            .expect("create tempdir");
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let path = td.path().join(format!("{}_{}.json", prefix, unique));
         fs::write(&path, contents).unwrap();
         Self { _td: td, path }

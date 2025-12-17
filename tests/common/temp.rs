@@ -14,7 +14,10 @@ pub struct TempDir {
 impl TempDir {
     pub fn new(_prefix: &str, _namespace: &str) -> Self {
         // Use tempfile to create a secure unique temp directory
-        let dir = tempfile::Builder::new().prefix("count_lines_").tempdir().expect("create temp dir");
+        let dir = tempfile::Builder::new()
+            .prefix("count_lines_")
+            .tempdir()
+            .expect("create temp dir");
         Self { inner: dir }
     }
 
@@ -41,7 +44,9 @@ pub struct TempWorkspace {
 impl TempWorkspace {
     #[allow(dead_code)]
     pub fn new(prefix: &str, namespace: &str) -> Self {
-        Self { dir: TempDir::new(prefix, namespace) }
+        Self {
+            dir: TempDir::new(prefix, namespace),
+        }
     }
 
     pub fn path(&self) -> &Path {

@@ -51,7 +51,10 @@ impl WatchService {
     fn create_watcher(
         config: &Config,
     ) -> std::result::Result<
-        (RecommendedWatcher, std::sync::mpsc::Receiver<std::result::Result<notify::Event, notify::Error>>),
+        (
+            RecommendedWatcher,
+            std::sync::mpsc::Receiver<std::result::Result<notify::Event, notify::Error>>,
+        ),
         InfrastructureError,
     > {
         let (tx, rx) = mpsc::channel();
@@ -180,6 +183,9 @@ impl WatchService {
     where
         F: FnMut() -> Result<()>,
     {
-        Err(InfrastructureError::OutputError("watch feature disabled at compile time".to_string()).into())
+        Err(
+            InfrastructureError::OutputError("watch feature disabled at compile time".to_string())
+                .into(),
+        )
     }
 }

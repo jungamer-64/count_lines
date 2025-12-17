@@ -83,10 +83,10 @@ impl SqlProcessor {
             } else if !after.trim().is_empty() {
                 return self.process(after);
             }
-            return 0;
+            0
         } else {
             self.in_block_comment = true;
-            return if has_code_before { 1 } else { 0 };
+            if has_code_before { 1 } else { 0 }
         }
     }
 }

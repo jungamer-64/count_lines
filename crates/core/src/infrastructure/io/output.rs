@@ -26,7 +26,10 @@ pub fn emit(stats: &[FileStats], config: &Config) -> Result<()> {
 
             #[cfg(not(feature = "yaml"))]
             {
-                Err(InfrastructureError::OutputError("YAML support disabled at build time".into()).into())
+                Err(
+                    InfrastructureError::OutputError("YAML support disabled at build time".into())
+                        .into(),
+                )
             }
         }
         OutputFormat::Csv => output_delimited(stats, config, ',', &mut writer),

@@ -5,7 +5,8 @@ use count_lines_domain::{
     config::Config,
     model::{FileMeta, FileStatsV2},
     value_objects::{
-        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime, WordCount,
+        CharCount, FileExtension, FileName, FilePath, FileSize, LineCount, ModificationTime,
+        WordCount,
     },
 };
 

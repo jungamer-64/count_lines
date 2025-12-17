@@ -11,7 +11,9 @@ impl std::str::FromStr for SizeArg {
         let s = s.trim().replace('_', "");
         let lower = s.to_ascii_lowercase();
         let (num_str, multiplier) = parse_with_suffix(&lower)?;
-        let num: u64 = num_str.parse().map_err(|_| format!("Invalid size number: {num_str}"))?;
+        let num: u64 = num_str
+            .parse()
+            .map_err(|_| format!("Invalid size number: {num_str}"))?;
         Ok(SizeArg(num * multiplier))
     }
 }
@@ -77,14 +79,16 @@ where
     T: Copy + PartialOrd + Display + FromStr,
     <T as FromStr>::Err: Display,
 {
-    let value = s.parse::<T>().map_err(|err| format!("invalid number '{s}': {err}"))?;
+    let value = s
+        .parse::<T>()
+        .map_err(|err| format!("invalid number '{s}': {err}"))?;
     if value < min {
         return Err(format!("value must be at least {min}"));
     }
-    if let Some(max_bound) = max {
-        if value > max_bound {
-            return Err(format!("value must be at most {max_bound}"));
-        }
+    if let Some(max_bound) = max
+        && value > max_bound
+    {
+        return Err(format!("value must be at most {max_bound}"));
     }
     Ok(value)
 }
@@ -127,13 +131,17 @@ mod tests {
 
     #[test]
     fn size_arg_rejects_invalid_numbers() {
-        let err = "ten".parse::<SizeArg>().expect_err("invalid number should fail");
+        let err = "ten"
+            .parse::<SizeArg>()
+            .expect_err("invalid number should fail");
         assert!(err.contains("Invalid size number"));
     }
 
     #[test]
     fn datetime_arg_parses_rfc3339() {
-        let arg: DateTimeArg = "2024-05-01T12:34:56Z".parse().expect("valid rfc3339 datetime");
+        let arg: DateTimeArg = "2024-05-01T12:34:56Z"
+            .parse()
+            .expect("valid rfc3339 datetime");
         let utc = arg.0.with_timezone(&Utc);
         assert_eq!(utc, Utc.with_ymd_and_hms(2024, 5, 1, 12, 34, 56).unwrap());
     }
@@ -158,7 +166,9 @@ mod tests {
 
     #[test]
     fn datetime_arg_rejects_nonsense() {
-        let err = "nonsense".parse::<DateTimeArg>().expect_err("invalid datetime should fail");
+        let err = "nonsense"
+            .parse::<DateTimeArg>()
+            .expect_err("invalid datetime should fail");
         assert!(err.contains("Cannot parse datetime"));
     }
 

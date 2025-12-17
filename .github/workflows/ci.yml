@@ -162,6 +162,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@5d458579430fc14a04a08a1e7d3694f545e91ce6
 
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo-audit
+        run: cargo audit
+
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@ef301417264190a1eb9f26fcf171642070085c5b
 

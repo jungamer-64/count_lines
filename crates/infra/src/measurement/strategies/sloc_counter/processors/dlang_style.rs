@@ -33,7 +33,10 @@ impl LineProcessor for DLangProcessor {
 
 impl DLangProcessor {
     pub const fn new() -> Self {
-        Self { block_comment_depth: 0, in_c_block: false }
+        Self {
+            block_comment_depth: 0,
+            in_c_block: false,
+        }
     }
 
     pub fn process(&mut self, line: &str) -> usize {
@@ -68,7 +71,11 @@ impl DLangProcessor {
             self.block_comment_depth = 1;
             let rest = &line[pos + 2..];
             let rest_has_code = self.process_nesting_block(rest);
-            return if has_code_before || rest_has_code { 1 } else { 0 };
+            return if has_code_before || rest_has_code {
+                1
+            } else {
+                0
+            };
         }
 
         // Cスタイルブロックコメント /*

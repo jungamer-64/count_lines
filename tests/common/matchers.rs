@@ -10,7 +10,9 @@ pub struct FileStatsAssertion {
 
 impl FileStatsAssertion {
     pub fn new(stats: &FileStats) -> Self {
-        Self { stats: stats.to_v2() }
+        Self {
+            stats: stats.to_v2(),
+        }
     }
 
     pub fn has_lines(self, expected: usize) -> Self {
@@ -37,7 +39,11 @@ impl FileStatsAssertion {
 
     pub fn has_words(self, expected: Option<usize>) -> Self {
         let actual = self.stats.words().map(|w| w.value());
-        assert_eq!(actual, expected, "Expected {:?} words, got {:?}", expected, actual);
+        assert_eq!(
+            actual, expected,
+            "Expected {:?} words, got {:?}",
+            expected, actual
+        );
         self
     }
 
@@ -61,13 +67,19 @@ pub fn assert_stats(stats: &FileStats) -> FileStatsAssertion {
 /// ソート順の検証
 pub fn assert_sorted_by_lines_desc(stats: &[FileStats]) {
     for window in stats.windows(2) {
-        assert!(window[0].lines >= window[1].lines, "Stats not sorted by lines descending");
+        assert!(
+            window[0].lines >= window[1].lines,
+            "Stats not sorted by lines descending"
+        );
     }
 }
 
 pub fn assert_sorted_by_lines_asc(stats: &[FileStats]) {
     for window in stats.windows(2) {
-        assert!(window[0].lines <= window[1].lines, "Stats not sorted by lines ascending");
+        assert!(
+            window[0].lines <= window[1].lines,
+            "Stats not sorted by lines ascending"
+        );
     }
 }
 
@@ -77,8 +89,16 @@ mod tests {
 
     #[test]
     fn file_stats_builder_assertions_work() {
-        let stats = FileStatsBuilder::new("test.rs").lines(10).chars(100).words(20).build();
+        let stats = FileStatsBuilder::new("test.rs")
+            .lines(10)
+            .chars(100)
+            .words(20)
+            .build();
 
-        assert_stats(&stats).has_lines(10).has_chars(100).has_words(Some(20)).has_ext("rs");
+        assert_stats(&stats)
+            .has_lines(10)
+            .has_chars(100)
+            .has_words(Some(20))
+            .has_ext("rs");
     }
 }

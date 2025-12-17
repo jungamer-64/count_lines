@@ -66,11 +66,7 @@ mod tests {
     impl LineProcessor for TestProcessor {
         fn process_line(&mut self, line: &str) -> usize {
             self.count += 1;
-            if line.trim().starts_with("//") {
-                0
-            } else {
-                1
-            }
+            if line.trim().starts_with("//") { 0 } else { 1 }
         }
     }
 

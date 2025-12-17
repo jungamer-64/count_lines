@@ -81,7 +81,12 @@ fn csv_output_contains_header_and_total_row() {
     run_with_config(config).expect("run succeeds");
     let csv = fs::read_to_string(&output_path).expect("csv exists");
 
-    assert!(csv.lines().next().unwrap().contains("lines,chars,words,file"));
+    assert!(
+        csv.lines()
+            .next()
+            .unwrap()
+            .contains("lines,chars,words,file")
+    );
     assert!(csv.contains("lib.rs"));
     assert!(csv.contains("TOTAL"));
 }
