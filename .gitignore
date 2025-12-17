@@ -9,6 +9,9 @@ Cargo.lock
 /logs/*.log
 /logs/**/*.log
 /.codacy/logs/
+/*.log
+/*.txt
+/*.json
 
 # Editor files
 .vscode/

@@ -1,0 +1,230 @@
+use crate::args::Args;
+use crate::options::{ByMode, OutputFormat, OutputMode, SortKey, WatchOutput};
+use std::path::PathBuf;
+use std::time::Duration;
+
+#[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct WalkOptions {
+    pub roots: Vec<PathBuf>,
+    pub threads: usize,
+    pub hidden: bool,
+    pub git_ignore: bool,
+    pub max_depth: Option<usize>,
+    pub follow_links: bool,
+    pub override_include: Vec<String>,
+    pub override_exclude: Vec<String>,
+    pub case_insensitive_dedup: bool,
+    pub files_from: Option<PathBuf>,
+    pub files_from0: Option<PathBuf>,
+    pub types: Option<ignore::types::Types>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct FilterConfig {
+    pub allow_ext: Vec<String>,
+    pub deny_ext: Vec<String>, // Maybe logic handles this
+
+    pub min_lines: Option<usize>,
+    pub max_lines: Option<usize>,
+    pub min_chars: Option<usize>,
+    pub max_chars: Option<usize>,
+    pub min_words: Option<usize>,
+    pub max_words: Option<usize>,
+    pub min_size: Option<u64>,
+    pub max_size: Option<u64>,
+
+    pub mtime_since: Option<chrono::DateTime<chrono::Local>>,
+    pub mtime_until: Option<chrono::DateTime<chrono::Local>>,
+
+    pub include_patterns: Vec<String>,
+    pub exclude_patterns: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)]
+pub struct Config {
+    pub walk: WalkOptions,
+    pub filter: FilterConfig,
+
+    pub format: OutputFormat,
+    pub sort: Vec<(SortKey, bool)>,
+    pub top_n: Option<usize>,
+    pub by: Vec<ByMode>,
+    pub output_mode: OutputMode,
+    pub by_limit: Option<usize>,
+    pub total_row: bool,
+    pub count_newlines_in_chars: bool,
+    pub progress: bool,
+    pub ratio: bool,
+    pub output_path: Option<PathBuf>,
+
+    pub count_words: bool,
+    pub count_sloc: bool,
+
+    pub strict: bool,
+    pub incremental: bool,
+    pub cache_dir: Option<PathBuf>,
+    pub verify_cache: bool,
+    pub clear_cache: bool,
+    pub watch: bool,
+    pub watch_interval: Duration,
+    pub watch_output: WatchOutput,
+
+    pub compare: Option<(PathBuf, PathBuf)>,
+}
+
+impl Config {
+    pub fn from_args(args: Args) -> Self {
+        // Resolve words/sloc dependencies
+        let count_words = args.filter.words
+            || args.filter.min_words.is_some()
+            || args.filter.max_words.is_some()
+            || args
+                .output
+                .sort
+                .0
+                .iter()
+                .any(|(k, _)| matches!(k, SortKey::Words));
+
+        let count_sloc = args.filter.sloc
+            || args
+                .output
+                .sort
+                .0
+                .iter()
+                .any(|(k, _)| matches!(k, SortKey::Sloc));
+
+        let walk_threads = args
+            .scan
+            .walk_threads
+            .or(args.scan.jobs)
+            .unwrap_or_else(num_cpus::get);
+
+        let walk = WalkOptions {
+            roots: if args.paths.is_empty() {
+                vec![PathBuf::from(".")]
+            } else {
+                args.paths
+            },
+            threads: walk_threads,
+            hidden: args.scan.hidden,
+            git_ignore: !args.scan.no_gitignore, // Respect .gitignore by default
+            max_depth: args.scan.max_depth,
+            follow_links: args.scan.follow,
+            override_include: args.scan.override_include,
+            override_exclude: args.scan.override_exclude,
+            case_insensitive_dedup: args.scan.case_insensitive_dedup,
+            files_from: args.scan.files_from,
+            files_from0: args.scan.files_from0,
+            types: None, // Can build types from force_text_ext etc.
+        };
+
+        let filter = FilterConfig {
+            allow_ext: args.filter.ext,
+            deny_ext: vec![], // ignore crate handles excludes
+            min_lines: args.filter.min_lines,
+            max_lines: args.filter.max_lines,
+            min_chars: args.filter.min_chars,
+            max_chars: args.filter.max_chars,
+            min_words: args.filter.min_words,
+            max_words: args.filter.max_words,
+            min_size: args.filter.min_size.map(|s| s.0),
+            max_size: args.filter.max_size.map(|s| s.0),
+            mtime_since: args.filter.mtime_since.map(|d| d.0),
+            mtime_until: args.filter.mtime_until.map(|d| d.0),
+            include_patterns: args.filter.include,
+            exclude_patterns: args.filter.exclude,
+        };
+
+        // Handle compare tuple
+        let compare = if let Some(files) = args.comparison.compare {
+            if files.len() == 2 {
+                Some((files[0].clone(), files[1].clone()))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        Self {
+            walk,
+            filter,
+            format: args.output.format,
+            sort: args.output.sort.0,
+            top_n: args.output.top,
+            by: args.output.by,
+            output_mode: args.output.output_mode,
+            by_limit: args.output.by_limit,
+            total_row: args.output.total_row,
+            count_newlines_in_chars: args.output.count_newlines_in_chars,
+            progress: args.output.progress,
+            ratio: args.output.ratio,
+            output_path: args.output.output,
+            count_words,
+            count_sloc,
+            strict: args.behavior.strict,
+            incremental: args.behavior.incremental,
+            cache_dir: args.behavior.cache_dir,
+            verify_cache: args.behavior.cache_verify,
+            clear_cache: args.behavior.clear_cache,
+            watch: args.behavior.watch,
+            watch_interval: std::time::Duration::from_secs(
+                args.behavior.watch_interval.unwrap_or(1),
+            ),
+            watch_output: args.behavior.watch_output,
+            compare,
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            walk: WalkOptions::default(),
+            filter: FilterConfig::default(),
+            format: OutputFormat::Table, // Table seems to be default or common
+            sort: vec![],
+            top_n: None,
+            by: vec![],
+            output_mode: OutputMode::default(),
+            by_limit: None,
+            total_row: false,
+            count_newlines_in_chars: false,
+            progress: false,
+            ratio: false,
+            output_path: None,
+            count_words: false,
+            count_sloc: false,
+            strict: false,
+            incremental: false,
+            cache_dir: None,
+            verify_cache: false,
+            clear_cache: false,
+            watch: false,
+            watch_interval: Duration::from_secs(1),
+            watch_output: WatchOutput::Full,
+            compare: None,
+        }
+    }
+}
+
+impl Default for WalkOptions {
+    fn default() -> Self {
+        Self {
+            roots: vec![],
+            threads: 1,
+            hidden: false,
+            git_ignore: true,
+            max_depth: None,
+            follow_links: false,
+            override_include: vec![],
+            override_exclude: vec![],
+            case_insensitive_dedup: false,
+            files_from: None,
+            files_from0: None,
+            types: None,
+        }
+    }
+}

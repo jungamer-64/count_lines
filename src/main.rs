@@ -1,7 +1,41 @@
-#![allow(clippy::multiple_crate_versions)]
+use clap::Parser;
+use count_lines::args::Args;
+use count_lines::config::Config;
+use count_lines::engine;
+use count_lines::presentation;
 
-//! CLI entry point for the `count_lines` application.
+use std::process::ExitCode;
 
-fn main() -> anyhow::Result<()> {
-    count_lines::run_from_cli()
+fn main() -> ExitCode {
+    let args = Args::parse();
+    let config = Config::from_args(args);
+
+    if let Some((old, new)) = &config.compare {
+        match count_lines::compare::compare_snapshots(old, new) {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("Comparison Error: {}", e);
+                ExitCode::FAILURE
+            }
+        }
+    } else if config.watch {
+        if let Err(e) = count_lines::watch::watch_paths(&config) {
+            eprintln!("Watch Error: {}", e);
+            ExitCode::FAILURE
+        } else {
+            // Watch loop is infinite, but if it returns Ok, it means it finished (unlikely)
+            ExitCode::SUCCESS
+        }
+    } else {
+        match engine::run(&config) {
+            Ok(stats) => {
+                presentation::print_results(&stats, &config);
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("Application Error: {}", e);
+                ExitCode::FAILURE
+            }
+        }
+    }
 }
