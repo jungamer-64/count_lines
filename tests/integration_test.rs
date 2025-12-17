@@ -1,9 +1,9 @@
-//! Basic integration tests for the refactored count_lines crate
+//! Basic integration tests for the refactored `count_lines` crate
 
 use count_lines::{language::SlocProcessor, stats::FileStats};
 use std::path::PathBuf;
 
-/// Test that SlocProcessor can be created from various extensions
+/// Test that `SlocProcessor` can be created from various extensions
 #[test]
 fn test_sloc_processor_from_extension() {
     // Rust - NestingCStyle
@@ -35,7 +35,7 @@ fn test_sloc_processor_from_extension() {
     assert!(matches!(proc, SlocProcessor::NoComment));
 }
 
-/// Test FileStats creation via new()
+/// Test `FileStats` creation via `new()`
 #[test]
 fn test_file_stats_creation() {
     let stats = FileStats::new(PathBuf::from("test.rs"));
@@ -48,7 +48,7 @@ fn test_file_stats_creation() {
     assert!(!stats.is_binary);
 }
 
-/// Test FileStats with fields set
+/// Test `FileStats` with fields set
 #[test]
 fn test_file_stats_with_values() {
     let mut stats = FileStats::new(PathBuf::from("example.py"));
@@ -62,14 +62,14 @@ fn test_file_stats_with_values() {
     assert_eq!(stats.ext, "py");
 }
 
-/// Test SlocProcessor default
+/// Test `SlocProcessor` default
 #[test]
 fn test_sloc_processor_default() {
     let proc = SlocProcessor::default();
     assert!(matches!(proc, SlocProcessor::NoComment));
 }
 
-/// Test LineProcessor trait on SlocProcessor
+/// Test `LineProcessor` trait on `SlocProcessor`
 #[test]
 fn test_line_processor_process_line() {
     use count_lines::language::LineProcessor;
@@ -102,7 +102,7 @@ fn test_line_processor_reset() {
     assert_eq!(proc.process_line("fn test() {}"), 1);
 }
 
-/// Test NoComment processor with empty lines
+/// Test `NoComment` processor with empty lines
 #[test]
 fn test_no_comment_processor() {
     use count_lines::language::LineProcessor;

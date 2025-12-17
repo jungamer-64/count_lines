@@ -21,7 +21,7 @@ pub struct FileStats {
 }
 
 impl FileStats {
-    #[must_use] 
+    #[must_use]
     pub fn new(path: PathBuf) -> Self {
         let name = path
             .file_name()
@@ -65,19 +65,19 @@ impl RunResult {
 
     /// Returns true if there were any processing errors
     #[must_use]
-    pub fn has_errors(&self) -> bool {
+    pub const fn has_errors(&self) -> bool {
         !self.errors.is_empty()
     }
 
     /// Returns the number of successfully processed files
     #[must_use]
-    pub fn file_count(&self) -> usize {
+    pub const fn file_count(&self) -> usize {
         self.stats.len()
     }
 
     /// Returns the number of errors encountered
     #[must_use]
-    pub fn error_count(&self) -> usize {
+    pub const fn error_count(&self) -> usize {
         self.errors.len()
     }
 }

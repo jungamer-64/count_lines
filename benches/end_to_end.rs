@@ -8,7 +8,7 @@ fn benchmark_cli_parsing(c: &mut Criterion) {
         b.iter(|| {
             let args = Args::try_parse_from(black_box(["count_lines", "."])).unwrap();
             black_box(args);
-        })
+        });
     });
 }
 

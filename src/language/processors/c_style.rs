@@ -26,7 +26,7 @@ impl LineProcessor for CStyleProcessor {
 
 impl CStyleProcessor {
     #[must_use]
-    pub fn new(options: StringSkipOptions) -> Self {
+    pub const fn new(options: StringSkipOptions) -> Self {
         Self {
             options,
             in_block_comment: false,
@@ -49,8 +49,7 @@ impl CStyleProcessor {
             return 0;
         }
 
-        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", self.options)
-        {
+        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", self.options) {
             let before = &line[..line_comment_pos];
             if before.trim().is_empty() {
                 return 0;
@@ -104,7 +103,7 @@ impl LineProcessor for NestingCStyleProcessor {
 
 impl NestingCStyleProcessor {
     #[must_use]
-    pub fn new(options: StringSkipOptions) -> Self {
+    pub const fn new(options: StringSkipOptions) -> Self {
         Self {
             options,
             in_block_comment: false,
@@ -128,8 +127,7 @@ impl NestingCStyleProcessor {
             return;
         }
 
-        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", self.options)
-        {
+        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", self.options) {
             let before = &line[..line_comment_pos];
             if before.trim().is_empty() {
                 return;

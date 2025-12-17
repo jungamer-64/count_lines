@@ -12,7 +12,7 @@ fn main() -> ExitCode {
 
     if let Some((old, new)) = &config.compare {
         match count_lines::compare::compare_snapshots(old, new) {
-            Ok(_) => ExitCode::SUCCESS,
+            Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
                 eprintln!("Comparison Error: {e}");
                 ExitCode::FAILURE

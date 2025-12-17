@@ -29,7 +29,7 @@ pub struct SimplePrefixProcessor {
 
 impl SimplePrefixProcessor {
     /// 大文字小文字を区別するプロセッサを作成
-    #[must_use] 
+    #[must_use]
     pub const fn new(prefixes: &'static [&'static str]) -> Self {
         Self {
             prefixes,
@@ -38,7 +38,7 @@ impl SimplePrefixProcessor {
     }
 
     /// 大文字小文字を区別しないプロセッサを作成
-    #[must_use] 
+    #[must_use]
     pub const fn new_ignore_case(prefixes: &'static [&'static str]) -> Self {
         Self {
             prefixes,
@@ -47,7 +47,7 @@ impl SimplePrefixProcessor {
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
-    #[must_use] 
+    #[must_use]
     pub fn process(&self, line: &str) -> usize {
         let trimmed = line.trim();
 
@@ -103,48 +103,48 @@ pub const VB_PREFIXES: &[&str] = &["'", "REM ", "REM\t"];
 
 impl SimplePrefixProcessor {
     /// VHDL用プロセッサ
-    #[must_use] 
-    pub fn vhdl() -> Self {
+    #[must_use]
+    pub const fn vhdl() -> Self {
         Self::new(VHDL_PREFIXES)
     }
 
     /// Erlang/LaTeX用プロセッサ
-    #[must_use] 
-    pub fn erlang() -> Self {
+    #[must_use]
+    pub const fn erlang() -> Self {
         Self::new(ERLANG_PREFIXES)
     }
 
     /// Lisp系用プロセッサ
-    #[must_use] 
-    pub fn lisp() -> Self {
+    #[must_use]
+    pub const fn lisp() -> Self {
         Self::new(LISP_PREFIXES)
     }
 
     /// Assembly (NASM/MASM)用プロセッサ
-    #[must_use] 
-    pub fn assembly() -> Self {
+    #[must_use]
+    pub const fn assembly() -> Self {
         Self::new(ASSEMBLY_PREFIXES)
     }
 
     /// Fortran用プロセッサ
-    #[must_use] 
-    pub fn fortran() -> Self {
+    #[must_use]
+    pub const fn fortran() -> Self {
         Self::new(FORTRAN_PREFIXES)
     }
 
     /// Batch用プロセッサ (大文字小文字区別なし)
-    #[must_use] 
-    pub fn batch() -> Self {
+    #[must_use]
+    pub const fn batch() -> Self {
         Self::new_ignore_case(BATCH_PREFIXES)
     }
 
     /// Visual Basic用プロセッサ (大文字小文字区別なし)
-    #[must_use] 
-    pub fn visual_basic() -> Self {
+    #[must_use]
+    pub const fn visual_basic() -> Self {
         Self::new_ignore_case(VB_PREFIXES)
     }
 
-    pub fn reset(&mut self) {}
+    pub const fn reset(&mut self) {}
 }
 
 #[cfg(test)]
