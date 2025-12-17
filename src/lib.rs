@@ -10,7 +10,6 @@
 // - or_fun_call: Lazy eval not critical for performance in this context
 // - unused_self: Some methods keep &self for API consistency
 // - unnecessary_wraps: Some return types are for future extensibility
-// - format_push_string: Works correctly, low priority
 // - too_many_lines: Complex functions are documented, will refactor incrementally
 // - struct_excessive_bools: State tracking requires multiple flags
 // - doc_markdown: Will address incrementally
@@ -24,7 +23,6 @@
 #![allow(clippy::or_fun_call)]
 #![allow(clippy::unused_self)]
 #![allow(clippy::unnecessary_wraps)]
-#![allow(clippy::format_push_string)]
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::struct_excessive_bools)]
 #![allow(clippy::doc_markdown)]
