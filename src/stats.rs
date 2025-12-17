@@ -2,6 +2,8 @@ use chrono::{DateTime, Local};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+use crate::error::AppError;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct FileStats {
     pub path: PathBuf,
@@ -41,5 +43,40 @@ impl FileStats {
             name,
             is_binary: false,
         }
+    }
+}
+
+/// Result of running the file counting engine.
+/// Contains both successful stats and any errors encountered during processing.
+#[derive(Debug, Default)]
+pub struct RunResult {
+    /// Successfully processed file statistics
+    pub stats: Vec<FileStats>,
+    /// Errors encountered during processing (path, error)
+    pub errors: Vec<(PathBuf, AppError)>,
+}
+
+impl RunResult {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns true if there were any processing errors
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        !self.errors.is_empty()
+    }
+
+    /// Returns the number of successfully processed files
+    #[must_use]
+    pub fn file_count(&self) -> usize {
+        self.stats.len()
+    }
+
+    /// Returns the number of errors encountered
+    #[must_use]
+    pub fn error_count(&self) -> usize {
+        self.errors.len()
     }
 }

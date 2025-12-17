@@ -14,13 +14,13 @@ fn main() -> ExitCode {
         match count_lines::compare::compare_snapshots(old, new) {
             Ok(_) => ExitCode::SUCCESS,
             Err(e) => {
-                eprintln!("Comparison Error: {}", e);
+                eprintln!("Comparison Error: {e}");
                 ExitCode::FAILURE
             }
         }
     } else if config.watch {
         if let Err(e) = count_lines::watch::watch_paths(&config) {
-            eprintln!("Watch Error: {}", e);
+            eprintln!("Watch Error: {e}");
             ExitCode::FAILURE
         } else {
             // Watch loop is infinite, but if it returns Ok, it means it finished (unlikely)
@@ -28,12 +28,20 @@ fn main() -> ExitCode {
         }
     } else {
         match engine::run(&config) {
-            Ok(stats) => {
-                presentation::print_results(&stats, &config);
+            Ok(result) => {
+                // Print any processing errors to stderr
+                for (path, err) in &result.errors {
+                    eprintln!("Error processing {}: {err}", path.display());
+                }
+
+                // Print successful results
+                presentation::print_results(&result.stats, &config);
+
+                // Return success even if some files had errors (non-strict mode)
                 ExitCode::SUCCESS
             }
             Err(e) => {
-                eprintln!("Application Error: {}", e);
+                eprintln!("Application Error: {e}");
                 ExitCode::FAILURE
             }
         }

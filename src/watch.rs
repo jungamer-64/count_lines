@@ -15,7 +15,7 @@ pub fn watch_paths(config: &Config) -> Result<()> {
         Ok(event) => {
             let _ = tx.send(event);
         }
-        Err(e) => eprintln!("watch error: {:?}", e),
+        Err(e) => eprintln!("watch error: {e:?}"),
     })?;
 
     // Add paths to be watched
@@ -28,7 +28,7 @@ pub fn watch_paths(config: &Config) -> Result<()> {
 
     // Initial run
     println!("[count_lines] Starting watch mode...");
-    run_cycle(config)?; // Changed to return Result
+    run_cycle(config)?;
 
     let debounce_interval = config.watch_interval;
 
@@ -43,18 +43,13 @@ pub fn watch_paths(config: &Config) -> Result<()> {
             while rx.try_recv().is_ok() {}
 
             // Clear screen and re-run
-            presentation::print_clear_screen(&config.watch_output); // Adjusted to use config.watch_output
+            presentation::print_clear_screen(&config.watch_output);
             run_cycle(config)?;
         }
     }
 }
 
 fn run_cycle(config: &Config) -> Result<()> {
-    // Changed signature to return Result
-    // Determine output style
-    // If jsonl watch output, we print a clear screen char?
-    // Or just append?
-
     // Clear screen for full output
     if matches!(config.watch_output, WatchOutput::Full) {
         // ANSI clear screen
@@ -62,16 +57,20 @@ fn run_cycle(config: &Config) -> Result<()> {
     }
 
     match engine::run(config) {
-        Ok(stats) => {
+        Ok(result) => {
+            // Print any processing errors to stderr
+            for (path, err) in &result.errors {
+                eprintln!("Error processing {}: {err}", path.display());
+            }
+
+            // Print results
             if matches!(config.watch_output, WatchOutput::Jsonl) {
-                // Just print jsonl, maybe with a marker?
-                // The existing jsonl printer includes a total row.
-                presentation::print_results(&stats, config);
+                presentation::print_results(&result.stats, config);
             } else {
-                presentation::print_results(&stats, config);
+                presentation::print_results(&result.stats, config);
             }
         }
-        Err(e) => eprintln!("Error in watch cycle: {}", e),
+        Err(e) => eprintln!("Error in watch cycle: {e}"),
     }
     Ok(())
 }
