@@ -1,38 +1,42 @@
 //! Basic integration tests for the refactored `count_lines` crate
 
-use count_lines::{language::SlocProcessor, stats::FileStats};
+use count_lines::language::get_processor;
+use count_lines::stats::FileStats;
+use std::collections::HashMap;
 use std::path::PathBuf;
 
-/// Test that `SlocProcessor` can be created from various extensions
+/// Test that `get_processor` returns a working processor for various extensions
 #[test]
-fn test_sloc_processor_from_extension() {
-    // Rust - NestingCStyle
-    let proc = SlocProcessor::from_extension("rs");
-    assert!(matches!(proc, SlocProcessor::NestingCStyle(_)));
+fn test_get_processor_basic() {
+    let map = HashMap::new();
 
-    // C - CStyle
-    let proc = SlocProcessor::from_extension("c");
-    assert!(matches!(proc, SlocProcessor::CStyle(_)));
+    // Rust - Should handle SLOC
+    let mut proc = get_processor("rs", &map);
+    assert_eq!(proc.process_line("fn main() {}"), 1);
+    assert_eq!(proc.process_line("// comment"), 0);
 
-    // Python
-    let proc = SlocProcessor::from_extension("py");
-    assert!(matches!(proc, SlocProcessor::Python(_)));
+    // C - Should handle SLOC
+    let mut proc = get_processor("c", &map);
+    assert_eq!(proc.process_line("int x;"), 1);
+    assert_eq!(proc.process_line("// comment"), 0);
 
-    // Ruby
-    let proc = SlocProcessor::from_extension("rb");
-    assert!(matches!(proc, SlocProcessor::Ruby(_)));
+    // Python - Should handle SLOC (assuming implementations are correct)
+    let mut proc = get_processor("py", &map);
+    assert_eq!(proc.process_line("def foo():"), 1);
+    assert_eq!(proc.process_line("# comment"), 0);
 
-    // Shell - Shell (Specialized SimpleHash)
-    let proc = SlocProcessor::from_extension("sh");
-    assert!(matches!(proc, SlocProcessor::Shell(_)));
+    // Shell
+    let mut proc = get_processor("sh", &map);
+    assert_eq!(proc.process_line("echo hello"), 1);
+    assert_eq!(proc.process_line("# comment"), 0);
 
-    // VHDL - SimplePrefix
-    let proc = SlocProcessor::from_extension("vhd");
-    assert!(matches!(proc, SlocProcessor::SimplePrefix(_)));
-
-    // Text - NoComment
-    let proc = SlocProcessor::from_extension("txt");
-    assert!(matches!(proc, SlocProcessor::NoComment));
+    // Text - NoComment (empty map means default behavior?)
+    // Actually "txt" maps to NoComment in get_processor default matching?
+    // Wait, get_processor(ext) uses CommentStyle::from_extension.
+    // CommentStyle("txt") -> None -> NoCommentProcessor.
+    let mut proc = get_processor("txt", &map);
+    assert_eq!(proc.process_line("text"), 1);
+    assert_eq!(proc.process_line(""), 0);
 }
 
 /// Test `FileStats` creation via `new()`
@@ -62,59 +66,34 @@ fn test_file_stats_with_values() {
     assert_eq!(stats.ext, "py");
 }
 
-/// Test `SlocProcessor` default
+/// Test reset functionality on a boxed processor
 #[test]
-fn test_sloc_processor_default() {
-    let proc = SlocProcessor::default();
-    assert!(matches!(proc, SlocProcessor::NoComment));
-}
+fn test_line_processor_reset_boxed() {
+    let map = HashMap::new();
+    let mut proc = get_processor("rs", &map);
 
-/// Test `LineProcessor` trait on `SlocProcessor`
-#[test]
-fn test_line_processor_process_line() {
-    use count_lines::language::LineProcessor;
-
-    // Rust processor
-    let mut proc = SlocProcessor::from_extension("rs");
-
-    // Code line
-    assert_eq!(proc.process_line("fn main() {}"), 1);
-
-    // Comment line
-    assert_eq!(proc.process_line("// comment"), 0);
-}
-
-/// Test reset functionality
-#[test]
-fn test_line_processor_reset() {
-    use count_lines::language::LineProcessor;
-
-    let mut proc = SlocProcessor::from_extension("rs");
-
-    // Process some lines
+    // Process some lines (assume stateful processor like NestingCStyle)
     proc.process_line("/* start block");
-    proc.process_line("still in block */");
+    // Processor state is now in_block_comment
 
     // Reset should clear state
     proc.reset();
 
-    // Should be fresh processor now
+    // Should be fresh processor now (treats code as code)
+    // If it was still in block comment, "fn test..." would be 0?
+    // NestingCStyle: "fn test..." inside block is 0.
+    // If reset works, it returns 1.
     assert_eq!(proc.process_line("fn test() {}"), 1);
 }
 
-/// Test `NoComment` processor with empty lines
+/// Test `NoComment` usage
 #[test]
-fn test_no_comment_processor() {
-    use count_lines::language::LineProcessor;
+fn test_no_comment_processor_basic() {
+    let map = HashMap::new();
+    let mut proc = get_processor("txt", &map);
 
-    let mut proc = SlocProcessor::from_extension("txt");
-
-    // Non-empty line = code
+    // NoComment just counts non-empty lines
     assert_eq!(proc.process_line("hello world"), 1);
-
-    // Empty line = not code
     assert_eq!(proc.process_line(""), 0);
-
-    // Whitespace only = not code
     assert_eq!(proc.process_line("   "), 0);
 }

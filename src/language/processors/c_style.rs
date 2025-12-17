@@ -22,6 +22,10 @@ impl LineProcessor for CStyleProcessor {
     fn is_in_block_comment(&self) -> bool {
         self.in_block_comment
     }
+
+    fn reset(&mut self) {
+        self.in_block_comment = false;
+    }
 }
 
 impl CStyleProcessor {
@@ -98,6 +102,11 @@ impl LineProcessor for NestingCStyleProcessor {
 
     fn is_in_block_comment(&self) -> bool {
         self.in_block_comment || self.block_comment_depth > 0
+    }
+
+    fn reset(&mut self) {
+        self.in_block_comment = false;
+        self.block_comment_depth = 0;
     }
 }
 

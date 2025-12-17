@@ -3,11 +3,10 @@ use rayon::prelude::*;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 
 use crate::config::Config;
 use crate::error::{AppError, Result};
-use crate::language::{LineProcessor, SlocProcessor};
+use crate::language::LineProcessor;
 use crate::stats::{FileStats, RunResult};
 
 /// Run the file counting engine.
@@ -44,25 +43,16 @@ pub fn run(config: &Config) -> Result<RunResult> {
         })
     } else {
         // Non-strict mode: collect errors alongside successful results
-        let errors: Mutex<Vec<(PathBuf, AppError)>> = Mutex::new(Vec::new());
-
-        let stats: Vec<FileStats> = iter
-            .filter_map(|item| {
+        let (results, errors): (Vec<_>, Vec<_>) = iter
+            .map(|item| {
                 let path = item.0.clone();
-                match process_file(item, config) {
-                    Ok(stats) => Some(stats),
-                    Err(e) => {
-                        // Collect error instead of printing to stderr
-                        if let Ok(mut errs) = errors.lock() {
-                            errs.push((path, e));
-                        }
-                        None
-                    }
-                }
+                process_file(item, config).map_err(|e| (path, e))
             })
-            .collect();
+            .partition(|r| r.is_ok());
 
-        let errors = errors.into_inner().unwrap_or_default();
+        let stats: Vec<FileStats> = results.into_iter().map(|r| r.unwrap()).collect();
+        let errors: Vec<(PathBuf, AppError)> = errors.into_iter().map(|r| r.unwrap_err()).collect();
+
         Ok(RunResult { stats, errors })
     }
 }
@@ -128,7 +118,7 @@ fn process_content_sloc<R: BufRead>(
     let count_newlines = config.count_newlines_in_chars;
 
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    let mut processor = SlocProcessor::from_extension(ext);
+    let mut processor = crate::language::get_processor(ext, &config.filter.map_ext);
 
     let mut line_buf = Vec::new();
 
@@ -139,32 +129,18 @@ fn process_content_sloc<R: BufRead>(
             Ok(_) => {
                 lines += 1;
 
-                if let Ok(line_str) = std::str::from_utf8(&line_buf) {
-                    // Chars logic
-                    if count_newlines {
-                        chars += line_str.chars().count();
-                    } else {
-                        let mut c = line_str.chars().count();
-                        if line_str.ends_with("\r\n") {
-                            c = c.saturating_sub(2);
-                        } else if line_str.ends_with('\n') {
-                            c = c.saturating_sub(1);
-                        }
-                        chars += c;
-                    }
+                // Use lossy conversion to support non-UTF8 text files (mostly)
+                let cow = String::from_utf8_lossy(&line_buf);
+                let line_str = &cow;
 
-                    // Words logic (Unicode-aware using split_whitespace)
-                    if count_words {
-                        words += line_str.split_whitespace().count();
-                    }
+                // Single-pass processing for chars, words, and SLOC
+                let l_stats = processor.process_line_stats(line_str, count_words, count_newlines);
 
-                    // SLOC logic
-                    sloc += processor.process_line(line_str);
-                } else {
-                    stats.is_binary = true;
-                    stats.lines = lines;
-                    stats.chars = chars;
-                    return Ok(stats);
+                chars += l_stats.chars;
+                sloc += l_stats.sloc;
+
+                if count_words {
+                    words += l_stats.words;
                 }
             }
             Err(e) => return Err(AppError::Io(e)),
@@ -235,16 +211,9 @@ fn process_content_streaming<R: BufRead>(
 
         // Count words with UTF-8 validation
         if count_words {
-            if let Ok(text) = std::str::from_utf8(buf) {
-                // Unicode-aware word counting using split_whitespace
-                words += text.split_whitespace().count();
-            } else {
-                // Invalid UTF-8 detected - mark as binary and stop processing
-                stats.is_binary = true;
-                stats.lines = lines;
-                stats.chars = chars;
-                return Ok(stats);
-            }
+            // Use lossy conversion to support non-UTF8 text and handle split multi-byte seq
+            let cow = String::from_utf8_lossy(buf);
+            words += cow.split_whitespace().count();
         }
 
         let len = buf.len();

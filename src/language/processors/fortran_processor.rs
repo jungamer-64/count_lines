@@ -16,6 +16,18 @@
 #[derive(Default, Clone, Debug)]
 pub struct FortranProcessor;
 
+use super::super::processor_trait::LineProcessor;
+
+impl LineProcessor for FortranProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        false
+    }
+}
+
 impl FortranProcessor {
     /// 新しいFortranプロセッサを作成
     #[must_use]

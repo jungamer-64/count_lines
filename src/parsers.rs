@@ -116,3 +116,13 @@ pub fn parse_usize_1_to_512(s: &str) -> Result<usize, String> {
 pub fn parse_positive_u64(s: &str) -> Result<u64, String> {
     parse_bounded_number(s, 1, None)
 }
+
+/// Parse a key=value pair string into a tuple.
+///
+/// # Errors
+/// Returns an error if the input string does not contain an '=' character.
+pub fn parse_key_val(s: &str) -> Result<(String, String), String> {
+    s.split_once('=')
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .ok_or_else(|| format!("Expected key=val: {s}"))
+}

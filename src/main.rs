@@ -8,7 +8,7 @@ use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let args = Args::parse();
-    let config = Config::from_args(args);
+    let config = Config::from(args);
 
     if let Some((old, new)) = &config.compare {
         match count_lines::compare::compare_snapshots(old, new) {

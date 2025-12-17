@@ -47,7 +47,7 @@ impl SimpleHashProcessor {
 }
 
 /// 単純な文字列 ("..." と '...') 外の # を検索
-#[must_use] 
+#[must_use]
 pub fn find_hash_outside_simple_string(line: &str) -> Option<usize> {
     let bytes = line.as_bytes();
     let mut in_single = false;

@@ -34,7 +34,7 @@ impl LineProcessor for PerlProcessor {
 }
 
 impl PerlProcessor {
-    #[must_use] 
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             in_pod: false,
@@ -158,7 +158,7 @@ fn is_inside_string(line: &str, target_pos: usize) -> bool {
 }
 
 /// Perl POD (Plain Old Documentation) の開始行かどうかを判定
-#[must_use] 
+#[must_use]
 pub fn is_perl_pod_start(line: &str) -> bool {
     if !line.starts_with('=') {
         return false;

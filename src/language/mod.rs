@@ -5,169 +5,79 @@ pub mod processors;
 pub mod string_utils;
 
 use comment_style::CommentStyle;
-pub use processor_trait::LineProcessor;
+pub use processor_trait::{LineProcessor, LineStats};
 #[allow(clippy::wildcard_imports)]
 use processors::*;
 use string_utils::StringSkipOptions;
 
-/// SLOCプロセッサ (Enum Dispatch)
-#[derive(Default)]
-pub enum SlocProcessor {
-    /// C系言語 (//, /* */) - ネストなし
-    CStyle(CStyleProcessor),
-    /// C系言語 (//, /* */) - ネスト対応 (Rust, Kotlin, Scala)
-    NestingCStyle(NestingCStyleProcessor),
-    /// JavaScript/TypeScript (Template Literals, Regex)
-    JavaScript(JavaScriptProcessor),
-    /// Swift (拡張デリミタ文字列対応 + ネストコメント)
-    Swift(SwiftProcessor),
-    /// Python (Docstring, f-string)
-    Python(PythonProcessor),
-    /// Ruby (=begin/=end)
-    Ruby(RubyProcessor),
-    /// Perl (POD)
-    Perl(PerlProcessor),
-    /// PHP (//, /* */, #)
-    Php(PhpProcessor),
-    /// `PowerShell` (# と <# #>)
-    PowerShell(PowerShellProcessor),
-    /// Lua (-- と --[[ ]])
-    Lua(LuaProcessor),
-    /// HTML/XML (<!-- -->)
-    Html(HtmlProcessor),
-    /// SQL (-- と /* */)
-    Sql(SqlProcessor),
-    /// Haskell (-- と {- -})
-    Haskell(HaskellProcessor),
-    /// Julia (# と #= =#)
-    Julia(JuliaProcessor),
-    /// OCaml/F#/Pascal ((* *))
-    OCaml(OCamlProcessor),
-    /// D言語 (//, /* */, /+ +/)
-    DLang(DLangProcessor),
-    /// MATLAB/Octave (% と %{ %})
-    Matlab(MatlabProcessor),
-    /// GAS Assembly (# と /* */)
-    GasAssembly(GasAssemblyProcessor),
-    /// 単純な行コメント (#) (Shell, YAML, etc.)
-    SimpleHash(SimpleHashProcessor),
-    /// Shell (Here-doc対応)
-    Shell(ShellProcessor),
-    /// 単純なプレフィックス型コメント (VHDL, Erlang, Lisp, Batch, etc.)
-    SimplePrefix(SimplePrefixProcessor),
-    /// Fortran (! と C/c/* カラム1)
-    Fortran(FortranProcessor),
-    /// コメントなし
-    #[default]
-    NoComment,
+use std::collections::HashMap;
+
+fn new_box<T: LineProcessor + 'static>(p: T) -> Box<dyn LineProcessor> {
+    Box::new(p)
 }
 
-impl SlocProcessor {
-    /// 拡張子からプロセッサを作成
-    #[must_use]
-    pub fn from_extension(extension: &str) -> Self {
-        let style = CommentStyle::from_extension(extension);
-        let ext_lower = extension.to_lowercase();
-        let string_opts = StringSkipOptions::from_extension(extension);
+/// 拡張子に応じたプロセッサを生成する
+#[must_use]
+pub fn get_processor(extension: &str, map: &HashMap<String, String>) -> Box<dyn LineProcessor> {
+    // マッピングを確認 (なければそのまま)
+    let effective_ext = map.get(extension).map(String::as_str).unwrap_or(extension);
 
-        match style {
-            CommentStyle::CStyle => {
-                if ext_lower == "swift" {
-                    Self::Swift(SwiftProcessor::new())
-                } else if matches!(ext_lower.as_str(), "rs" | "kt" | "kts" | "scala" | "sc") {
-                    Self::NestingCStyle(NestingCStyleProcessor::new(string_opts))
-                } else if matches!(
-                    ext_lower.as_str(),
-                    "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts"
-                ) {
-                    Self::JavaScript(JavaScriptProcessor::new())
-                } else {
-                    Self::CStyle(CStyleProcessor::new(string_opts))
-                }
+    let style = CommentStyle::from_extension(effective_ext);
+    let ext_lower = effective_ext.to_lowercase();
+    let string_opts = StringSkipOptions::from_extension(effective_ext);
+
+    match style {
+        CommentStyle::CStyle => {
+            if ext_lower == "swift" {
+                new_box(SwiftProcessor::new())
+            } else if matches!(ext_lower.as_str(), "rs" | "kt" | "kts" | "scala" | "sc") {
+                new_box(NestingCStyleProcessor::new(string_opts))
+            } else if matches!(
+                ext_lower.as_str(),
+                "js" | "jsx" | "mjs" | "cjs" | "ts" | "tsx" | "mts" | "cts"
+            ) {
+                new_box(JavaScriptProcessor::new())
+            } else {
+                new_box(CStyleProcessor::new(string_opts))
             }
-            CommentStyle::Python => Self::Python(PythonProcessor::default()),
-            CommentStyle::Ruby => Self::Ruby(RubyProcessor::default()),
-            CommentStyle::Perl => Self::Perl(PerlProcessor::default()),
-            CommentStyle::Php => Self::Php(PhpProcessor::new()),
-            CommentStyle::PowerShell => Self::PowerShell(PowerShellProcessor::new()),
-            CommentStyle::Lua => Self::Lua(LuaProcessor::new()),
-            CommentStyle::Html => Self::Html(HtmlProcessor::new()),
-            CommentStyle::Sql => Self::Sql(SqlProcessor::new()),
-            CommentStyle::Haskell => Self::Haskell(HaskellProcessor::new()),
-            CommentStyle::Julia => Self::Julia(JuliaProcessor::new()),
-            CommentStyle::OCaml => Self::OCaml(OCamlProcessor::new()),
-            CommentStyle::DLang => Self::DLang(DLangProcessor::new()),
-            CommentStyle::Matlab => Self::Matlab(MatlabProcessor::new()),
-            CommentStyle::GasAssembly => Self::GasAssembly(GasAssemblyProcessor::new()),
-            CommentStyle::SimpleHash => {
-                if matches!(ext_lower.as_str(), "sh" | "bash" | "zsh") {
-                    Self::Shell(ShellProcessor::new())
-                } else {
-                    Self::SimpleHash(SimpleHashProcessor::default())
-                }
-            }
-            CommentStyle::Vhdl => Self::SimplePrefix(SimplePrefixProcessor::vhdl()),
-            CommentStyle::Erlang => Self::SimplePrefix(SimplePrefixProcessor::erlang()),
-            CommentStyle::Lisp => Self::SimplePrefix(SimplePrefixProcessor::lisp()),
-            CommentStyle::Assembly => Self::SimplePrefix(SimplePrefixProcessor::assembly()),
-            CommentStyle::Fortran => Self::Fortran(FortranProcessor::new()),
-            CommentStyle::Batch => Self::SimplePrefix(SimplePrefixProcessor::batch()),
-            CommentStyle::VisualBasic => Self::SimplePrefix(SimplePrefixProcessor::visual_basic()),
-            CommentStyle::None => Self::NoComment,
         }
+        CommentStyle::Python => new_box(PythonProcessor::default()),
+        CommentStyle::Ruby => new_box(RubyProcessor::default()),
+        CommentStyle::Perl => new_box(PerlProcessor::default()),
+        CommentStyle::Php => new_box(PhpProcessor::new()),
+        CommentStyle::PowerShell => new_box(PowerShellProcessor::new()),
+        CommentStyle::Lua => new_box(LuaProcessor::new()),
+        CommentStyle::Html => new_box(HtmlProcessor::new()),
+        CommentStyle::Sql => new_box(SqlProcessor::new()),
+        CommentStyle::Haskell => new_box(HaskellProcessor::new()),
+        CommentStyle::Julia => new_box(JuliaProcessor::new()),
+        CommentStyle::OCaml => new_box(OCamlProcessor::new()),
+        CommentStyle::DLang => new_box(DLangProcessor::new()),
+        CommentStyle::Matlab => new_box(MatlabProcessor::new()),
+        CommentStyle::GasAssembly => new_box(GasAssemblyProcessor::new()),
+        CommentStyle::SimpleHash => {
+            if matches!(ext_lower.as_str(), "sh" | "bash" | "zsh") {
+                new_box(ShellProcessor::new())
+            } else {
+                new_box(SimpleHashProcessor::default())
+            }
+        }
+        CommentStyle::Vhdl => new_box(SimplePrefixProcessor::vhdl()),
+        CommentStyle::Erlang => new_box(SimplePrefixProcessor::erlang()),
+        CommentStyle::Lisp => new_box(SimplePrefixProcessor::lisp()),
+        CommentStyle::Assembly => new_box(SimplePrefixProcessor::assembly()),
+        CommentStyle::Fortran => new_box(FortranProcessor::new()),
+        CommentStyle::Batch => new_box(SimplePrefixProcessor::batch()),
+        CommentStyle::VisualBasic => new_box(SimplePrefixProcessor::visual_basic()),
+        CommentStyle::None => new_box(NoCommentProcessor),
     }
 }
 
-macro_rules! dispatch {
-    ($self:expr, $method:ident $(, $args:expr)*) => {
-        match $self {
-            Self::CStyle(p) => p.$method($($args),*),
-            Self::NestingCStyle(p) => p.$method($($args),*),
-            Self::JavaScript(p) => p.$method($($args),*),
-            Self::Swift(p) => p.$method($($args),*),
-            Self::Python(p) => p.$method($($args),*),
-            Self::Ruby(p) => p.$method($($args),*),
-            Self::Perl(p) => p.$method($($args),*),
-            Self::Php(p) => p.$method($($args),*),
-            Self::PowerShell(p) => p.$method($($args),*),
-            Self::Lua(p) => p.$method($($args),*),
-            Self::Html(p) => p.$method($($args),*),
-            Self::Sql(p) => p.$method($($args),*),
-            Self::Haskell(p) => p.$method($($args),*),
-            Self::Julia(p) => p.$method($($args),*),
-            Self::OCaml(p) => p.$method($($args),*),
-            Self::DLang(p) => p.$method($($args),*),
-            Self::Matlab(p) => p.$method($($args),*),
-            Self::GasAssembly(p) => p.$method($($args),*),
-            Self::SimpleHash(p) => p.$method($($args),*),
-            Self::Shell(p) => p.$method($($args),*),
-            Self::SimplePrefix(p) => p.$method($($args),*),
-            Self::Fortran(p) => p.$method($($args),*),
-            Self::NoComment => {
-                 // For NoComment, we just count non-empty lines
-                 // LineProcessor trait methods might need dummy mapping if mapped directly
-                 // But methods are process_line and is_in_block_comment
-                 // We handle them specifically in the impl below this macro?
-                 // Or we implement methods for NoComment dummy?
-                 // Current code handles Self::NoComment specifically in match.
-                 panic!("Should not dispatch NoComment via macro if not homogeneous")
-            }
-        }
-    }
-}
+/// コメントなしのプロセッサ
+struct NoCommentProcessor;
 
-impl LineProcessor for SlocProcessor {
+impl LineProcessor for NoCommentProcessor {
     fn process_line(&mut self, line: &str) -> usize {
-        match self {
-            Self::NoComment => usize::from(!line.trim().is_empty()),
-            _ => dispatch!(self, process, line),
-        }
-    }
-
-    fn reset(&mut self) {
-        match self {
-            Self::NoComment => {}
-            _ => dispatch!(self, reset),
-        }
+        usize::from(!line.trim().is_empty())
     }
 }

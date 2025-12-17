@@ -39,6 +39,7 @@ pub struct FilterConfig {
 
     pub include_patterns: Vec<String>,
     pub exclude_patterns: Vec<String>,
+    pub map_ext: std::collections::HashMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,8 +75,8 @@ pub struct Config {
     pub compare: Option<(PathBuf, PathBuf)>,
 }
 
-impl Config {
-    pub fn from_args(args: Args) -> Self {
+impl From<Args> for Config {
+    fn from(args: Args) -> Self {
         // Resolve words/sloc dependencies
         let count_words = args.filter.words
             || args.filter.min_words.is_some()
@@ -95,47 +96,8 @@ impl Config {
                 .iter()
                 .any(|(k, _)| matches!(k, SortKey::Sloc));
 
-        let walk_threads = args
-            .scan
-            .walk_threads
-            .or(args.scan.jobs)
-            .unwrap_or_else(num_cpus::get);
-
-        let walk = WalkOptions {
-            roots: if args.paths.is_empty() {
-                vec![PathBuf::from(".")]
-            } else {
-                args.paths
-            },
-            threads: walk_threads,
-            hidden: args.scan.hidden,
-            git_ignore: !args.scan.no_gitignore, // Respect .gitignore by default
-            max_depth: args.scan.max_depth,
-            follow_links: args.scan.follow,
-            override_include: args.scan.override_include,
-            override_exclude: args.scan.override_exclude,
-            case_insensitive_dedup: args.scan.case_insensitive_dedup,
-            files_from: args.scan.files_from,
-            files_from0: args.scan.files_from0,
-            types: None, // Can build types from force_text_ext etc.
-        };
-
-        let filter = FilterConfig {
-            allow_ext: args.filter.ext,
-            deny_ext: vec![], // ignore crate handles excludes
-            min_lines: args.filter.min_lines,
-            max_lines: args.filter.max_lines,
-            min_chars: args.filter.min_chars,
-            max_chars: args.filter.max_chars,
-            min_words: args.filter.min_words,
-            max_words: args.filter.max_words,
-            min_size: args.filter.min_size.map(|s| s.0),
-            max_size: args.filter.max_size.map(|s| s.0),
-            mtime_since: args.filter.mtime_since.map(|d| d.0),
-            mtime_until: args.filter.mtime_until.map(|d| d.0),
-            include_patterns: args.filter.include,
-            exclude_patterns: args.filter.exclude,
-        };
+        let walk = WalkOptions::from_scan_and_paths(args.scan, args.paths);
+        let filter = FilterConfig::from(args.filter);
 
         // Handle compare tuple
         let compare = args
@@ -171,6 +133,58 @@ impl Config {
             ),
             watch_output: args.behavior.watch_output,
             compare,
+        }
+    }
+}
+
+impl WalkOptions {
+    fn from_scan_and_paths(scan: crate::args::ScanOptions, paths: Vec<PathBuf>) -> Self {
+        let walk_threads = scan
+            .walk_threads
+            .or(scan.jobs)
+            .unwrap_or_else(num_cpus::get);
+
+        let roots = if paths.is_empty() {
+            vec![PathBuf::from(".")]
+        } else {
+            paths
+        };
+
+        Self {
+            roots,
+            threads: walk_threads,
+            hidden: scan.hidden,
+            git_ignore: !scan.no_gitignore, // Respect .gitignore by default
+            max_depth: scan.max_depth,
+            follow_links: scan.follow,
+            override_include: scan.override_include,
+            override_exclude: scan.override_exclude,
+            case_insensitive_dedup: scan.case_insensitive_dedup,
+            files_from: scan.files_from,
+            files_from0: scan.files_from0,
+            types: None,
+        }
+    }
+}
+
+impl From<crate::args::FilterOptions> for FilterConfig {
+    fn from(opts: crate::args::FilterOptions) -> Self {
+        Self {
+            allow_ext: opts.ext,
+            deny_ext: vec![],
+            min_lines: opts.min_lines,
+            max_lines: opts.max_lines,
+            min_chars: opts.min_chars,
+            max_chars: opts.max_chars,
+            min_words: opts.min_words,
+            max_words: opts.max_words,
+            min_size: opts.min_size.map(|s| s.0),
+            max_size: opts.max_size.map(|s| s.0),
+            mtime_since: opts.mtime_since.map(|d| d.0),
+            mtime_until: opts.mtime_until.map(|d| d.0),
+            include_patterns: opts.include,
+            exclude_patterns: opts.exclude,
+            map_ext: opts.map_ext.into_iter().collect(),
         }
     }
 }

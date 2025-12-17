@@ -27,6 +27,18 @@ pub struct SimplePrefixProcessor {
     ignore_case: bool,
 }
 
+use super::super::processor_trait::LineProcessor;
+
+impl LineProcessor for SimplePrefixProcessor {
+    fn process_line(&mut self, line: &str) -> usize {
+        self.process(line)
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        false
+    }
+}
+
 impl SimplePrefixProcessor {
     /// 大文字小文字を区別するプロセッサを作成
     #[must_use]

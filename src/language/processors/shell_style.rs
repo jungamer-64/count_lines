@@ -22,7 +22,7 @@ pub struct ShellProcessor {
 }
 
 impl ShellProcessor {
-    #[must_use] 
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
@@ -94,16 +94,20 @@ impl ShellProcessor {
 
         1
     }
-
-    pub fn reset(&mut self) {
-        self.heredoc_ctx.reset();
-        self.line_count = 0;
-    }
 }
 
 impl LineProcessor for ShellProcessor {
     fn process_line(&mut self, line: &str) -> usize {
         self.process(line)
+    }
+
+    fn reset(&mut self) {
+        self.heredoc_ctx.reset();
+        self.line_count = 0;
+    }
+
+    fn is_in_block_comment(&self) -> bool {
+        self.heredoc_ctx.is_in_heredoc()
     }
 }
 

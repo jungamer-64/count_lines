@@ -172,6 +172,10 @@ pub struct FilterOptions {
 
     #[arg(long, help_heading = "フィルタ")]
     pub mtime_until: Option<DateTimeArg>,
+
+    /// 拡張子と言語の紐づけ (例: h=cpp, mylang=sh)
+    #[arg(long, value_parser = parsers::parse_key_val, help_heading = "フィルタ")]
+    pub map_ext: Vec<(String, String)>,
 }
 
 #[derive(ClapArgs, Debug)]
