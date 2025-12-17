@@ -5,6 +5,20 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
+/// Safely convert usize to isize, capping at isize::MAX to avoid wrap-around
+fn to_isize(value: usize) -> isize {
+    isize::try_from(value).unwrap_or(isize::MAX)
+}
+
+/// Safely calculate the difference between two usize values as isize
+fn safe_diff(new_val: usize, old_val: usize) -> isize {
+    if new_val >= old_val {
+        to_isize(new_val - old_val)
+    } else {
+        -to_isize(old_val - new_val)
+    }
+}
+
 pub struct ComparisonSummary {
     pub added_files: usize,
     pub removed_files: usize,
@@ -74,10 +88,10 @@ fn compare_stats<'a>(
                     new_chars: new_s.chars,
                 });
                 summary.modified_files += 1;
-                summary.diff_lines += new_s.lines as isize - old_s.lines as isize;
-                summary.diff_chars += new_s.chars as isize - old_s.chars as isize;
+                summary.diff_lines += safe_diff(new_s.lines, old_s.lines);
+                summary.diff_chars += safe_diff(new_s.chars, old_s.chars);
                 if let (Some(w1), Some(w2)) = (old_s.words, new_s.words) {
-                    summary.diff_words += w2 as isize - w1 as isize;
+                    summary.diff_words += safe_diff(w2, w1);
                 }
             } else {
                 summary.unchanged_files += 1;
@@ -85,10 +99,10 @@ fn compare_stats<'a>(
         } else {
             diffs.push(FileDiff::Removed(old_s));
             summary.removed_files += 1;
-            summary.diff_lines -= old_s.lines as isize;
-            summary.diff_chars -= old_s.chars as isize;
+            summary.diff_lines -= to_isize(old_s.lines);
+            summary.diff_chars -= to_isize(old_s.chars);
             if let Some(w) = old_s.words {
-                summary.diff_words -= w as isize;
+                summary.diff_words -= to_isize(w);
             }
         }
     }
@@ -98,10 +112,10 @@ fn compare_stats<'a>(
         if !old_map.contains_key(path) {
             diffs.push(FileDiff::Added(new_s));
             summary.added_files += 1;
-            summary.diff_lines += new_s.lines as isize;
-            summary.diff_chars += new_s.chars as isize;
+            summary.diff_lines += to_isize(new_s.lines);
+            summary.diff_chars += to_isize(new_s.chars);
             if let Some(w) = new_s.words {
-                summary.diff_words += w as isize;
+                summary.diff_words += to_isize(w);
             }
         }
     }
@@ -186,8 +200,8 @@ fn print_comparison_results(
                 new_chars,
             } = diff
             {
-                let dl = *new_lines as isize - *old_lines as isize;
-                let dc = *new_chars as isize - *old_chars as isize;
+                let dl = safe_diff(*new_lines, *old_lines);
+                let dc = safe_diff(*new_chars, *old_chars);
                 println!("~ {} (Lines: {:+}, Chars: {:+})", path.display(), dl, dc);
             }
         }

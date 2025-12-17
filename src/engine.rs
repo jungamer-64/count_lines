@@ -139,35 +139,32 @@ fn process_content_sloc<R: BufRead>(
             Ok(_) => {
                 lines += 1;
 
-                match std::str::from_utf8(&line_buf) {
-                    Ok(line_str) => {
-                        // Chars logic
-                        if count_newlines {
-                            chars += line_str.chars().count();
-                        } else {
-                            let mut c = line_str.chars().count();
-                            if line_str.ends_with("\r\n") {
-                                c = c.saturating_sub(2);
-                            } else if line_str.ends_with('\n') {
-                                c = c.saturating_sub(1);
-                            }
-                            chars += c;
+                if let Ok(line_str) = std::str::from_utf8(&line_buf) {
+                    // Chars logic
+                    if count_newlines {
+                        chars += line_str.chars().count();
+                    } else {
+                        let mut c = line_str.chars().count();
+                        if line_str.ends_with("\r\n") {
+                            c = c.saturating_sub(2);
+                        } else if line_str.ends_with('\n') {
+                            c = c.saturating_sub(1);
                         }
-
-                        // Words logic (Unicode-aware using split_whitespace)
-                        if count_words {
-                            words += line_str.split_whitespace().count();
-                        }
-
-                        // SLOC logic
-                        sloc += processor.process_line(line_str);
+                        chars += c;
                     }
-                    Err(_) => {
-                        stats.is_binary = true;
-                        stats.lines = lines;
-                        stats.chars = chars;
-                        return Ok(stats);
+
+                    // Words logic (Unicode-aware using split_whitespace)
+                    if count_words {
+                        words += line_str.split_whitespace().count();
                     }
+
+                    // SLOC logic
+                    sloc += processor.process_line(line_str);
+                } else {
+                    stats.is_binary = true;
+                    stats.lines = lines;
+                    stats.chars = chars;
+                    return Ok(stats);
                 }
             }
             Err(e) => return Err(AppError::Io(e)),

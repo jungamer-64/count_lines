@@ -74,14 +74,12 @@ impl PythonProcessor {
         }
         self.line_count += 1;
 
-        let mut has_code_token = false;
-
         // Stack state determines initial has_code_token
-        if let Some(PythonScope::String(state)) = self.stack.last() {
-            if !state.is_doc_comment {
-                has_code_token = true; // Continuation of data string
-            }
-        }
+        let mut has_code_token = if let Some(PythonScope::String(state)) = self.stack.last() {
+            !state.is_doc_comment // Continuation of data string
+        } else {
+            false
+        };
 
         let mut chars = line.char_indices().peekable();
 
@@ -114,14 +112,14 @@ impl PythonProcessor {
 
         // Check for string end
         if c == quote_char {
-            if let Some(ended) = self.check_string_end(chars, state) {
-                if ended {
-                    self.stack.pop();
-                    if !state.is_doc_comment {
-                        has_code_token = true;
-                    }
-                    return has_code_token;
+            if let Some(ended) = self.check_string_end(chars, state)
+                && ended
+            {
+                self.stack.pop();
+                if !state.is_doc_comment {
+                    has_code_token = true;
                 }
+                return has_code_token;
             }
             // Not ended - treat as regular char
             if !state.is_doc_comment && !c.is_whitespace() {

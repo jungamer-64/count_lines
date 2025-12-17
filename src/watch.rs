@@ -64,11 +64,7 @@ fn run_cycle(config: &Config) -> Result<()> {
             }
 
             // Print results
-            if matches!(config.watch_output, WatchOutput::Jsonl) {
-                presentation::print_results(&result.stats, config);
-            } else {
-                presentation::print_results(&result.stats, config);
-            }
+            presentation::print_results(&result.stats, config);
         }
         Err(e) => eprintln!("Error in watch cycle: {e}"),
     }
