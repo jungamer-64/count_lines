@@ -21,6 +21,7 @@ pub struct FileStats {
 }
 
 impl FileStats {
+    #[must_use] 
     pub fn new(path: PathBuf) -> Self {
         let name = path
             .file_name()

@@ -32,6 +32,7 @@ impl LineProcessor for DLangProcessor {
 }
 
 impl DLangProcessor {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             block_comment_depth: 0,

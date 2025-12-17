@@ -57,6 +57,7 @@ pub enum CommentStyle {
 
 impl CommentStyle {
     /// 拡張子から言語のコメントスタイルを判定
+    #[must_use]
     pub fn from_extension(ext: &str) -> Self {
         match ext.to_lowercase().as_str() {
             // C系言語 (// と /* */)

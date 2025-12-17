@@ -23,11 +23,13 @@ pub struct HeredocContext {
 }
 
 impl HeredocContext {
+    #[must_use]
     pub const fn new() -> Self {
         Self { stack: Vec::new() }
     }
 
     /// ヒアドキュメント内かどうか
+    #[must_use]
     pub fn is_in_heredoc(&self) -> bool {
         !self.stack.is_empty()
     }

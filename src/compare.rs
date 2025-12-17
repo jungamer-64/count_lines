@@ -41,6 +41,10 @@ pub enum FileDiff<'a> {
     },
 }
 
+/// Compares two snapshots.
+///
+/// # Errors
+/// Returns an error if the files cannot be read or parsed.
 pub fn compare_snapshots(old_path: &PathBuf, new_path: &PathBuf) -> Result<()> {
     let old_stats = load_stats(old_path)?;
     let new_stats = load_stats(new_path)?;

@@ -18,6 +18,7 @@ pub struct FortranProcessor;
 
 impl FortranProcessor {
     /// 新しいFortranプロセッサを作成
+    #[must_use]
     pub const fn new() -> Self {
         Self
     }
@@ -49,6 +50,7 @@ impl FortranProcessor {
     /// assert_eq!(p.process("      count = count + 1"), 1);
     /// assert_eq!(p.process("      call subroutine()"), 1);
     /// ```
+    #[must_use]
     pub fn process(&self, line: &str) -> usize {
         // 空行・空白のみの行
         if line.trim().is_empty() {

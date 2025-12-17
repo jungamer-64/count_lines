@@ -31,6 +31,7 @@ impl LineProcessor for JavaScriptProcessor {
 }
 
 impl JavaScriptProcessor {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

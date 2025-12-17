@@ -4,6 +4,10 @@ use crossbeam_channel::Sender;
 use ignore::WalkBuilder;
 use std::path::PathBuf;
 
+/// Parallel recursive directory walk.
+///
+/// # Errors
+/// Returns `Ok` if traversal completes. Errors during traversal are handled internally or ignored.
 pub fn walk_parallel(
     options: &WalkOptions,
     filters: &FilterConfig,

@@ -26,6 +26,7 @@ impl LineProcessor for LuaProcessor {
 }
 
 impl LuaProcessor {
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }

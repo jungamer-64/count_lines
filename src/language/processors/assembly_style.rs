@@ -24,6 +24,7 @@ impl LineProcessor for GasAssemblyProcessor {
 }
 
 impl GasAssemblyProcessor {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             in_block_comment: false,

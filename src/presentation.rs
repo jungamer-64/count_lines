@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::options::{OutputFormat, SortKey, WatchOutput};
 use crate::stats::FileStats;
 use std::cmp::Ordering;
+use std::fmt::Write;
 
 // ... (existing code)
 
@@ -142,8 +143,6 @@ fn print_jsonl(stats: &[FileStats]) {
 fn print_markdown(stats: &[FileStats], config: &Config) {
     println!("### File Statistics");
     println!();
-
-    use std::fmt::Write;
     let mut header = String::from("| Lines |");
     let mut separator = String::from("|:---:|");
 
@@ -203,7 +202,7 @@ fn print_sv(stats: &[FileStats], config: &Config, delimiter: &str) {
 
     header.push_str(delimiter);
     header.push_str("path");
-    println!("{}", header);
+    println!("{header}");
 
     for s in stats {
         let mut row = format!("{}", s.lines);

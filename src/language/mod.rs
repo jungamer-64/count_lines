@@ -64,6 +64,7 @@ pub enum SlocProcessor {
 
 impl SlocProcessor {
     /// 拡張子からプロセッサを作成
+    #[must_use]
     pub fn from_extension(extension: &str) -> Self {
         let style = CommentStyle::from_extension(extension);
         let ext_lower = extension.to_lowercase();

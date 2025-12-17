@@ -25,6 +25,7 @@ impl LineProcessor for CStyleProcessor {
 }
 
 impl CStyleProcessor {
+    #[must_use]
     pub fn new(options: StringSkipOptions) -> Self {
         Self {
             options,
@@ -102,6 +103,7 @@ impl LineProcessor for NestingCStyleProcessor {
 }
 
 impl NestingCStyleProcessor {
+    #[must_use]
     pub fn new(options: StringSkipOptions) -> Self {
         Self {
             options,

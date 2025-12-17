@@ -34,6 +34,7 @@ pub struct StringSkipOptions {
 
 impl StringSkipOptions {
     /// Rust 用オプション
+    #[must_use] 
     pub fn rust() -> Self {
         Self {
             rust_raw_string: true,
@@ -46,6 +47,7 @@ impl StringSkipOptions {
     }
 
     /// C/C++ 用オプション (Raw String対応)
+    #[must_use] 
     pub fn cpp() -> Self {
         Self {
             cpp_raw_string: true,
@@ -56,6 +58,7 @@ impl StringSkipOptions {
     }
 
     /// C 用オプション (Raw String なし)
+    #[must_use] 
     pub fn c() -> Self {
         Self {
             double_quote: true,
@@ -65,6 +68,7 @@ impl StringSkipOptions {
     }
 
     /// C# 用オプション (Verbatim String @"..." 対応)
+    #[must_use] 
     pub fn csharp() -> Self {
         Self {
             csharp_verbatim: true,
@@ -75,6 +79,7 @@ impl StringSkipOptions {
     }
 
     /// Java/Kotlin/Scala 用オプション (Text Block """...""" 対応)
+    #[must_use] 
     pub fn java_kotlin() -> Self {
         Self {
             text_block: true,
@@ -85,6 +90,7 @@ impl StringSkipOptions {
     }
 
     /// Go 用オプション (バッククォート `...` 対応、正規表現リテラルなし)
+    #[must_use] 
     pub fn go() -> Self {
         Self {
             backtick_string: true,
@@ -95,6 +101,7 @@ impl StringSkipOptions {
     }
 
     /// JavaScript/TypeScript 用オプション (バッククォート `...` と正規表現 /.../ 対応)
+    #[must_use] 
     pub fn javascript() -> Self {
         Self {
             backtick_string: true,
@@ -106,6 +113,7 @@ impl StringSkipOptions {
     }
 
     /// Ruby 用オプション (正規表現 /.../ 対応)
+    #[must_use] 
     pub fn ruby() -> Self {
         Self {
             double_quote: true,
@@ -116,6 +124,7 @@ impl StringSkipOptions {
     }
 
     /// Perl 用オプション (正規表現 /.../ 対応)
+    #[must_use] 
     pub fn perl() -> Self {
         Self {
             double_quote: true,
@@ -131,6 +140,7 @@ impl StringSkipOptions {
     /// - 通常: `"..."`
     /// - 多重引用符: `"""..."""`
     /// - 拡張デリミタ: `#"..."#`, `##"..."##`
+    #[must_use] 
     pub fn swift() -> Self {
         Self {
             double_quote: true,
@@ -143,6 +153,7 @@ impl StringSkipOptions {
     /// Verilog/SystemVerilog 用オプション
     ///
     /// Verilog は C風の文字列のみ (Raw String なし)
+    #[must_use] 
     pub fn verilog() -> Self {
         Self {
             double_quote: true,
@@ -155,6 +166,7 @@ impl StringSkipOptions {
     /// Dart 用オプション
     ///
     /// Dart はバッククォートなし、三重クォートあり
+    #[must_use] 
     pub fn dart() -> Self {
         Self {
             text_block: true,
@@ -168,6 +180,7 @@ impl StringSkipOptions {
     ///
     /// @"..." 形式の `NSString` リテラルがあるが、
     /// C# Verbatim String とは異なりエスケープ可能
+    #[must_use] 
     pub fn objc() -> Self {
         Self {
             double_quote: true,
@@ -177,6 +190,7 @@ impl StringSkipOptions {
     }
 
     /// 基本的な C スタイル (多くの言語で共通)
+    #[must_use] 
     pub fn basic() -> Self {
         Self {
             double_quote: true,
@@ -187,6 +201,7 @@ impl StringSkipOptions {
 
     /// 拡張子から適切なオプションを取得
     #[allow(clippy::wildcard_in_or_patterns)]
+    #[must_use] 
     pub fn from_extension(ext: &str) -> Self {
         match ext.to_lowercase().as_str() {
             // Rust
@@ -235,6 +250,7 @@ impl StringSkipOptions {
 
 /// 識別子に使える文字かどうかを判定
 #[inline]
+#[must_use] 
 pub fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
@@ -245,6 +261,7 @@ pub fn is_ident_char(b: u8) -> bool {
 /// 言語固有の文字列構文は考慮しない。
 ///
 /// より正確な検索が必要な場合は `find_outside_string_with_options` を使用。
+#[must_use] 
 pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
     find_outside_string_with_options(line, pattern, &StringSkipOptions::rust())
 }
@@ -253,6 +270,7 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
 ///
 /// 指定されたオプションに基づいて、言語固有の文字列構文をスキップする。
 /// これにより、異なる言語間での誤検出を防ぐ。
+#[must_use] 
 pub fn find_outside_string_with_options(
     line: &str,
     pattern: &str,
@@ -419,6 +437,7 @@ pub fn find_outside_string_with_options(
 ///
 /// `r"..."`, `r#"..."#`, `r##"..."##` などの形式を処理
 /// 成功した場合はスキップするバイト数を返す
+#[must_use] 
 pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
     if bytes.is_empty() || bytes[0] != b'r' {
         return None;
@@ -465,6 +484,7 @@ pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
 ///
 /// `b"..."`, `br"..."`, `br#"..."#` などの形式を処理
 /// 成功した場合はスキップするバイト数を返す
+#[must_use] 
 pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
     if bytes.is_empty() || bytes[0] != b'b' {
         return None;
@@ -507,6 +527,7 @@ pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
 /// ライフタイム: `'a`, `'static` など（閉じクォートがない）
 ///
 /// 閉じクォートが12文字以内に見つからない場合はライフタイムとみなしNoneを返す
+#[must_use] 
 pub fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
     const MAX_CHAR_LITERAL_LEN: usize = 12; // '\u{10FFFF}' + 余裕
 
@@ -535,6 +556,7 @@ pub fn try_skip_char_literal(bytes: &[u8]) -> Option<usize> {
 
 /// C++ Raw String Literal をスキップ
 /// 形式: R"delimiter(...)delimiter" (delimiterは0-16文字の英数字)
+#[must_use] 
 pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
     // R" で始まる必要がある
     if bytes.len() < 3 || bytes[0] != b'R' || bytes[1] != b'"' {
@@ -589,6 +611,7 @@ pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
 /// - Raw: `r"..."`, `R"..."`
 /// - Bytes: `b"..."`, `B"..."`
 /// - 複合: `fr"..."`, `rf"..."`, `br"..."`, `rb"..."` など
+#[must_use] 
 pub fn find_hash_outside_string(line: &str) -> Option<usize> {
     let bytes = line.as_bytes();
     let mut i = 0;
@@ -739,6 +762,7 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
 }
 
 /// Docstring開始をチェック（三重クォートで始まるか）
+#[must_use] 
 pub fn check_docstring_start(trimmed: &str) -> Option<u8> {
     if trimmed.starts_with("\"\"\"") {
         Some(b'"')
@@ -758,6 +782,7 @@ pub fn check_docstring_start(trimmed: &str) -> Option<u8> {
 /// - 拡張デリミタ + 多重引用符: `#"""..."""#`
 ///
 /// 成功した場合はスキップするバイト数を返す
+#[must_use] 
 pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
     if bytes.is_empty() {
         return None;
@@ -839,6 +864,7 @@ pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
 }
 
 /// Swift の文字列リテラルを考慮した文字列外検索
+#[must_use] 
 pub fn find_outside_string_swift(line: &str, pattern: &str) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();
@@ -911,6 +937,7 @@ pub fn find_outside_string_swift(line: &str, pattern: &str) -> Option<usize> {
 
 /// C# Verbatim String をスキップ
 /// 形式: @"..." ( " は "" でエスケープ、\ はエスケープしない)
+#[must_use] 
 pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
     if bytes.len() < 2 || bytes[0] != b'@' || bytes[1] != b'"' {
         return None;
@@ -936,6 +963,7 @@ pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
 
 /// Java/Kotlin Text Block (三重クォート) をスキップ
 /// 形式: """..."""
+#[must_use] 
 pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
     // 最低でも6文字必要: """ + """
     if bytes.len() < 6 || bytes[0] != b'"' || bytes[1] != b'"' || bytes[2] != b'"' {
@@ -1097,6 +1125,7 @@ fn is_regex_preceding_keyword(bytes: &[u8], end_pos: usize) -> bool {
 /// # 戻り値
 /// * `Some(n)` - スキップするバイト数
 /// * `None` - 正規表現リテラルではない
+#[must_use] 
 pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
     // 正規表現の開始として妥当かチェック
     if !is_likely_regex_start(bytes, start_pos) {
@@ -1176,6 +1205,7 @@ fn is_regex_flag_char(b: u8) -> bool {
 /// SQL の文字列リテラル:
 /// - シングルクォート: '...' ('' でエスケープ)
 /// - ダブルクォート識別子: "..." (一部のDBでは文字列として使用)
+#[must_use] 
 pub fn find_outside_string_sql(line: &str, pattern: &str) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();

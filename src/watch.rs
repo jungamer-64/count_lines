@@ -28,7 +28,7 @@ pub fn watch_paths(config: &Config) -> Result<()> {
 
     // Initial run
     println!("[count_lines] Starting watch mode...");
-    run_cycle(config)?;
+    run_cycle(config);
 
     let debounce_interval = config.watch_interval;
 
