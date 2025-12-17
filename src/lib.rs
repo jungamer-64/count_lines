@@ -14,7 +14,6 @@
 // - too_many_lines: Complex functions are documented, will refactor incrementally
 // - struct_excessive_bools: State tracking requires multiple flags
 // - doc_markdown: Will address incrementally
-// - field_reassign_with_default: Test setup patterns
 
 #![allow(clippy::multiple_crate_versions)]
 #![allow(clippy::must_use_candidate)]
@@ -29,7 +28,6 @@
 #![allow(clippy::too_many_lines)]
 #![allow(clippy::struct_excessive_bools)]
 #![allow(clippy::doc_markdown)]
-#![allow(clippy::field_reassign_with_default)]
 
 pub mod args;
 pub mod compare;

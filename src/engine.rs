@@ -255,11 +255,10 @@ fn process_content_streaming<R: BufRead>(
     }
 
     // 末尾に改行がない場合の行カウント補正
-    if let Some(b) = last_byte {
-        if b != b'\n' {
+    if let Some(b) = last_byte
+        && b != b'\n' {
             lines += 1;
         }
-    }
 
     stats.lines = lines;
     stats.chars = chars;
