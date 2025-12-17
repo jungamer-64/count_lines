@@ -9,11 +9,11 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g., v0.5.0)'
+        description: "Release tag (e.g., v0.5.0)"
         required: true
         type: string
 
@@ -38,7 +38,7 @@ jobs:
     name: Create Release Inputs
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # uploading assets later will require this in matrix jobs
+      contents: write # uploading assets later will require this in matrix jobs
     outputs:
       version: ${{ steps.get_version.outputs.version }}
     steps:
@@ -115,7 +115,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     permissions:
-      contents: write   # to upload assets to the release
+      contents: write # to upload assets to the release
     strategy:
       fail-fast: false
       matrix:
@@ -338,9 +338,9 @@ jobs:
         shell: bash
         run: cargo publish -p count_lines_core --dry-run --locked
 
-      - name: Dry-run publish (main crate)
+      - name: Dry-run publish (cli crate)
         shell: bash
-        run: cargo publish --dry-run --locked
+        run: cargo publish -p count_lines_cli --dry-run --locked
 
       - name: Cargo login
         shell: bash
@@ -358,6 +358,6 @@ jobs:
             cargo update -p count_lines_core && break || true
           done
 
-      - name: Publish main crate
+      - name: Publish cli crate
         shell: bash
-        run: cargo publish --no-verify
+        run: cargo publish -p count_lines_cli --no-verify

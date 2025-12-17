@@ -1,8 +1,8 @@
 //! Basic integration tests for the refactored `count_lines` crate
 
-use count_lines::language::get_processor;
-use count_lines::stats::FileStats;
-use std::collections::HashMap;
+use count_lines_cli::stats::FileStats;
+use count_lines_core::language::get_processor;
+use hashbrown::HashMap;
 use std::path::PathBuf;
 
 /// Test that `get_processor` returns a working processor for various extensions

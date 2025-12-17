@@ -6,14 +6,9 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 # no_std dependencies
-regex = { version = "1", default-features = false, features = [
-    "std",
-    "perf",
-] } # Enable std/perf for now as regex 1.x often needs std for full perfs, but logic is separable. 
-# Actually strict no_std regex might be tricky. regex-automata is lower level. 
-# But let's try regex with default-features=false. 'std' feature is usually enabled for Error impls etc.
-# Ideally we want NO std. 
-# "regex" crate with `default-features = false` and `features = ["perf"]` uses `alloc` but not `std`.
+regex = { version = "1", default-features = false, features = ["perf"] }
+# "regex" 1.9+ with `default-features = false` uses `alloc` but should not use `std`.
+
 
 hashbrown = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }

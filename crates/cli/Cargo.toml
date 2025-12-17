@@ -9,6 +9,10 @@ readme = "../../README.md"
 keywords = ["count", "lines", "statistics", "files", "metrics"]
 categories = ["command-line-utilities", "development-tools"]
 
+[[bin]]
+name = "count_lines"
+path = "src/main.rs"
+
 [dependencies]
 count_lines_core = { path = "../core" }
 
