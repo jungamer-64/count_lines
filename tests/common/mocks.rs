@@ -330,7 +330,7 @@ mod tests {
         assert!(!presenter.was_called());
         assert_eq!(presenter.call_count(), 0);
 
-        let stats = vec![FileStatsBuilder::new("test.rs").lines(10).build()];
+        let stats = [FileStatsBuilder::new("test.rs").lines(10).build()];
         let config = ConfigBuilder::new().build();
 
         presenter.present(&stats, &config).unwrap();
@@ -357,8 +357,8 @@ mod tests {
 
     #[test]
     fn mock_processor_success() {
-        let stats = vec![FileStatsBuilder::new("test.rs").lines(42).build()];
-        let processor = MockFileStatisticsProcessor::success(stats.clone());
+        let stats = [FileStatsBuilder::new("test.rs").lines(42).build()];
+        let processor = MockFileStatisticsProcessor::success(stats.to_vec());
         let config = ConfigBuilder::new().build();
 
         let result = processor.measure(vec![], &config).unwrap();
@@ -378,8 +378,8 @@ mod tests {
 
     #[test]
     fn mock_setup_builder() {
-        let stats = vec![FileStatsBuilder::new("a.rs").lines(10).build()];
-        let setup = MockSetup::new().with_stats(stats);
+        let stats = [FileStatsBuilder::new("a.rs").lines(10).build()];
+        let setup = MockSetup::new().with_stats(stats.to_vec());
 
         let outcome = setup
             .processor

@@ -16,7 +16,7 @@ fn make_stats(path: &str, lines: usize, chars: usize, words: Option<usize>) -> F
 
 #[test]
 fn summary_aggregates_metrics() {
-    let stats = vec![
+    let stats = [
         make_stats("a.txt", 10, 80, Some(5)),
         make_stats("b.txt", 5, 20, None),
         make_stats("c.txt", 0, 0, Some(2)),

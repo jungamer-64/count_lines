@@ -80,9 +80,11 @@ criterion = "0.7.0"
 count_lines_infra.workspace = true
 
 [profile.release]
-opt-level = 3
+strip = true
+opt-level = "z"
 lto = true
 codegen-units = 1
+panic = "abort"
 
 [[bench]]
 name = "end_to_end"

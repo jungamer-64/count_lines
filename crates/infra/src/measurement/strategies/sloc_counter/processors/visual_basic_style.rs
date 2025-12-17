@@ -13,7 +13,8 @@
 /// - `'` で始まる行コメント
 /// - `REM` で始まる行コメント (大文字小文字不問)
 /// - 行中の `'` 以降もコメント（文字列リテラル外）
-pub fn process_visual_basic_style(line: &str, count: &mut usize) {
+#[cfg(test)]
+fn process_visual_basic_style(line: &str, count: &mut usize) {
     let trimmed = line.trim();
 
     // ' で始まるコメント行

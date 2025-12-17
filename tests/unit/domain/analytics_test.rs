@@ -31,7 +31,7 @@ fn make_stats(
 
 #[test]
 fn aggregates_by_extension_and_sorts_descending() {
-    let stats = vec![
+    let stats = [
         make_stats("src/lib.rs", 20, 120, "rs", None),
         make_stats("src/main.rs", 30, 180, "rs", None),
         make_stats("README.md", 10, 80, "md", None),
@@ -58,7 +58,7 @@ fn aggregates_by_extension_and_sorts_descending() {
 
 #[test]
 fn aggregates_by_directory_with_depth() {
-    let stats = vec![
+    let stats = [
         make_stats("src/lib.rs", 12, 90, "rs", None),
         make_stats("src/bin/main.rs", 8, 60, "rs", None),
         make_stats("tests/unit.rs", 20, 150, "rs", None),
@@ -84,7 +84,7 @@ fn aggregates_by_mtime_bucket() {
     let jan = Local.with_ymd_and_hms(2024, 1, 15, 12, 0, 0).unwrap();
     let feb = Local.with_ymd_and_hms(2024, 2, 5, 9, 0, 0).unwrap();
 
-    let stats = vec![
+    let stats = [
         make_stats("src/lib.rs", 10, 80, "rs", Some(jan)),
         make_stats("src/main.rs", 5, 60, "rs", Some(jan)),
         make_stats("docs/guide.md", 7, 70, "md", Some(feb)),

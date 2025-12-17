@@ -6,7 +6,8 @@
 //! - `C`, `c`, `*` で始まる固定形式コメント (Fortran 77)
 
 /// Fortran スタイル (!) の処理
-pub fn process_fortran_style(line: &str, count: &mut usize) {
+#[cfg(test)]
+fn process_fortran_style(line: &str, count: &mut usize) {
     // Fortran: ! で始まるコメント、または C/c/* で始まる固定形式コメント
     if line.starts_with('!')
         || line.starts_with('C')

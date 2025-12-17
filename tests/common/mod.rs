@@ -1,4 +1,5 @@
 // tests/common/mod.rs
+#![allow(clippy::duplicate_mod)]
 //! 共通テストユーティリティ
 
 pub mod builders;

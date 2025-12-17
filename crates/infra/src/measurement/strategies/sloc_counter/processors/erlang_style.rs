@@ -5,7 +5,8 @@
 //! コメント: `%` で始まる行
 
 /// Erlang スタイル (%) の処理
-pub fn process_erlang_style(line: &str, count: &mut usize) {
+#[cfg(test)]
+fn process_erlang_style(line: &str, count: &mut usize) {
     if line.starts_with('%') {
         return;
     }

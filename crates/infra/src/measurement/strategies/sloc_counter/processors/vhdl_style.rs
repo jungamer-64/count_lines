@@ -9,7 +9,8 @@
 /// VHDL:
 /// - `--` 以降が行コメント
 /// - VHDL-2008ではブロックコメントがあるが、多くの処理系が未対応なので行コメントのみ
-pub fn process_vhdl_style(line: &str, count: &mut usize) {
+#[cfg(test)]
+fn process_vhdl_style(line: &str, count: &mut usize) {
     // -- から始まる場合はコメント行
     if line.starts_with("--") {
         return;

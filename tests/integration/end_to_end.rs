@@ -183,9 +183,7 @@ fn filtering_by_lines_range() {
 
     let output_path = temp.path().join("output.json");
 
-    let mut filters = FilterOptions::default();
-    filters.min_lines = Some(3);
-    filters.max_lines = Some(7);
+    let filters = FilterOptions { min_lines: Some(3), max_lines: Some(7), ..Default::default() };
 
     let mut options = base_options(temp.path());
     options.filters = filters;
@@ -229,7 +227,7 @@ fn sorting_with_multiple_keys() {
 
 #[test]
 fn test_with_builder_pattern() {
-    let stats = vec![
+    let stats = [
         FileStatsBuilder::new("test.rs").lines(100).chars(500).words(75).build(),
         FileStatsBuilder::new("lib.rs").lines(200).chars(1000).words(150).build(),
     ];

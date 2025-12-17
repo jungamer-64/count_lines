@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 /// キャッシュ用ハッシャートレイト
 ///
 /// 異なるハッシュ実装 (xxhash, ahash, 標準) を統一インターフェースで扱います。
+#[allow(dead_code)]
 trait CacheHasherTrait {
     fn new() -> Self;
     fn update(&mut self, bytes: &[u8]);

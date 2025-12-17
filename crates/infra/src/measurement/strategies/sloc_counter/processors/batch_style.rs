@@ -11,7 +11,8 @@
 /// Windows バッチファイルのコメント:
 /// - `REM` (大文字小文字不問) で始まる行
 /// - `::` で始まる行 (ラベルの特殊用法としてのコメント)
-pub fn process_batch_style(line: &str, count: &mut usize) {
+#[cfg(test)]
+fn process_batch_style(line: &str, count: &mut usize) {
     let trimmed = line.trim();
 
     // REM コメント (大文字小文字不問)
@@ -30,10 +31,7 @@ pub fn process_batch_style(line: &str, count: &mut usize) {
     if let Some(stripped) = trimmed.strip_prefix('@') {
         let after_at = stripped.trim_start();
         let upper_after = after_at.to_uppercase();
-        if upper_after == "REM"
-            || upper_after.starts_with("REM ")
-            || upper_after.starts_with("REM\t")
-        {
+        if upper_after == "REM" || upper_after.starts_with("REM ") || upper_after.starts_with("REM\t") {
             return;
         }
     }

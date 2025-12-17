@@ -4,8 +4,8 @@
 //! 対象: Lisp, Scheme, Clojure, Emacs Lisp 等
 //! コメント: `;` で始まる行
 
-/// Lisp スタイル (;) の処理
-pub fn process_lisp_style(line: &str, count: &mut usize) {
+#[cfg(test)]
+fn process_lisp_style(line: &str, count: &mut usize) {
     if line.starts_with(';') {
         return;
     }
