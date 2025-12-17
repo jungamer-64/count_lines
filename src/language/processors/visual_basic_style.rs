@@ -1,7 +1,7 @@
 // src/language/processors/visual_basic_style.rs
-//! Visual Basic / VBA / VBScript のコメント処理
+//! `Visual Basic` / `VBA` / `VBScript` のコメント処理
 //!
-//! VB系言語固有の対応:
+//! `VB`系言語固有の対応:
 //! - `'` で始まる行コメント
 //! - `REM` で始まる行コメント (大文字小文字不問)
 //! - 行中の `'` 以降もコメント（文字列リテラル外）

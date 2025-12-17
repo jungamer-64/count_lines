@@ -63,42 +63,41 @@ pub fn walk_parallel(
             }
         }
 
-        // Size filter
+        // Size and mtime filters
         // Note: metadata() might trigger stat if not cached.
         // ignore crate usually stats.
-        if filters.min_size.is_some()
+        if (filters.min_size.is_some()
             || filters.max_size.is_some()
             || filters.mtime_since.is_some()
-            || filters.mtime_until.is_some()
+            || filters.mtime_until.is_some())
+            && let Ok(meta) = entry.metadata()
         {
-            if let Ok(meta) = entry.metadata() {
-                let size = meta.len();
-                if let Some(min) = filters.min_size
-                    && size < min
-                {
-                    return false;
-                }
-                if let Some(max) = filters.max_size
-                    && size > max
-                {
-                    return false;
-                }
+            let size = meta.len();
+            if let Some(min) = filters.min_size
+                && size < min
+            {
+                return false;
+            }
+            if let Some(max) = filters.max_size
+                && size > max
+            {
+                return false;
+            }
 
-                // Mtime filter
-                if (filters.mtime_since.is_some() || filters.mtime_until.is_some())
-                    && let Ok(mod_time) = meta.modified()
+            // Mtime filter
+            if (filters.mtime_since.is_some() || filters.mtime_until.is_some())
+                && let Ok(mod_time) = meta.modified()
+            {
+                let dt: chrono::DateTime<chrono::Local> = mod_time.into();
+                if let Some(since) = filters.mtime_since
+                    && dt < since
                 {
-                    let dt: chrono::DateTime<chrono::Local> = mod_time.into();
-                    if let Some(since) = filters.mtime_since
-                        && dt < since
-                    {
-                        return false;
-                    }
-                    if let Some(until) = filters.mtime_until
-                        && dt > until
-                    {
-                        return false;
-                    }
+                    return false;
+                }
+                if let Some(until) = filters.mtime_until
+                    && dt > until
+                {
+                    return false;
                 }
             }
         }

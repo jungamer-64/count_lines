@@ -1,7 +1,7 @@
 // src/language/processors/ocaml_style.rs
-//! OCaml言語のコメント処理
+//! `OCaml`言語のコメント処理
 //!
-//! OCaml固有の対応:
+//! `OCaml`固有の対応:
 //! - ブロックコメント: `(*` ～ `*)` (ネスト対応)
 //! - 行コメントなし
 
