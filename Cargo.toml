@@ -27,7 +27,7 @@ chrono = { version = "0.4", features = ["serde", "clock"] }
 clap = { version = "4.5", features = ["derive"] }
 ignore = "0.4"
 globset = "0.4"
-notify = "6.1"
+notify = "8.2.0"
 num_cpus = "1.17"
 predicates = "3"
 rayon = "1.11"

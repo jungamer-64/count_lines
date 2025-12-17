@@ -30,7 +30,7 @@ impl HeredocContext {
 
     /// ヒアドキュメント内かどうか
     #[must_use]
-    pub fn is_in_heredoc(&self) -> bool {
+    pub const fn is_in_heredoc(&self) -> bool {
         !self.stack.is_empty()
     }
 

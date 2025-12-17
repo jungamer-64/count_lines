@@ -102,11 +102,17 @@ pub fn parse_positive_usize(s: &str) -> Result<usize, String> {
 }
 
 /// Parse a `usize` constrained to the inclusive range [1, 512].
+///
+/// # Errors
+/// Returns an error if the input string is not a valid number or is outside the range [1, 512].
 pub fn parse_usize_1_to_512(s: &str) -> Result<usize, String> {
     parse_bounded_number(s, 1, Some(512))
 }
 
 /// Parse a positive `u64` (>= 1) from CLI input.
+///
+/// # Errors
+/// Returns an error if the input string is not a valid number or is less than 1.
 pub fn parse_positive_u64(s: &str) -> Result<u64, String> {
     parse_bounded_number(s, 1, None)
 }

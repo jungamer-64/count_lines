@@ -40,6 +40,9 @@ impl PhpProcessor {
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
+    ///
+    /// # Panics
+    /// regexが不正な場合にパニックします（静的定義のため発生しません）。
     pub fn process(&mut self, line: &str) -> usize {
         // ヒアドキュメント処理
         if self.heredoc_ctx.is_in_heredoc() {

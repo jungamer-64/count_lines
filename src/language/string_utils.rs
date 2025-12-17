@@ -8,130 +8,121 @@
 ///
 /// 言語ごとに有効な文字列構文を指定することで、
 /// 他の言語の構文による誤検出を防ぐ
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StringSkipOptions {
-    /// Rust raw string: r"...", r#"..."#
-    pub rust_raw_string: bool,
-    /// Rust byte string: b"...", br"..."
-    pub rust_byte_string: bool,
-    /// Rust ライフタイム注釈を考慮 ('a, 'static)
-    pub rust_lifetime: bool,
-    /// C++ Raw String: R"delimiter(...)delimiter"
-    pub cpp_raw_string: bool,
-    /// C# Verbatim String: @"..."
-    pub csharp_verbatim: bool,
-    /// Java/Kotlin Text Block: """..."""
-    pub text_block: bool,
-    /// バッククォート文字列: `...` (Go, JS/TS)
-    pub backtick_string: bool,
-    /// 通常のダブルクォート文字列: "..."
-    pub double_quote: bool,
-    /// 通常のシングルクォート: '...'
-    pub single_quote: bool,
-    /// 正規表現リテラル: /.../ (JavaScript, TypeScript, Ruby, Perl)
-    pub regex_literal: bool,
+    flags: u16,
 }
 
 impl StringSkipOptions {
+    const RUST_RAW_STRING: u16 = 1 << 0;
+    const RUST_BYTE_STRING: u16 = 1 << 1;
+    const RUST_LIFETIME: u16 = 1 << 2;
+    const CPP_RAW_STRING: u16 = 1 << 3;
+    const CSHARP_VERBATIM: u16 = 1 << 4;
+    const TEXT_BLOCK: u16 = 1 << 5;
+    const BACKTICK_STRING: u16 = 1 << 6;
+    const DOUBLE_QUOTE: u16 = 1 << 7;
+    const SINGLE_QUOTE: u16 = 1 << 8;
+    const REGEX_LITERAL: u16 = 1 << 9;
+
+    #[must_use] pub fn rust_raw_string(self) -> bool { self.flags & Self::RUST_RAW_STRING != 0 }
+    #[must_use] pub fn rust_byte_string(self) -> bool { self.flags & Self::RUST_BYTE_STRING != 0 }
+    #[must_use] pub fn rust_lifetime(self) -> bool { self.flags & Self::RUST_LIFETIME != 0 }
+    #[must_use] pub fn cpp_raw_string(self) -> bool { self.flags & Self::CPP_RAW_STRING != 0 }
+    #[must_use] pub fn csharp_verbatim(self) -> bool { self.flags & Self::CSHARP_VERBATIM != 0 }
+    #[must_use] pub fn text_block(self) -> bool { self.flags & Self::TEXT_BLOCK != 0 }
+    #[must_use] pub fn backtick_string(self) -> bool { self.flags & Self::BACKTICK_STRING != 0 }
+    #[must_use] pub fn double_quote(self) -> bool { self.flags & Self::DOUBLE_QUOTE != 0 }
+    #[must_use] pub fn single_quote(self) -> bool { self.flags & Self::SINGLE_QUOTE != 0 }
+    #[must_use] pub fn regex_literal(self) -> bool { self.flags & Self::REGEX_LITERAL != 0 }
+
+    #[must_use]
+    fn with_flag(mut self, flag: u16) -> Self {
+        self.flags |= flag;
+        self
+    }
+
     /// Rust 用オプション
     #[must_use] 
     pub fn rust() -> Self {
-        Self {
-            rust_raw_string: true,
-            rust_byte_string: true,
-            rust_lifetime: true,
-            double_quote: true,
-            single_quote: true, // 文字リテラル
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::RUST_RAW_STRING)
+            .with_flag(Self::RUST_BYTE_STRING)
+            .with_flag(Self::RUST_LIFETIME)
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// C/C++ 用オプション (Raw String対応)
     #[must_use] 
     pub fn cpp() -> Self {
-        Self {
-            cpp_raw_string: true,
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::CPP_RAW_STRING)
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// C 用オプション (Raw String なし)
     #[must_use] 
     pub fn c() -> Self {
-        Self {
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// C# 用オプション (Verbatim String @"..." 対応)
     #[must_use] 
     pub fn csharp() -> Self {
-        Self {
-            csharp_verbatim: true,
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::CSHARP_VERBATIM)
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// Java/Kotlin/Scala 用オプション (Text Block """...""" 対応)
     #[must_use] 
     pub fn java_kotlin() -> Self {
-        Self {
-            text_block: true,
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::TEXT_BLOCK)
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// Go 用オプション (バッククォート `...` 対応、正規表現リテラルなし)
     #[must_use] 
     pub fn go() -> Self {
-        Self {
-            backtick_string: true,
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::BACKTICK_STRING)
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// JavaScript/TypeScript 用オプション (バッククォート `...` と正規表現 /.../ 対応)
     #[must_use] 
     pub fn javascript() -> Self {
-        Self {
-            backtick_string: true,
-            double_quote: true,
-            single_quote: true,
-            regex_literal: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::BACKTICK_STRING)
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
+            .with_flag(Self::REGEX_LITERAL)
     }
 
     /// Ruby 用オプション (正規表現 /.../ 対応)
     #[must_use] 
     pub fn ruby() -> Self {
-        Self {
-            double_quote: true,
-            single_quote: true,
-            regex_literal: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
+            .with_flag(Self::REGEX_LITERAL)
     }
 
     /// Perl 用オプション (正規表現 /.../ 対応)
     #[must_use] 
     pub fn perl() -> Self {
-        Self {
-            double_quote: true,
-            single_quote: true,
-            regex_literal: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
+            .with_flag(Self::REGEX_LITERAL)
     }
 
     /// Swift 用オプション (拡張デリミタ #"..."# 対応)
@@ -142,12 +133,9 @@ impl StringSkipOptions {
     /// - 拡張デリミタ: `#"..."#`, `##"..."##`
     #[must_use] 
     pub fn swift() -> Self {
-        Self {
-            double_quote: true,
-            single_quote: true,
-            // Swift専用の処理は find_outside_string_swift で行う
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// Verilog/SystemVerilog 用オプション
@@ -155,12 +143,8 @@ impl StringSkipOptions {
     /// Verilog は C風の文字列のみ (Raw String なし)
     #[must_use] 
     pub fn verilog() -> Self {
-        Self {
-            double_quote: true,
-            // Verilog では ' は ビット幅指定 (4'b0001) などに使われるため除外
-            single_quote: false,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::DOUBLE_QUOTE)
     }
 
     /// Dart 用オプション
@@ -168,12 +152,10 @@ impl StringSkipOptions {
     /// Dart はバッククォートなし、三重クォートあり
     #[must_use] 
     pub fn dart() -> Self {
-        Self {
-            text_block: true,
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::TEXT_BLOCK)
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// Objective-C 用オプション
@@ -182,21 +164,17 @@ impl StringSkipOptions {
     /// C# Verbatim String とは異なりエスケープ可能
     #[must_use] 
     pub fn objc() -> Self {
-        Self {
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// 基本的な C スタイル (多くの言語で共通)
     #[must_use] 
     pub fn basic() -> Self {
-        Self {
-            double_quote: true,
-            single_quote: true,
-            ..Default::default()
-        }
+        Self::default()
+            .with_flag(Self::DOUBLE_QUOTE)
+            .with_flag(Self::SINGLE_QUOTE)
     }
 
     /// 拡張子から適切なオプションを取得
@@ -255,6 +233,123 @@ pub fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
+fn try_skip_prefixed_string(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+    let bytes = &line[i..];
+
+    if options.csharp_verbatim()
+        && bytes.len() >= 2
+        && bytes[0] == b'@'
+        && bytes[1] == b'"'
+    {
+        return try_skip_csharp_verbatim_string(bytes);
+    }
+
+    if options.cpp_raw_string()
+        && bytes.len() >= 2
+        && bytes[0] == b'R'
+        && bytes[1] == b'"'
+    {
+        return try_skip_cpp_raw_string(bytes);
+    }
+
+    if options.rust_raw_string()
+        && bytes[0] == b'r'
+        && (i == 0 || !is_ident_char(line[i - 1]))
+    {
+        return try_skip_raw_string(bytes);
+    }
+
+    if options.rust_byte_string()
+        && bytes[0] == b'b'
+        && (i == 0 || !is_ident_char(line[i - 1]))
+    {
+        return try_skip_byte_string(bytes);
+    }
+
+    None
+}
+
+fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+    let bytes = &line[i..];
+    let b = bytes[0];
+
+    if options.text_block()
+        && b == b'"'
+        && bytes.len() >= 3
+        && bytes[1] == b'"'
+        && bytes[2] == b'"'
+    {
+        return try_skip_text_block(bytes);
+    }
+
+    if options.double_quote() && b == b'"' {
+        let mut j = 1;
+        while j < bytes.len() {
+            if bytes[j] == b'\\' && j + 1 < bytes.len() {
+                j += 2;
+                continue;
+            }
+            if bytes[j] == b'"' {
+                return Some(j + 1);
+            }
+            j += 1;
+        }
+        return Some(bytes.len());
+    }
+
+    if options.single_quote() && b == b'\'' {
+        if options.rust_lifetime() {
+            if let Some(skip) = try_skip_char_literal(bytes) {
+                return Some(skip);
+            }
+            // Lifetime annotation, just skip '
+            return Some(1);
+        }
+
+        let mut j = 1;
+        while j < bytes.len() {
+            if bytes[j] == b'\\' && j + 1 < bytes.len() {
+                j += 2;
+                continue;
+            }
+            if bytes[j] == b'\'' {
+                return Some(j + 1);
+            }
+            j += 1;
+        }
+        return Some(bytes.len());
+    }
+
+    if options.backtick_string() && b == b'`' {
+        let mut j = 1;
+        while j < bytes.len() {
+            if bytes[j] == b'\\' && j + 1 < bytes.len() {
+                j += 2;
+                continue;
+            }
+            if bytes[j] == b'`' {
+                return Some(j + 1);
+            }
+            j += 1;
+        }
+        return Some(bytes.len());
+    }
+
+    None
+}
+
+fn try_skip_regex(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+    if options.regex_literal() && line[i] == b'/' {
+        let is_line_comment = i + 1 < line.len() && line[i + 1] == b'/';
+        let is_block_comment = i + 1 < line.len() && line[i + 1] == b'*';
+
+        if !is_line_comment && !is_block_comment {
+             return try_skip_regex_literal(line, i);
+        }
+    }
+    None
+}
+
 /// 文字列リテラル外でパターンを検索 (言語非依存・基本版)
 ///
 /// 基本的な文字列リテラル ("...", '...') のみをスキップ。
@@ -263,7 +358,7 @@ pub fn is_ident_char(b: u8) -> bool {
 /// より正確な検索が必要な場合は `find_outside_string_with_options` を使用。
 #[must_use] 
 pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
-    find_outside_string_with_options(line, pattern, &StringSkipOptions::rust())
+    find_outside_string_with_options(line, pattern, StringSkipOptions::rust())
 }
 
 /// 文字列リテラル外でパターンを検索 (オプション指定版)
@@ -274,7 +369,7 @@ pub fn find_outside_string(line: &str, pattern: &str) -> Option<usize> {
 pub fn find_outside_string_with_options(
     line: &str,
     pattern: &str,
-    options: &StringSkipOptions,
+    options: StringSkipOptions,
 ) -> Option<usize> {
     let pattern_bytes = pattern.as_bytes();
     let line_bytes = line.as_bytes();
@@ -285,139 +380,19 @@ pub fn find_outside_string_with_options(
 
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
-        // C# Verbatim String: @"..."
-        if options.csharp_verbatim
-            && line_bytes[i] == b'@'
-            && i + 1 < line_bytes.len()
-            && line_bytes[i + 1] == b'"'
-            && let Some(skip) = try_skip_csharp_verbatim_string(&line_bytes[i..])
-        {
+        if let Some(skip) = try_skip_prefixed_string(line_bytes, i, options) {
             i += skip;
             continue;
         }
 
-        // C++ Raw String: R"delimiter(...)delimiter"
-        if options.cpp_raw_string
-            && line_bytes[i] == b'R'
-            && i + 1 < line_bytes.len()
-            && line_bytes[i + 1] == b'"'
-            && let Some(skip) = try_skip_cpp_raw_string(&line_bytes[i..])
-        {
+        if let Some(skip) = try_skip_quoted_string(line_bytes, i, options) {
             i += skip;
             continue;
         }
 
-        // Rust raw文字列リテラル: r"...", r#"..."#, r##"..."## など
-        if options.rust_raw_string
-            && line_bytes[i] == b'r'
-            && (i == 0 || !is_ident_char(line_bytes[i - 1]))
-            && let Some(skip) = try_skip_raw_string(&line_bytes[i..])
-        {
+        if let Some(skip) = try_skip_regex(line_bytes, i, options) {
             i += skip;
             continue;
-        }
-
-        // Rust byte文字列: b"...", br"...", br#"..."# など
-        if options.rust_byte_string
-            && line_bytes[i] == b'b'
-            && (i == 0 || !is_ident_char(line_bytes[i - 1]))
-            && let Some(skip) = try_skip_byte_string(&line_bytes[i..])
-        {
-            i += skip;
-            continue;
-        }
-
-        // Java/Kotlin Text Block: """...""" (三重クォート)
-        // 通常のダブルクォート処理より先にチェック
-        if options.text_block
-            && line_bytes[i] == b'"'
-            && i + 2 < line_bytes.len()
-            && line_bytes[i + 1] == b'"'
-            && line_bytes[i + 2] == b'"'
-            && let Some(skip) = try_skip_text_block(&line_bytes[i..])
-        {
-            i += skip;
-            continue;
-        }
-
-        // ダブルクォート文字列リテラル: "..."
-        if options.double_quote && line_bytes[i] == b'"' {
-            i += 1;
-            while i < line_bytes.len() {
-                if line_bytes[i] == b'\\' && i + 1 < line_bytes.len() {
-                    i += 2; // エスケープシーケンスをスキップ
-                    continue;
-                }
-                if line_bytes[i] == b'"' {
-                    i += 1;
-                    break;
-                }
-                i += 1;
-            }
-            continue;
-        }
-
-        // シングルクォート処理
-        if options.single_quote && line_bytes[i] == b'\'' {
-            if options.rust_lifetime {
-                // Rust: 文字リテラル vs ライフタイム注釈の区別
-                if let Some(skip) = try_skip_char_literal(&line_bytes[i..]) {
-                    i += skip;
-                    continue;
-                }
-                // ライフタイム注釈の場合は単に次へ進む
-                i += 1;
-                continue;
-            }
-
-            // 他の言語: 通常のシングルクォート文字列/文字リテラル
-            i += 1;
-            while i < line_bytes.len() {
-                if line_bytes[i] == b'\\' && i + 1 < line_bytes.len() {
-                    i += 2;
-                    continue;
-                }
-                if line_bytes[i] == b'\'' {
-                    i += 1;
-                    break;
-                }
-                i += 1;
-            }
-            continue;
-        }
-
-        // バッククォート文字列 (Go Raw String, JS/TS Template Literal)
-        if options.backtick_string && line_bytes[i] == b'`' {
-            i += 1;
-            while i < line_bytes.len() {
-                // JS/TSのテンプレートリテラルではエスケープが可能
-                if line_bytes[i] == b'\\' && i + 1 < line_bytes.len() {
-                    i += 2;
-                    continue;
-                }
-                if line_bytes[i] == b'`' {
-                    i += 1;
-                    break;
-                }
-                i += 1;
-            }
-            continue;
-        }
-
-        // 正規表現リテラル: /.../ (JavaScript, TypeScript, Ruby, Perl)
-        // コメント開始 (//, /*) との区別が必要
-        if options.regex_literal && line_bytes[i] == b'/' {
-            // // (行コメント) や /* (ブロックコメント) は除外
-            let is_line_comment = i + 1 < line_bytes.len() && line_bytes[i + 1] == b'/';
-            let is_block_comment = i + 1 < line_bytes.len() && line_bytes[i + 1] == b'*';
-
-            if !is_line_comment
-                && !is_block_comment
-                && let Some(skip) = try_skip_regex_literal(line_bytes, i)
-            {
-                i += skip;
-                continue;
-            }
         }
 
         // パターンとマッチするかチェック
@@ -1399,7 +1374,7 @@ mod tests {
             // 正規表現内の // が行コメントと誤認されないこと
             let options = StringSkipOptions::javascript();
             let result =
-                find_outside_string_with_options("var re = /https:\\/\\//;", "//", &options);
+                find_outside_string_with_options("var re = /https:\\/\\//;", "//", options);
             assert_eq!(result, None);
         }
 
@@ -1408,7 +1383,7 @@ mod tests {
             // 正規表現の後の行コメント
             let options = StringSkipOptions::javascript();
             let result =
-                find_outside_string_with_options("var re = /abc/g; // comment", "//", &options);
+                find_outside_string_with_options("var re = /abc/g; // comment", "//", options);
             assert_eq!(result, Some(17));
         }
 
@@ -1416,7 +1391,7 @@ mod tests {
         fn test_js_block_comment_in_regex() {
             // 正規表現内の /* */ がブロックコメントと誤認されないこと
             let options = StringSkipOptions::javascript();
-            let result = find_outside_string_with_options("var re = /a*b/g;", "/*", &options);
+            let result = find_outside_string_with_options("var re = /a*b/g;", "/*", options);
             assert_eq!(result, None);
         }
 
@@ -1425,7 +1400,7 @@ mod tests {
             // 除算演算子の後のコメント
             let options = StringSkipOptions::javascript();
             let result =
-                find_outside_string_with_options("var x = a/b; // division", "//", &options);
+                find_outside_string_with_options("var x = a/b; // division", "//", options);
             assert_eq!(result, Some(13));
         }
 
@@ -1434,7 +1409,7 @@ mod tests {
             // テンプレート文字列内の正規表現パターン
             let options = StringSkipOptions::javascript();
             let result =
-                find_outside_string_with_options("var s = `pattern: /abc/`;", "//", &options);
+                find_outside_string_with_options("var s = `pattern: /abc/`;", "//", options);
             assert_eq!(result, None);
         }
     }

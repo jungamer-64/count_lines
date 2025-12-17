@@ -6,6 +6,10 @@ use crate::presentation;
 use notify::{RecursiveMode, Watcher};
 use std::sync::mpsc::channel;
 
+/// Watch files for changes and re-run analysis.
+///
+/// # Errors
+/// Returns an error if the watcher cannot be initialized or if adding paths to watch fails.
 pub fn watch_paths(config: &Config) -> Result<()> {
     let (tx, rx) = channel();
 
