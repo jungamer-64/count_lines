@@ -238,10 +238,10 @@ fn process_content<R: BufRead>(
             words += 1;
         }
         // If file ends without newline, count that line
-        if let Some(b) = last_byte {
-            if b != b'\n' {
-                lines += 1;
-            }
+        if let Some(b) = last_byte
+            && b != b'\n'
+        {
+            lines += 1;
         }
     }
 

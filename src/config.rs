@@ -138,15 +138,11 @@ impl Config {
         };
 
         // Handle compare tuple
-        let compare = if let Some(files) = args.comparison.compare {
-            if files.len() == 2 {
-                Some((files[0].clone(), files[1].clone()))
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        let compare = args
+            .comparison
+            .compare
+            .filter(|files| files.len() == 2)
+            .map(|files| (files[0].clone(), files[1].clone()));
 
         Self {
             walk,

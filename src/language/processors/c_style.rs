@@ -409,7 +409,7 @@ mod tests {
         // Empty string
         assert_eq!(p.process(r#"s = "";"#), 1);
         // Single char string
-        assert_eq!(p.process(r#"c = 'x';"#), 1);
+        assert_eq!(p.process("c = 'x';"), 1);
     }
 
     #[test]

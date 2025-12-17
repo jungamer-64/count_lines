@@ -46,7 +46,7 @@ pub fn walk_parallel(
     let filters = filters.clone();
     builder.filter_entry(move |entry| {
         // Always descend into directories (unless max_depth handles it, which it does)
-        if entry.file_type().map_or(false, |ft| ft.is_dir()) {
+        if entry.file_type().is_some_and(|ft| ft.is_dir()) {
             return true;
         }
 
@@ -73,31 +73,31 @@ pub fn walk_parallel(
         {
             if let Ok(meta) = entry.metadata() {
                 let size = meta.len();
-                if let Some(min) = filters.min_size {
-                    if size < min {
-                        return false;
-                    }
+                if let Some(min) = filters.min_size
+                    && size < min
+                {
+                    return false;
                 }
-                if let Some(max) = filters.max_size {
-                    if size > max {
-                        return false;
-                    }
+                if let Some(max) = filters.max_size
+                    && size > max
+                {
+                    return false;
                 }
 
                 // Mtime filter
-                if filters.mtime_since.is_some() || filters.mtime_until.is_some() {
-                    if let Ok(mod_time) = meta.modified() {
-                        let dt: chrono::DateTime<chrono::Local> = mod_time.into();
-                        if let Some(since) = filters.mtime_since {
-                            if dt < since {
-                                return false;
-                            }
-                        }
-                        if let Some(until) = filters.mtime_until {
-                            if dt > until {
-                                return false;
-                            }
-                        }
+                if (filters.mtime_since.is_some() || filters.mtime_until.is_some())
+                    && let Ok(mod_time) = meta.modified()
+                {
+                    let dt: chrono::DateTime<chrono::Local> = mod_time.into();
+                    if let Some(since) = filters.mtime_since
+                        && dt < since
+                    {
+                        return false;
+                    }
+                    if let Some(until) = filters.mtime_until
+                        && dt > until
+                    {
+                        return false;
                     }
                 }
             }
