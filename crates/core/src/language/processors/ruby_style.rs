@@ -39,6 +39,12 @@ impl LineProcessor for RubyProcessor {
     }
 }
 
+impl Default for RubyProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RubyProcessor {
     #[must_use]
     pub fn new() -> Self {
@@ -48,11 +54,6 @@ impl RubyProcessor {
             stack: Vec::new(),
             heredoc_re: Regex::new(r"^<<([-~]?)(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap(),
         }
-    }
-
-    /// Provide a default implementation manually since Regex doesn't impl Default
-    pub fn default() -> Self {
-        Self::new()
     }
 
     fn is_in_string_scope(&self) -> bool {

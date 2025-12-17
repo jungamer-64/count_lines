@@ -22,6 +22,12 @@ pub struct ShellProcessor {
     heredoc_re: Regex,
 }
 
+impl Default for ShellProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ShellProcessor {
     #[must_use]
     pub fn new() -> Self {
@@ -31,10 +37,6 @@ impl ShellProcessor {
             heredoc_re: Regex::new(r"<<(-?)\s*(?:([^\s\x22'>|&;]+)|'([^']+)'|\x22([^\x22]+)\x22)")
                 .unwrap(),
         }
-    }
-
-    pub fn default() -> Self {
-        Self::new()
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す

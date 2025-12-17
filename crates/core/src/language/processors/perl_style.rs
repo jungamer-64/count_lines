@@ -32,6 +32,12 @@ impl LineProcessor for PerlProcessor {
     }
 }
 
+impl Default for PerlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PerlProcessor {
     #[must_use]
     pub fn new() -> Self {
@@ -41,10 +47,6 @@ impl PerlProcessor {
             heredoc_ctx: HeredocContext::new(),
             heredoc_re: Regex::new(r"<<\s*(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap(),
         }
-    }
-
-    pub fn default() -> Self {
-        Self::new()
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す

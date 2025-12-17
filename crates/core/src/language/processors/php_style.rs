@@ -29,6 +29,12 @@ impl LineProcessor for PhpProcessor {
     }
 }
 
+impl Default for PhpProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PhpProcessor {
     #[must_use]
     pub fn new() -> Self {
@@ -37,10 +43,6 @@ impl PhpProcessor {
             heredoc_ctx: HeredocContext::new(),
             heredoc_re: Regex::new(r"<<<(?:([\w]+)|'([\w]+)'|\x22([\w]+)\x22)").unwrap(),
         }
-    }
-
-    pub fn default() -> Self {
-        Self::new()
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
