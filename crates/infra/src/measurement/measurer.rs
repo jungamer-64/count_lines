@@ -447,13 +447,16 @@ impl FileMeasurer {
 
         for (index, key, entry) in pending {
             if let Some(stats) = measured_map.remove(&entry.path) {
+                // Clone the path before moving `entry` into the processed vector so
+                // we can record the changed file without re-querying `processed`.
+                let entry_path = entry.path.clone();
                 processed.push(IndexedResult {
                     index,
                     key,
                     entry,
                     stats,
                 });
-                changed_files.push(processed.last().unwrap().entry.path.clone());
+                changed_files.push(entry_path);
             }
         }
 

@@ -11,6 +11,7 @@ pub fn parse_patterns(patterns: &[String]) -> Result<Vec<GlobPattern>> {
             GlobPattern::new(pattern).map_err(|err| DomainError::InvalidPattern {
                 pattern: pattern.clone(),
                 details: err.to_string(),
+                source: Some(Box::new(err)),
             })
         })
         .collect::<std::result::Result<Vec<_>, DomainError>>()

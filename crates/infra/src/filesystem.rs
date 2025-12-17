@@ -571,9 +571,18 @@ fn collect_entries_from_root(
                 // we've already visited the same directory using the platform-
                 // appropriate detector (inode on Unix, canonical path elsewhere).
                 if follow_links {
-                    let mut detector = visited_dirs_cloned.lock().unwrap();
-                    if !detector.visit(entry.path(), maybe_md.as_ref()) {
-                        return false; // already visited
+                    match visited_dirs_cloned.lock() {
+                        Ok(mut detector) => {
+                            if !detector.visit(entry.path(), maybe_md.as_ref()) {
+                                return false; // already visited
+                            }
+                        }
+                        Err(err) => {
+                            // Poisoned mutex — log and continue without loop detection.
+                            warn_msg(&format!(
+                                "directory loop detector mutex poisoned: {err}; continuing without loop detection",
+                            ));
+                        }
                     }
                 }
 
@@ -619,8 +628,12 @@ fn collect_entries_from_root(
                 ) {
                     collector.buf.push(dto);
                     if collector.buf.len() >= FLUSH_THRESHOLD {
-                        let mut guard = collector.shared.lock().unwrap();
-                        guard.append(&mut collector.buf);
+                        match collector.shared.lock() {
+                            Ok(mut guard) => guard.append(&mut collector.buf),
+                            Err(err) => warn_msg(&format!(
+                                "collector mutex poisoned: {err}; dropping this batch"
+                            )),
+                        }
                     }
                 }
                 ignore::WalkState::Continue
@@ -629,7 +642,10 @@ fn collect_entries_from_root(
     });
 
     // merge local entries into main vector
-    let mut guard = entries_ref.lock().unwrap();
+    let mut guard = entries_ref.lock().map_err(|err| InfrastructureError::OutputError {
+        message: format!("entries mutex poisoned: {err}"),
+        source: None,
+    })?;
     let collected = std::mem::take(&mut *guard);
     Ok(collected)
 }
@@ -798,8 +814,11 @@ impl LocalCollector {
 impl Drop for LocalCollector {
     fn drop(&mut self) {
         if !self.buf.is_empty() {
-            let mut guard = self.shared.lock().unwrap();
-            guard.append(&mut self.buf);
+            if let Ok(mut guard) = self.shared.lock() {
+                guard.append(&mut self.buf);
+            } else {
+                warn_msg("collector mutex poisoned on drop; dropping leftover entries");
+            }
         }
     }
 }

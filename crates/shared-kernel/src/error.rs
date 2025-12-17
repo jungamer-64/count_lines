@@ -39,7 +39,12 @@ pub enum DomainError {
     InvalidFilterExpression { expression: String, details: String },
 
     #[error("Invalid pattern '{pattern}': {details}")]
-    InvalidPattern { pattern: String, details: String },
+    InvalidPattern {
+        pattern: String,
+        details: String,
+        #[source]
+        source: Option<Box<dyn std::error::Error + Send + Sync>>,
+    },
 
     #[error("Invalid sort specification: {spec}")]
     InvalidSortSpec { spec: String },

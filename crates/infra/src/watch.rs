@@ -100,7 +100,13 @@ impl WatchService {
     where
         F: FnMut() -> Result<()>,
     {
-        let start = pending.expect("pending should be Some when process_pending is called");
+        let start = match pending.take() {
+            Some(s) => s,
+            None => {
+                eprintln!("[warn] process_pending called without pending set; returning");
+                return Ok(());
+            }
+        };
         let elapsed = start.elapsed();
         if elapsed >= interval {
             on_change()?;
