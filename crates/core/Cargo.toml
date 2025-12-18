@@ -3,6 +3,11 @@ name = "count_lines_core"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+description = "no_std compatible core library for counting lines, characters, and words in source code"
+repository = "https://github.com/jungamer-64/count_lines"
+readme = "../../README.md"
+keywords = ["count", "lines", "sloc", "no_std", "metrics"]
+categories = ["no-std", "parsing", "development-tools"]
 
 [dependencies]
 # no_std dependencies

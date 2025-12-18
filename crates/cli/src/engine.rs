@@ -18,6 +18,10 @@ use count_lines_core::language::LineProcessor;
 ///
 /// Returns an error only for critical failures (e.g., walk initialization).
 /// Individual file processing errors are collected in `RunResult::errors`.
+///
+/// # Panics
+///
+/// Panics if the partition results contain unexpected `Ok`/`Err` variants (should never happen).
 pub fn run(config: &Config) -> Result<RunResult> {
     let (tx, rx) = crossbeam_channel::bounded(1024);
 
@@ -43,6 +47,7 @@ pub fn run(config: &Config) -> Result<RunResult> {
         })
     } else {
         // Non-strict mode: collect errors alongside successful results
+        #[allow(clippy::redundant_closure_for_method_calls)]
         let (results, errors): (Vec<_>, Vec<_>) = iter
             .map(|item| {
                 let path = item.0.clone();
