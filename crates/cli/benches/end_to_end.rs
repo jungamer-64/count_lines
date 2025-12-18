@@ -1,5 +1,5 @@
 use clap::Parser;
-use count_lines::args::Args;
+use count_lines_cli::args::Args;
 use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 

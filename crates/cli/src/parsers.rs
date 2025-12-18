@@ -207,7 +207,7 @@ mod property_tests {
         #[test]
         fn test_size_arg_underscores(n in 1000u64..1_000_000) {
             // Format with underscores as thousand separators
-            let with_underscores = format!("{}", n)
+            let with_underscores = format!("{n}")
                 .chars()
                 .rev()
                 .enumerate()
