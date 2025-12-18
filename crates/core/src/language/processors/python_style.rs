@@ -1,11 +1,49 @@
 // src/language/processors/python_style.rs
-//! Python言語のコメント処理
+//! # Python Processor
 //!
-//! Python固有の対応:
-//! - Docstring: `"""..."""` / `'''...'''`
-//! - f-string: `f"..."`, `F"..."` 等の文字列プレフィックス
-//! - 複合プレフィックス: `fr"..."`, `rf"..."` 等
-//! - shebang行の除外
+//! SLOC counter processor for Python with special handling for docstrings and f-strings.
+//!
+//! ## Supported Syntax
+//!
+//! - **Line comments**: `#`
+//! - **Docstrings**: `"""..."""` and `'''...'''` (treated as comments when standalone)
+//! - **f-strings**: `f"..."`, `F"..."` with `{expr}` interpolation
+//! - **Raw strings**: `r"..."`, `R"..."`
+//! - **Byte strings**: `b"..."`, `B"..."`
+//! - **Combined prefixes**: `rf"..."`, `fr"..."`, `br"..."`, etc.
+//! - **Shebang**: `#!/usr/bin/env python` (first line only)
+//!
+//! ## Docstring Detection
+//!
+//! Triple-quoted strings are treated as docstrings (comments) when they appear
+//! at the start of a line with no preceding code. Otherwise, they are counted as code.
+//!
+//! ## Performance Characteristics
+//!
+//! - **Time complexity**: O(n) where n = line length
+//! - **Space complexity**: O(d) where d = nesting depth (f-string interpolation)
+//! - **Thread safety**: No (has internal mutable state)
+//!
+//! ## Usage Example
+//!
+//! ```rust
+//! use count_lines_core::language::processors::PythonProcessor;
+//! use count_lines_core::language::processor_trait::LineProcessor;
+//!
+//! let mut proc = PythonProcessor::new();
+//!
+//! // Code line
+//! assert_eq!(proc.process_line("x = 1"), 1);
+//!
+//! // Comment line
+//! assert_eq!(proc.process_line("# this is a comment"), 0);
+//!
+//! // Docstring (standalone triple-quote)
+//! proc.reset();
+//! assert_eq!(proc.process_line("\"\"\""), 0);
+//! assert_eq!(proc.process_line("Docstring content"), 0);
+//! assert_eq!(proc.process_line("\"\"\""), 0);
+//! ```
 
 use core::iter::Peekable;
 use core::str::CharIndices;

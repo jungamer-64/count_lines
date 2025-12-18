@@ -1,8 +1,54 @@
 // src/language/processors/c_style.rs
-//! C系言語のコメント処理
+//! # C-Style Comment Processor
 //!
-//! C/C++/Java/JavaScript/Rust/Go/Kotlin等の
-//! `//` 行コメントと `/* */` ブロックコメントを処理します。
+//! SLOC counter processor for C-family languages with `//` and `/* */` comments.
+//!
+//! ## Supported Languages
+//!
+//! - C, C++, Objective-C
+//! - Java, Kotlin, Scala
+//! - Go, Rust (via `NestingCStyleProcessor`)
+//! - Swift, D
+//! - Many other C-derived languages
+//!
+//! ## Supported Syntax
+//!
+//! - **Line comments**: `//`
+//! - **Block comments**: `/* */`
+//! - **Nested block comments** (Rust, Kotlin, Scala): `/* outer /* inner */ */`
+//!
+//! ## Processors
+//!
+//! | Processor | Nesting | Use Case |
+//! |-----------|---------|----------|
+//! | `CStyleProcessor` | No | C, C++, Java, Go |
+//! | `NestingCStyleProcessor` | Yes | Rust, Kotlin, Scala |
+//!
+//! ## Performance Characteristics
+//!
+//! - **Time complexity**: O(n) where n = line length
+//! - **Space complexity**: O(1) for `CStyleProcessor`, O(d) for nesting
+//! - **Thread safety**: No (has internal mutable state)
+//!
+//! ## Usage Example
+//!
+//! ```rust
+//! use count_lines_core::language::processors::CStyleProcessor;
+//! use count_lines_core::language::processor_trait::LineProcessor;
+//! use count_lines_core::language::string_utils::StringSkipOptions;
+//!
+//! let mut proc = CStyleProcessor::new(StringSkipOptions::default());
+//!
+//! // Code lines
+//! assert_eq!(proc.process_line("int x = 1;"), 1);
+//!
+//! // Comment lines
+//! assert_eq!(proc.process_line("// this is a comment"), 0);
+//!
+//! // Mixed content (code with inline comment)
+//! proc.reset();
+//! assert_eq!(proc.process_line("int y = 2; // inline"), 1);
+//! ```
 
 use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::{StringSkipOptions, find_outside_string_with_options};

@@ -1,8 +1,51 @@
 // src/language/processors/simple_prefix_style.rs
-//! 単純なプレフィックス型コメントプロセッサ
+//! # Simple Prefix Comment Processor
 //!
-//! 「特定のプレフィックスで始まる行をコメントとする」言語群を統合。
-//! 対象: Batch, VHDL, Erlang, Lisp, Fortran, Assembly など
+//! SLOC counter processor for languages with simple prefix-based line comments.
+//!
+//! ## Supported Languages
+//!
+//! | Language | Prefix(es) | Case Sensitive |
+//! |----------|------------|----------------|
+//! | VHDL | `--` | Yes |
+//! | Erlang, LaTeX | `%` | Yes |
+//! | Lisp, Scheme, Clojure | `;` | Yes |
+//! | Assembly (NASM/MASM) | `;` | Yes |
+//! | Fortran | `!`, `C`, `c`, `*` | Yes |
+//! | Batch | `REM `, `::`, `@REM ` | No |
+//! | Visual Basic | `'`, `REM ` | No |
+//!
+//! ## How It Works
+//!
+//! Lines are trimmed and checked if they start with any of the configured prefixes.
+//! If so, the line is counted as a comment (returns 0). Otherwise, it's code (returns 1).
+//!
+//! > **Note**: This processor does not handle inline comments. A line like
+//! > `signal x : integer; -- comment` will return 1 (code) because it doesn't
+//! > start with the comment prefix.
+//!
+//! ## Performance Characteristics
+//!
+//! - **Time complexity**: O(p × m) where p = number of prefixes, m = longest prefix length
+//! - **Space complexity**: O(1)
+//! - **Thread safety**: Yes (immutable after construction)
+//!
+//! ## Usage Example
+//!
+//! ```rust,ignore
+//! use count_lines_core::language::processors::SimplePrefixProcessor;
+//!
+//! // VHDL: "--" prefix
+//! let p = SimplePrefixProcessor::vhdl();
+//! assert_eq!(p.process("-- comment"), 0);
+//! assert_eq!(p.process("signal x : integer;"), 1);
+//!
+//! // Batch: case-insensitive "REM " prefix
+//! let p = SimplePrefixProcessor::batch();
+//! assert_eq!(p.process("REM comment"), 0);
+//! assert_eq!(p.process("rem comment"), 0);
+//! assert_eq!(p.process("echo hello"), 1);
+//! ```
 
 /// 単純なプレフィックス型コメントプロセッサ
 ///
