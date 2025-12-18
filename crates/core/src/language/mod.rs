@@ -22,7 +22,7 @@ fn new_box<T: LineProcessor + 'static>(p: T) -> Box<dyn LineProcessor> {
 #[must_use]
 pub fn get_processor(extension: &str, map: &HashMap<String, String>) -> Box<dyn LineProcessor> {
     // マッピングを確認 (なければそのまま)
-    let effective_ext = map.get(extension).map(String::as_str).unwrap_or(extension);
+    let effective_ext = map.get(extension).map_or(extension, String::as_str);
 
     let style = CommentStyle::from_extension(effective_ext);
     let ext_lower = effective_ext.to_lowercase();

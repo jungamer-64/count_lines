@@ -13,6 +13,7 @@ use alloc::string::String;
 
 /// Convert a byte slice to a String, replacing invalid UTF-8 with `REPLACEMENT_CHARACTER`.
 /// Mimics `String::from_utf8_lossy`.
+#[must_use]
 pub fn from_utf8_lossy(input: &[u8]) -> Cow<'_, str> {
     match core::str::from_utf8(input) {
         Ok(valid) => Cow::Borrowed(valid),

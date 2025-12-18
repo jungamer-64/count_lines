@@ -36,6 +36,11 @@ impl Default for PhpProcessor {
 }
 
 impl PhpProcessor {
+    /// Creates a new `PhpProcessor`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal regex pattern fails to compile (should never happen with hardcoded patterns).
     #[must_use]
     pub fn new() -> Self {
         Self {

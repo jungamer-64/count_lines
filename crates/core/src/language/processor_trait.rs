@@ -148,7 +148,7 @@ impl LineProcessor for Box<dyn LineProcessor> {
     }
 
     fn reset(&mut self) {
-        (**self).reset()
+        (**self).reset();
     }
 
     fn is_in_block_comment(&self) -> bool {

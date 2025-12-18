@@ -46,6 +46,11 @@ impl Default for RubyProcessor {
 }
 
 impl RubyProcessor {
+    /// Creates a new `RubyProcessor`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal regex pattern fails to compile (should never happen with hardcoded patterns).
     #[must_use]
     pub fn new() -> Self {
         Self {

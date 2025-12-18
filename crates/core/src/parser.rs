@@ -7,6 +7,7 @@ use crate::stats::AnalysisResult;
 /// This is the core entry point for the library.
 /// It mimics the logic from the original `process_content_sloc` but works on in-memory bytes.
 /// It also handles binary detection (simplistic check).
+#[must_use]
 pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> AnalysisResult {
     let mut stats = AnalysisResult::new();
 

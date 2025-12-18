@@ -1,8 +1,6 @@
 #![no_std]
 #![allow(clippy::cargo_common_metadata)]
 #![allow(clippy::multiple_crate_versions)]
-#![allow(clippy::map_unwrap_or)]
-#![allow(clippy::semicolon_if_nothing_returned)]
 extern crate alloc;
 
 pub mod config;

@@ -11,6 +11,7 @@ pub struct AnalysisResult {
 }
 
 impl AnalysisResult {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

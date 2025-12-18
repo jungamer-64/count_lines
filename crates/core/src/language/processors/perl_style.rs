@@ -39,6 +39,11 @@ impl Default for PerlProcessor {
 }
 
 impl PerlProcessor {
+    /// Creates a new `PerlProcessor`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal regex pattern fails to compile (should never happen with hardcoded patterns).
     #[must_use]
     pub fn new() -> Self {
         Self {

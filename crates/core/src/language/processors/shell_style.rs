@@ -29,6 +29,11 @@ impl Default for ShellProcessor {
 }
 
 impl ShellProcessor {
+    /// Creates a new `ShellProcessor`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal regex pattern fails to compile (should never happen with hardcoded patterns).
     #[must_use]
     pub fn new() -> Self {
         Self {
