@@ -1,7 +1,6 @@
-
-use proptest::prelude::*;
-use count_lines_core::parser::count_bytes;
 use count_lines_core::config::AnalysisConfig;
+use count_lines_core::counter::count_bytes;
+use proptest::prelude::*;
 
 proptest! {
     #[test]
@@ -20,7 +19,7 @@ proptest! {
             assert_eq!(stats.lines, 0);
         }
     }
-    
+
     #[test]
     fn test_char_count_consistent_with_unicode(
         content in "\\PC{0,500}"

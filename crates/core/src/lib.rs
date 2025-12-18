@@ -14,7 +14,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use count_lines_core::parser::count_bytes;
+//! use count_lines_core::counter::count_bytes;
 //! use count_lines_core::config::AnalysisConfig;
 //!
 //! let content = b"fn main() {\n    println!(\"Hello\");\n}\n";
@@ -27,7 +27,7 @@
 //!
 //! ## Architecture
 //!
-//! - [`parser`]: Main entry point (`count_bytes`).
+//! - [`counter`]: Main entry point (`count_bytes`).
 //! - [`language`]: Language-specific SLOC processors.
 //! - [`stats`]: Statistical data structures.
 //! - [`config`]: Configuration options.
@@ -37,6 +37,6 @@
 extern crate alloc;
 
 pub mod config;
+pub mod counter;
 pub mod language;
-pub mod parser;
 pub mod stats;

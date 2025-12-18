@@ -312,6 +312,7 @@ dependencies = [
 name = "count_lines_core"
 version = "0.1.0"
 dependencies = [
+ "bytecount",
  "hashbrown 0.15.5",
  "once_cell",
  "proptest",

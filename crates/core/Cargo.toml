@@ -24,6 +24,7 @@ once_cell = { version = "1.19", default-features = false, features = [
     "race",
     "alloc",
 ] }
+bytecount.workspace = true
 
 [dev-dependencies]
 proptest = "1.9.0"
