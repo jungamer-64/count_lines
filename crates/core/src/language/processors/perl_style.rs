@@ -192,6 +192,47 @@ pub fn is_perl_pod_start(line: &str) -> bool {
         || line.starts_with("=begin")
 }
 
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `PerlProcessor`.
+///
+/// Note: Does not include `heredoc_re` (compiled regex).
+#[derive(Debug, Clone, Default)]
+pub struct PerlState {
+    /// Whether currently inside POD documentation.
+    pub in_pod: bool,
+    /// Number of lines processed (for shebang detection).
+    pub line_count: usize,
+    /// Heredoc context (identifiers and `allow_indent` flags).
+    pub heredoc_ctx: HeredocContext,
+}
+
+impl StatefulProcessor for PerlProcessor {
+    type State = PerlState;
+
+    fn get_state(&self) -> Self::State {
+        PerlState {
+            in_pod: self.in_pod,
+            line_count: self.line_count,
+            heredoc_ctx: self.heredoc_ctx.clone(),
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.in_pod = state.in_pod;
+        self.line_count = state.line_count;
+        self.heredoc_ctx = state.heredoc_ctx;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.in_pod || self.heredoc_ctx.is_in_heredoc()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -53,19 +53,19 @@ use alloc::vec::Vec;
 use super::super::processor_trait::LineProcessor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum PythonScope {
+pub enum PythonScope {
     Interpolation, // { ... }
     String(PythonStringState),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools)]
-struct PythonStringState {
-    quote: u8,    // " or '
-    triple: bool, // """ or '''
-    is_f_string: bool,
-    is_raw: bool,
-    is_doc_comment: bool, // Treat content as comment?
+pub struct PythonStringState {
+    pub quote: u8,    // " or '
+    pub triple: bool, // """ or '''
+    pub is_f_string: bool,
+    pub is_raw: bool,
+    pub is_doc_comment: bool, // Treat content as comment?
 }
 
 /// 文字列プレフィックスの解析結果
@@ -387,6 +387,42 @@ impl PythonProcessor {
             // Get next char
             current = chars.next()?.1;
         }
+    }
+}
+
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `PythonProcessor`.
+#[derive(Debug, Clone, Default)]
+pub struct PythonState {
+    /// Current scope stack (strings, interpolations).
+    pub stack: Vec<PythonScope>,
+    /// Number of lines processed (for shebang detection).
+    pub line_count: usize,
+}
+
+impl StatefulProcessor for PythonProcessor {
+    type State = PythonState;
+
+    fn get_state(&self) -> Self::State {
+        PythonState {
+            stack: self.stack.clone(),
+            line_count: self.line_count,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.stack = state.stack;
+        self.line_count = state.line_count;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        // In a multi-line string or interpolation
+        !self.stack.is_empty()
     }
 }
 

@@ -66,6 +66,37 @@ impl HtmlProcessor {
     }
 }
 
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `HtmlProcessor`.
+#[derive(Debug, Clone, Default)]
+pub struct HtmlState {
+    /// Whether currently inside a `<!-- -->` comment.
+    pub in_comment: bool,
+}
+
+impl StatefulProcessor for HtmlProcessor {
+    type State = HtmlState;
+
+    fn get_state(&self) -> Self::State {
+        HtmlState {
+            in_comment: self.in_comment,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.in_comment = state.in_comment;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.in_comment
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

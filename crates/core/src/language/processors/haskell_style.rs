@@ -82,6 +82,37 @@ impl HaskellProcessor {
     }
 }
 
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `HaskellProcessor`.
+#[derive(Debug, Clone, Default)]
+pub struct HaskellState {
+    /// Current nesting depth of block comments `{- -}`.
+    pub block_comment_depth: usize,
+}
+
+impl StatefulProcessor for HaskellProcessor {
+    type State = HaskellState;
+
+    fn get_state(&self) -> Self::State {
+        HaskellState {
+            block_comment_depth: self.block_comment_depth,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.block_comment_depth = state.block_comment_depth;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.block_comment_depth > 0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

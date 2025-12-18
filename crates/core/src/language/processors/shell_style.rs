@@ -183,6 +183,43 @@ fn is_inside_string(line: &str, target_pos: usize) -> bool {
     in_single || in_double
 }
 
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `ShellProcessor`.
+///
+/// Note: Does not include `heredoc_re` as it's a compiled regex.
+#[derive(Debug, Clone, Default)]
+pub struct ShellState {
+    /// Heredoc context (identifiers and `allow_indent` flags).
+    pub heredoc_ctx: HeredocContext,
+    /// Number of lines processed (for shebang detection).
+    pub line_count: usize,
+}
+
+impl StatefulProcessor for ShellProcessor {
+    type State = ShellState;
+
+    fn get_state(&self) -> Self::State {
+        ShellState {
+            heredoc_ctx: self.heredoc_ctx.clone(),
+            line_count: self.line_count,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.heredoc_ctx = state.heredoc_ctx;
+        self.line_count = state.line_count;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.heredoc_ctx.is_in_heredoc()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

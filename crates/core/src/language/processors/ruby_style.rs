@@ -15,7 +15,7 @@ use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum RubyScope {
+pub enum RubyScope {
     Interpolation, // #{ ... }
     String(u8),    // String with quote char (", ', `)
 }
@@ -214,6 +214,48 @@ impl RubyProcessor {
         self.in_embedded_doc = false;
         self.heredoc_ctx.reset();
         self.stack.clear();
+    }
+}
+
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `RubyProcessor`.
+///
+/// Note: Does not include `heredoc_re` as it's a compiled regex
+/// that should not change during processing.
+#[derive(Debug, Clone, Default)]
+pub struct RubyState {
+    /// Whether currently inside embedded documentation (=begin...=end).
+    pub in_embedded_doc: bool,
+    /// Heredoc context (identifiers and `allow_indent` flags).
+    pub heredoc_ctx: HeredocContext,
+    /// Current scope stack (strings, interpolations).
+    pub stack: Vec<RubyScope>,
+}
+
+impl StatefulProcessor for RubyProcessor {
+    type State = RubyState;
+
+    fn get_state(&self) -> Self::State {
+        RubyState {
+            in_embedded_doc: self.in_embedded_doc,
+            heredoc_ctx: self.heredoc_ctx.clone(),
+            stack: self.stack.clone(),
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.in_embedded_doc = state.in_embedded_doc;
+        self.heredoc_ctx = state.heredoc_ctx;
+        self.stack = state.stack;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.in_embedded_doc || self.heredoc_ctx.is_in_heredoc() || self.is_in_string_scope()
     }
 }
 

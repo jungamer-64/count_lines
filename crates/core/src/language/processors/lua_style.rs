@@ -110,6 +110,41 @@ fn find_lua_block_end(s: &str, level: usize) -> Option<usize> {
     None
 }
 
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `LuaProcessor`.
+#[derive(Debug, Clone, Default)]
+pub struct LuaState {
+    /// Whether currently inside a block comment.
+    pub in_block_comment: bool,
+    /// Level of block comment (number of = signs).
+    pub block_level: usize,
+}
+
+impl StatefulProcessor for LuaProcessor {
+    type State = LuaState;
+
+    fn get_state(&self) -> Self::State {
+        LuaState {
+            in_block_comment: self.in_block_comment,
+            block_level: self.block_level,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.in_block_comment = state.in_block_comment;
+        self.block_level = state.block_level;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -47,7 +47,7 @@ use super::super::processor_trait::LineProcessor;
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum JsScope {
+pub enum JsScope {
     Interpolation, // ${ ... }
     BlockComment,  // /* ... */
     String(u8),    // " ' `
@@ -232,6 +232,46 @@ impl JavaScriptProcessor {
         self.stack.clear();
         self.last_token_is_value = false;
         self.line_count = 0;
+    }
+}
+
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `JavaScriptProcessor`.
+#[derive(Debug, Clone, Default)]
+pub struct JavaScriptState {
+    /// Current scope stack (strings, comments, interpolations, regex).
+    pub stack: Vec<JsScope>,
+    /// Whether the last token was value-like (for regex heuristics).
+    pub last_token_is_value: bool,
+    /// Number of lines processed (for shebang detection).
+    pub line_count: usize,
+}
+
+impl StatefulProcessor for JavaScriptProcessor {
+    type State = JavaScriptState;
+
+    fn get_state(&self) -> Self::State {
+        JavaScriptState {
+            stack: self.stack.clone(),
+            last_token_is_value: self.last_token_is_value,
+            line_count: self.line_count,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.stack = state.stack;
+        self.last_token_is_value = state.last_token_is_value;
+        self.line_count = state.line_count;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        // In a block comment, template literal, or other multi-line construct
+        !self.stack.is_empty()
     }
 }
 

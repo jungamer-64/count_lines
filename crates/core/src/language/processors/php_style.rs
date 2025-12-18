@@ -189,6 +189,43 @@ fn is_inside_string(line: &str, target_pos: usize) -> bool {
     in_single || in_double
 }
 
+// ============================================================================
+// StatefulProcessor implementation
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `PhpProcessor`.
+///
+/// Note: Does not include `heredoc_re` (compiled regex).
+#[derive(Debug, Clone, Default)]
+pub struct PhpState {
+    /// Whether currently inside a `/* */` block comment.
+    pub in_block_comment: bool,
+    /// Heredoc context (identifiers and `allow_indent` flags).
+    pub heredoc_ctx: HeredocContext,
+}
+
+impl StatefulProcessor for PhpProcessor {
+    type State = PhpState;
+
+    fn get_state(&self) -> Self::State {
+        PhpState {
+            in_block_comment: self.in_block_comment,
+            heredoc_ctx: self.heredoc_ctx.clone(),
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.in_block_comment = state.in_block_comment;
+        self.heredoc_ctx = state.heredoc_ctx;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.in_block_comment || self.heredoc_ctx.is_in_heredoc()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
