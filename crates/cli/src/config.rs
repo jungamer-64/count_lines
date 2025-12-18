@@ -3,6 +3,57 @@ use crate::options::{ByMode, OutputFormat, OutputMode, SortKey, WatchOutput};
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// Resource limits for file processing.
+///
+/// Provides protection against denial-of-service attacks and handles
+/// edge cases with extremely large files or deeply nested structures.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use count_lines_cli::config::ResourceLimits;
+///
+/// let limits = ResourceLimits::default();
+/// assert_eq!(limits.max_file_size, 100 * 1024 * 1024); // 100MB
+/// ```
+#[derive(Debug, Clone)]
+pub struct ResourceLimits {
+    /// Maximum file size in bytes.
+    ///
+    /// Files larger than this will be skipped with a warning.
+    /// Default: 100MB (104,857,600 bytes)
+    pub max_file_size: u64,
+
+    /// Maximum line length in characters.
+    ///
+    /// Lines longer than this may be truncated or cause the file to be skipped.
+    /// Default: 1,000,000 characters
+    pub max_line_length: usize,
+
+    /// Maximum nesting depth for block comments.
+    ///
+    /// Prevents stack overflow from deeply nested comment structures.
+    /// Default: 1,000 levels
+    pub max_nested_depth: usize,
+
+    /// Timeout for processing a single file.
+    ///
+    /// Files taking longer than this will be aborted.
+    /// Default: 30 seconds
+    pub timeout: Duration,
+}
+
+impl Default for ResourceLimits {
+    fn default() -> Self {
+        Self {
+            max_file_size: 100 * 1024 * 1024, // 100MB
+            max_line_length: 1_000_000,       // 1M characters
+            max_nested_depth: 1000,           // 1000 levels
+            timeout: Duration::from_secs(30), // 30 seconds
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct WalkOptions {

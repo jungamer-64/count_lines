@@ -1,6 +1,47 @@
 // src/language/processors/javascript_style.rs
-//! JavaScript/TypeScript Processor
-//! Handles //, /* */, "...", '...', `...` (template literal with ${}), /.../ (regex)
+//! # JavaScript/TypeScript Processor
+//!
+//! SLOC counter processor for JavaScript, TypeScript, and related languages.
+//!
+//! ## Supported Syntax
+//!
+//! - **Line comments**: `//`
+//! - **Block comments**: `/* */`
+//! - **String literals**: `"..."`, `'...'`, `` `...` ``
+//! - **Template literals**: `` `${...}` `` with interpolation
+//! - **Regex literals**: `/pattern/flags`
+//! - **Shebang**: `#!/usr/bin/env node` (first line only)
+//!
+//! ## Limitations
+//!
+//! - Nested comment-like syntax within regex patterns is not detected
+//! - JSX/TSX special syntax (`<Component />`) is not fully supported
+//! - Automatic semicolon insertion (ASI) edge cases may affect accuracy
+//!
+//! ## Performance Characteristics
+//!
+//! - **Time complexity**: O(n) where n = line length
+//! - **Space complexity**: O(d) where d = maximum nesting depth
+//! - **Thread safety**: No (has internal mutable state)
+//!
+//! ## Usage Example
+//!
+//! ```rust
+//! use count_lines_core::language::processors::JavaScriptProcessor;
+//! use count_lines_core::language::processor_trait::LineProcessor;
+//!
+//! let mut proc = JavaScriptProcessor::new();
+//!
+//! // Code line
+//! assert_eq!(proc.process_line("let x = 1;"), 1);
+//!
+//! // Comment line
+//! assert_eq!(proc.process_line("// this is a comment"), 0);
+//!
+//! // Regex literal (not a comment)
+//! proc.reset();
+//! assert_eq!(proc.process_line("const re = /pattern/;"), 1);
+//! ```
 
 use super::super::processor_trait::LineProcessor;
 use alloc::vec::Vec;

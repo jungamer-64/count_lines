@@ -126,3 +126,146 @@ pub fn parse_key_val(s: &str) -> Result<(String, String), String> {
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .ok_or_else(|| format!("Expected key=val: {s}"))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_size_arg_basic() {
+        let size: SizeArg = "1024".parse().unwrap();
+        assert_eq!(size.0, 1024);
+    }
+
+    #[test]
+    fn test_size_arg_with_suffix() {
+        let size: SizeArg = "1K".parse().unwrap();
+        assert_eq!(size.0, 1024);
+
+        let size: SizeArg = "2M".parse().unwrap();
+        assert_eq!(size.0, 2 * 1024 * 1024);
+
+        let size: SizeArg = "1G".parse().unwrap();
+        assert_eq!(size.0, 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_size_arg_case_insensitive() {
+        let size1: SizeArg = "1k".parse().unwrap();
+        let size2: SizeArg = "1K".parse().unwrap();
+        let size3: SizeArg = "1KB".parse().unwrap();
+        let size4: SizeArg = "1KiB".parse().unwrap();
+        assert_eq!(size1.0, size2.0);
+        assert_eq!(size1.0, size3.0);
+        assert_eq!(size1.0, size4.0);
+    }
+
+    #[test]
+    fn test_parse_key_val() {
+        let (k, v) = parse_key_val("foo=bar").unwrap();
+        assert_eq!(k, "foo");
+        assert_eq!(v, "bar");
+    }
+
+    #[test]
+    fn test_parse_key_val_error() {
+        assert!(parse_key_val("no_equals").is_err());
+    }
+}
+
+#[cfg(test)]
+mod property_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    proptest! {
+        /// Test that plain numeric values parse correctly without suffix
+        #[test]
+        fn test_size_arg_no_suffix(n in 0u64..1_000_000_000) {
+            let formatted = format!("{n}");
+            let parsed: SizeArg = formatted.parse().unwrap();
+            prop_assert_eq!(parsed.0, n);
+        }
+
+        /// Test that K suffix correctly multiplies by 1024
+        #[test]
+        fn test_size_arg_k_suffix(n in 0u64..1_000_000) {
+            let formatted = format!("{n}K");
+            let parsed: SizeArg = formatted.parse().unwrap();
+            prop_assert_eq!(parsed.0, n * 1024);
+        }
+
+        /// Test that M suffix correctly multiplies by 1024^2
+        #[test]
+        fn test_size_arg_m_suffix(n in 0u64..1_000) {
+            let formatted = format!("{n}M");
+            let parsed: SizeArg = formatted.parse().unwrap();
+            prop_assert_eq!(parsed.0, n * 1024 * 1024);
+        }
+
+        /// Test that underscores are correctly ignored
+        #[test]
+        fn test_size_arg_underscores(n in 1000u64..1_000_000) {
+            // Format with underscores as thousand separators
+            let with_underscores = format!("{}", n)
+                .chars()
+                .rev()
+                .enumerate()
+                .flat_map(|(i, c)| {
+                    if i > 0 && i % 3 == 0 {
+                        vec!['_', c]
+                    } else {
+                        vec![c]
+                    }
+                })
+                .collect::<String>()
+                .chars()
+                .rev()
+                .collect::<String>();
+
+            let parsed: SizeArg = with_underscores.parse().unwrap();
+            prop_assert_eq!(parsed.0, n);
+        }
+
+        /// Test positive usize parsing
+        #[test]
+        fn test_positive_usize(n in 1usize..1_000_000) {
+            let formatted = format!("{n}");
+            let parsed = parse_positive_usize(&formatted).unwrap();
+            prop_assert_eq!(parsed, n);
+        }
+
+        /// Test that zero is rejected for positive usize
+        #[test]
+        fn test_positive_usize_rejects_zero(_dummy in 0..1) {
+            prop_assert!(parse_positive_usize("0").is_err());
+        }
+
+        /// Test bounded usize [1, 512]
+        #[test]
+        fn test_bounded_usize_valid(n in 1usize..=512) {
+            let formatted = format!("{n}");
+            let parsed = parse_usize_1_to_512(&formatted).unwrap();
+            prop_assert_eq!(parsed, n);
+        }
+
+        /// Test bounded usize rejects values above max
+        #[test]
+        fn test_bounded_usize_rejects_large(n in 513usize..10_000) {
+            let formatted = format!("{n}");
+            prop_assert!(parse_usize_1_to_512(&formatted).is_err());
+        }
+
+        /// Test key=val parsing with arbitrary keys and values
+        #[test]
+        fn test_key_val_roundtrip(
+            key in "[a-zA-Z][a-zA-Z0-9_]{0,20}",
+            val in "[a-zA-Z0-9_]{0,50}"
+        ) {
+            let input = format!("{key}={val}");
+            let (k, v) = parse_key_val(&input).unwrap();
+            prop_assert_eq!(k, key);
+            prop_assert_eq!(v, val);
+        }
+    }
+}

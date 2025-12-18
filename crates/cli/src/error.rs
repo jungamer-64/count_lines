@@ -35,9 +35,11 @@ pub enum AppError {
     #[error("Invalid configuration: {0}")]
     Config(String),
 
-    // Kept for generic analysis errors if needed, but intended to be phased out
-    #[error("Analysis failed: {0}")]
-    Analysis(String),
+    #[error("Text processing failed: {0}")]
+    TextProcessing(String),
+
+    #[error("Cache operation failed: {0}")]
+    Cache(String),
 
     #[error("Unknown extension: {0}")]
     UnknownExtension(String),
