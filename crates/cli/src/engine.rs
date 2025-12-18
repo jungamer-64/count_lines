@@ -69,12 +69,18 @@ fn process_file((path, meta): (PathBuf, std::fs::Metadata), config: &Config) -> 
     stats.size = size;
     stats.mtime = mtime;
 
-    let file = File::open(&path).map_err(AppError::Io)?;
+    let file = File::open(&path).map_err(|e| AppError::FileRead {
+        path: path.clone(),
+        source: e,
+    })?;
     let mut reader = BufReader::new(file);
 
     // Binary check (Initial buffer check)
     {
-        let buffer = reader.fill_buf().map_err(AppError::Io)?;
+        let buffer = reader.fill_buf().map_err(|e| AppError::FileRead {
+            path: path.clone(),
+            source: e,
+        })?;
         if buffer.is_empty() {
             return Ok(stats);
         }
@@ -153,7 +159,12 @@ fn process_content_sloc<R: BufRead>(
                     }
                 }
             }
-            Err(e) => return Err(AppError::Io(e)),
+            Err(e) => {
+                return Err(AppError::FileRead {
+                    path: path.to_path_buf(),
+                    source: e,
+                });
+            }
         }
     }
 
@@ -194,7 +205,10 @@ fn process_content_streaming<R: BufRead>(
     let mut last_byte: Option<u8> = None;
 
     loop {
-        let buf = reader.fill_buf().map_err(AppError::Io)?;
+        let buf = reader.fill_buf().map_err(|e| AppError::FileRead {
+            path: path.to_path_buf(),
+            source: e,
+        })?;
         if buf.is_empty() {
             break;
         }

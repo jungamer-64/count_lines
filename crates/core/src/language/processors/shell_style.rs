@@ -7,8 +7,21 @@
 //!
 //! ヒアドキュメント内の `#` はコメントとして扱われません。
 
+use alloc::boxed::Box;
 use alloc::string::{String, ToString};
+use once_cell::race::OnceBox;
 use regex::Regex;
+
+static HEREDOC_RE: OnceBox<Regex> = OnceBox::new();
+
+fn get_heredoc_re() -> &'static Regex {
+    HEREDOC_RE.get_or_init(|| {
+        Box::new(
+            Regex::new(r"<<(-?)[ \t]*(?:([^ \t\x22'>|&;]+)|'([^']+)'|\x22([^\x22]+)\x22)")
+                .expect("Heredoc regex compilation failed"),
+        )
+    })
+}
 
 use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
@@ -19,7 +32,6 @@ use super::simple_hash_style::find_hash_outside_simple_string;
 pub struct ShellProcessor {
     heredoc_ctx: HeredocContext,
     line_count: usize,
-    heredoc_re: Regex,
 }
 
 impl Default for ShellProcessor {
@@ -39,8 +51,6 @@ impl ShellProcessor {
         Self {
             heredoc_ctx: HeredocContext::default(),
             line_count: 0,
-            heredoc_re: Regex::new(r"<<(-?)\s*(?:([^\s\x22'>|&;]+)|'([^']+)'|\x22([^\x22]+)\x22)")
-                .unwrap(),
         }
     }
 
@@ -88,7 +98,7 @@ impl ShellProcessor {
 
         // ヒアドキュメント検出 (<<[-] ["']?WORD["']?)
 
-        if let Some(captures) = self.find_heredoc_start(effective_line) {
+        if let Some(captures) = Self::find_heredoc_start(effective_line) {
             let allow_indent = captures.allow_indent;
             let ident = captures.ident;
             self.heredoc_ctx.push(ident, allow_indent);
@@ -111,12 +121,12 @@ impl ShellProcessor {
 
         1
     }
-    fn find_heredoc_start(&self, line: &str) -> Option<HeredocStart> {
+    fn find_heredoc_start(line: &str) -> Option<HeredocStart> {
         // Regex pattern using alternation to avoid backreferences:
         // <<(-?)\s*(?:([^\s"'>|&;]+)|'([^']+)'|"([^"]+)")
 
         // 見つかった位置が文字列内かチェック
-        for caps in self.heredoc_re.captures_iter(line) {
+        for caps in get_heredoc_re().captures_iter(line) {
             if let Some(matches) = caps.get(0) {
                 let start = matches.start();
                 if !is_inside_string(line, start) {

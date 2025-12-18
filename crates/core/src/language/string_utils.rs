@@ -300,7 +300,12 @@ pub const fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-fn try_skip_prefixed_string(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+#[must_use]
+pub fn try_skip_prefixed_string(
+    line: &[u8],
+    i: usize,
+    options: StringSkipOptions,
+) -> Option<usize> {
     let bytes = &line[i..];
 
     if options.csharp_verbatim() && bytes.len() >= 2 && bytes[0] == b'@' && bytes[1] == b'"' {
@@ -322,7 +327,8 @@ fn try_skip_prefixed_string(line: &[u8], i: usize, options: StringSkipOptions) -
     None
 }
 
-fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+#[must_use]
+pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
     let bytes = &line[i..];
     let b = bytes[0];
 
@@ -387,7 +393,8 @@ fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions) -> 
     None
 }
 
-fn try_skip_regex(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+#[must_use]
+pub fn try_skip_regex(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
     if options.regex_literal() && line[i] == b'/' {
         let is_line_comment = i + 1 < line.len() && line[i + 1] == b'/';
         let is_block_comment = i + 1 < line.len() && line[i + 1] == b'*';

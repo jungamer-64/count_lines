@@ -11,11 +11,19 @@ categories = ["no-std", "parsing", "development-tools"]
 
 [dependencies]
 # no_std dependencies
-regex = { version = "1", default-features = false, features = ["perf"] }
+regex = { version = "1", default-features = false, features = [
+    "perf",
+    "unicode-perl",
+] }
 # "regex" 1.9+ with `default-features = false` uses `alloc` but should not use `std`.
 
 
 hashbrown = { workspace = true }
 serde = { workspace = true, features = ["derive", "alloc"] }
+once_cell = { version = "1.19", default-features = false, features = [
+    "race",
+    "alloc",
+] }
 
 [dev-dependencies]
+proptest = "1.9.0"

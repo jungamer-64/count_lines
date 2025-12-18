@@ -2,8 +2,12 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AppError {
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    #[error("Failed to read file '{path}': {source}")]
+    FileRead {
+        path: std::path::PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
     #[error("Walk error: {0}")]
     Walk(#[from] ignore::Error),
@@ -35,6 +39,9 @@ pub enum AppError {
     #[error("Invalid configuration: {0}")]
     Config(String),
 
+    #[error("Invalid extension mapping: {0}")]
+    InvalidExtMapping(String),
+
     #[error("Text processing failed: {0}")]
     TextProcessing(String),
 
@@ -43,6 +50,9 @@ pub enum AppError {
 
     #[error("Unknown extension: {0}")]
     UnknownExtension(String),
+
+    #[error("IO error: {0}")]
+    Io(std::io::Error),
 }
 
 pub type Result<T> = std::result::Result<T, AppError>;

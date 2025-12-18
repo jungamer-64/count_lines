@@ -34,7 +34,7 @@ pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> An
     let mut words = 0;
     let mut sloc = 0;
 
-    for line in text.lines() {
+    for line in text.split_inclusive('\n') {
         lines += 1;
 
         let l_stats =

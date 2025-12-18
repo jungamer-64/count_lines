@@ -52,7 +52,8 @@
 
 use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::{
-    PatternMatch, StringSkipOptions, find_any_outside_string, find_outside_string_with_options,
+    PatternMatch, StringSkipOptions, find_any_outside_string, try_skip_prefixed_string,
+    try_skip_quoted_string, try_skip_regex,
 };
 
 /// C系言語プロセッサ (//, /* */) - ネスト非対応
@@ -86,64 +87,59 @@ impl CStyleProcessor {
     }
 
     pub fn process(&mut self, line: &str) -> usize {
-        if line.trim().is_empty() {
-            return 0;
-        }
+        let bytes = line.as_bytes();
+        let mut i = 0;
+        let mut has_code = false;
 
-        if self.in_block_comment {
-            if let Some(pos) = line.find("*/") {
-                self.in_block_comment = false;
-                let rest = &line[pos + 2..];
-                if !rest.trim().is_empty() && !rest.trim().starts_with("//") {
-                    return 1;
+        while i < bytes.len() {
+            if self.in_block_comment {
+                if i + 1 < bytes.len() && bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                    self.in_block_comment = false;
+                    i += 2;
+                } else {
+                    i += 1;
                 }
+                continue;
             }
-            return 0;
-        }
 
-        // Single scan for both // and /* patterns
-        const COMMENT_PATTERNS: &[&str] = &["//", "/*"];
-        if let Some(PatternMatch {
-            position,
-            pattern_index,
-        }) = find_any_outside_string(line, COMMENT_PATTERNS, self.options)
-        {
-            match pattern_index {
-                0 => {
-                    // Line comment "//"
-                    let before = &line[..position];
-                    if before.trim().is_empty() {
-                        return 0;
-                    }
-                    return 1;
-                }
-                1 => {
-                    // Block comment "/*"
-                    let before = &line[..position];
-                    let has_code_before = !before.trim().is_empty();
+            // Check for string literals to skip (strings count as code)
+            if let Some(skip) = try_skip_prefixed_string(bytes, i, self.options) {
+                has_code = true;
+                i += skip;
+                continue;
+            }
+            if let Some(skip) = try_skip_quoted_string(bytes, i, self.options) {
+                has_code = true;
+                i += skip;
+                continue;
+            }
+            if let Some(skip) = try_skip_regex(bytes, i, self.options) {
+                has_code = true;
+                i += skip;
+                continue;
+            }
 
-                    if let Some(block_end) = line[position + 2..].find("*/") {
-                        let after = &line[position + 2 + block_end + 2..];
-                        let has_code_after = !after.trim().is_empty()
-                            && find_outside_string_with_options(after, "//", self.options)
-                                .is_none_or(|p| p > 0);
-                        if has_code_before || has_code_after {
-                            return 1;
-                        }
-                        return 0;
-                    }
-
+            // Check for comments
+            if i + 1 < bytes.len() && bytes[i] == b'/' {
+                if bytes[i + 1] == b'/' {
+                    // Line comment: the rest of the line is ignored
+                    break;
+                } else if bytes[i + 1] == b'*' {
+                    // Block comment open
                     self.in_block_comment = true;
-                    if has_code_before {
-                        return 1;
-                    }
-                    return 0;
+                    i += 2;
+                    continue;
                 }
-                _ => {}
             }
+
+            // Normal code character
+            if !bytes[i].is_ascii_whitespace() {
+                has_code = true;
+            }
+            i += 1;
         }
 
-        1
+        usize::from(has_code)
     }
 }
 
@@ -191,13 +187,13 @@ impl NestingCStyleProcessor {
     }
 
     fn process_internal(&mut self, line: &str, count: &mut usize) {
+        const COMMENT_PATTERNS: &[&str] = &["//", "/*"];
         if self.block_comment_depth > 0 {
             self.process_nesting_block_line(line, count);
             return;
         }
 
         // Single scan for both // and /* patterns
-        const COMMENT_PATTERNS: &[&str] = &["//", "/*"];
         if let Some(PatternMatch {
             position,
             pattern_index,
@@ -488,11 +484,8 @@ mod tests {
     fn test_consecutive_block_comments() {
         let mut p = CStyleProcessor::new(StringSkipOptions::default());
         // Two block comments adjacent
-        // Current impl only handles one block on the same line after finding first "/*"
-        // After "/* first */", rest is "/* second */"
-        // has_code_after checks if "/* second */" is not empty and doesn't have // at start
-        // The impl doesn't recurse to handle the second block, so it sees "/* second */" as code
-        assert_eq!(p.process("/* first *//* second */"), 1);
+        // Current impl handles sequential block comments correctly
+        assert_eq!(p.process("/* first *//* second */"), 0);
         assert!(!p.is_in_block_comment());
         // With code in between
         assert_eq!(p.process("/* a */ x /* b */"), 1);
