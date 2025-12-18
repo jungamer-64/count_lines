@@ -133,6 +133,80 @@ pub trait LineProcessor: Send {
     }
 }
 
+/// Stateful processor trait for processors with persistent state across lines.
+///
+/// This trait extends `LineProcessor` to provide standardized state management
+/// for processors that track multi-line constructs (block comments, heredocs, etc.).
+///
+/// # Benefits
+///
+/// - **State Inspection**: Get current state for debugging/testing
+/// - **State Restoration**: Checkpoint and restore state for testing
+/// - **Context Detection**: Check if in a multi-line context
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use count_lines_core::language::processor_trait::{LineProcessor, StatefulProcessor};
+///
+/// impl StatefulProcessor for MyProcessor {
+///     type State = MyProcessorState;
+///
+///     fn get_state(&self) -> Self::State {
+///         MyProcessorState { in_comment: self.in_comment }
+///     }
+///
+///     fn set_state(&mut self, state: Self::State) {
+///         self.in_comment = state.in_comment;
+///     }
+///
+///     fn is_in_multiline_context(&self) -> bool {
+///         self.in_comment
+///     }
+/// }
+/// ```
+pub trait StatefulProcessor: LineProcessor {
+    /// The state type for this processor.
+    ///
+    /// Must be `Default` (for initialization), `Clone` (for checkpointing),
+    /// and `Send` (for thread safety).
+    type State: Default + Clone + Send;
+
+    /// Get the current state of the processor.
+    ///
+    /// Used for debugging, testing, or checkpointing.
+    fn get_state(&self) -> Self::State;
+
+    /// Set the state of the processor.
+    ///
+    /// Used for restoring from a checkpoint or testing specific states.
+    fn set_state(&mut self, state: Self::State);
+
+    /// Check if currently in a multi-line context that spans lines.
+    ///
+    /// Returns `true` if the processor is in the middle of processing
+    /// a multi-line construct (e.g., block comment, heredoc, multi-line string).
+    ///
+    /// Default implementation returns `false`.
+    fn is_in_multiline_context(&self) -> bool {
+        false
+    }
+
+    /// Create a checkpoint of the current state.
+    ///
+    /// Default implementation uses `get_state()`.
+    fn checkpoint(&self) -> Self::State {
+        self.get_state()
+    }
+
+    /// Restore state from a checkpoint.
+    ///
+    /// Default implementation uses `set_state()`.
+    fn restore(&mut self, checkpoint: Self::State) {
+        self.set_state(checkpoint);
+    }
+}
+
 impl LineProcessor for Box<dyn LineProcessor> {
     fn process_line(&mut self, line: &str) -> usize {
         (**self).process_line(line)

@@ -51,7 +51,9 @@
 //! ```
 
 use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::{StringSkipOptions, find_outside_string_with_options};
+use super::super::string_utils::{
+    PatternMatch, StringSkipOptions, find_any_outside_string, find_outside_string_with_options,
+};
 
 /// C系言語プロセッサ (//, /* */) - ネスト非対応
 #[derive(Default)]
@@ -99,34 +101,46 @@ impl CStyleProcessor {
             return 0;
         }
 
-        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", self.options) {
-            let before = &line[..line_comment_pos];
-            if before.trim().is_empty() {
-                return 0;
-            }
-            return 1;
-        }
-
-        if let Some(block_start) = find_outside_string_with_options(line, "/*", self.options) {
-            let before = &line[..block_start];
-            let has_code_before = !before.trim().is_empty();
-
-            if let Some(block_end) = line[block_start + 2..].find("*/") {
-                let after = &line[block_start + 2 + block_end + 2..];
-                let has_code_after = !after.trim().is_empty()
-                    && find_outside_string_with_options(after, "//", self.options)
-                        .is_none_or(|p| p > 0);
-                if has_code_before || has_code_after {
+        // Single scan for both // and /* patterns
+        const COMMENT_PATTERNS: &[&str] = &["//", "/*"];
+        if let Some(PatternMatch {
+            position,
+            pattern_index,
+        }) = find_any_outside_string(line, COMMENT_PATTERNS, self.options)
+        {
+            match pattern_index {
+                0 => {
+                    // Line comment "//"
+                    let before = &line[..position];
+                    if before.trim().is_empty() {
+                        return 0;
+                    }
                     return 1;
                 }
-                return 0;
-            }
+                1 => {
+                    // Block comment "/*"
+                    let before = &line[..position];
+                    let has_code_before = !before.trim().is_empty();
 
-            self.in_block_comment = true;
-            if has_code_before {
-                return 1;
+                    if let Some(block_end) = line[position + 2..].find("*/") {
+                        let after = &line[position + 2 + block_end + 2..];
+                        let has_code_after = !after.trim().is_empty()
+                            && find_outside_string_with_options(after, "//", self.options)
+                                .is_none_or(|p| p > 0);
+                        if has_code_before || has_code_after {
+                            return 1;
+                        }
+                        return 0;
+                    }
+
+                    self.in_block_comment = true;
+                    if has_code_before {
+                        return 1;
+                    }
+                    return 0;
+                }
+                _ => {}
             }
-            return 0;
         }
 
         1
@@ -182,25 +196,37 @@ impl NestingCStyleProcessor {
             return;
         }
 
-        if let Some(line_comment_pos) = find_outside_string_with_options(line, "//", self.options) {
-            let before = &line[..line_comment_pos];
-            if before.trim().is_empty() {
-                return;
+        // Single scan for both // and /* patterns
+        const COMMENT_PATTERNS: &[&str] = &["//", "/*"];
+        if let Some(PatternMatch {
+            position,
+            pattern_index,
+        }) = find_any_outside_string(line, COMMENT_PATTERNS, self.options)
+        {
+            match pattern_index {
+                0 => {
+                    // Line comment "//"
+                    let before = &line[..position];
+                    if before.trim().is_empty() {
+                        return;
+                    }
+                    *count += 1;
+                    return;
+                }
+                1 => {
+                    // Block comment "/*"
+                    let before = &line[..position];
+                    let has_code_before = !before.trim().is_empty();
+                    self.block_comment_depth = 1;
+                    let rest = &line[position + 2..];
+                    self.process_nesting_block_line(rest, count);
+                    if has_code_before {
+                        *count += 1;
+                    }
+                    return;
+                }
+                _ => {}
             }
-            *count += 1;
-            return;
-        }
-
-        if let Some(block_start) = find_outside_string_with_options(line, "/*", self.options) {
-            let before = &line[..block_start];
-            let has_code_before = !before.trim().is_empty();
-            self.block_comment_depth = 1;
-            let rest = &line[block_start + 2..];
-            self.process_nesting_block_line(rest, count);
-            if has_code_before {
-                *count += 1;
-            }
-            return;
         }
 
         *count += 1;
@@ -233,6 +259,66 @@ impl NestingCStyleProcessor {
             i += 1;
         }
         self.in_block_comment = self.block_comment_depth > 0;
+    }
+}
+
+// ============================================================================
+// StatefulProcessor implementations
+// ============================================================================
+
+use super::super::processor_trait::StatefulProcessor;
+
+/// State for `CStyleProcessor`.
+#[derive(Debug, Clone, Default)]
+pub struct CStyleState {
+    /// Whether currently inside a block comment.
+    pub in_block_comment: bool,
+}
+
+impl StatefulProcessor for CStyleProcessor {
+    type State = CStyleState;
+
+    fn get_state(&self) -> Self::State {
+        CStyleState {
+            in_block_comment: self.in_block_comment,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.in_block_comment = state.in_block_comment;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.in_block_comment
+    }
+}
+
+/// State for `NestingCStyleProcessor`.
+#[derive(Debug, Clone, Default)]
+pub struct NestingCStyleState {
+    /// Whether currently inside a block comment.
+    pub in_block_comment: bool,
+    /// Current nesting depth of block comments.
+    pub block_comment_depth: usize,
+}
+
+impl StatefulProcessor for NestingCStyleProcessor {
+    type State = NestingCStyleState;
+
+    fn get_state(&self) -> Self::State {
+        NestingCStyleState {
+            in_block_comment: self.in_block_comment,
+            block_comment_depth: self.block_comment_depth,
+        }
+    }
+
+    fn set_state(&mut self, state: Self::State) {
+        self.in_block_comment = state.in_block_comment;
+        self.block_comment_depth = state.block_comment_depth;
+    }
+
+    fn is_in_multiline_context(&self) -> bool {
+        self.in_block_comment || self.block_comment_depth > 0
     }
 }
 
@@ -635,5 +721,68 @@ mod tests {
         // Multiple blocks with code between
         p = CStyleProcessor::new(StringSkipOptions::default());
         assert_eq!(p.process("/* a */ x /* b */"), 1);
+    }
+
+    // =========================================================================
+    // StatefulProcessor tests
+    // =========================================================================
+
+    #[test]
+    fn test_c_style_stateful_checkpoint_restore() {
+        let mut p = CStyleProcessor::new(StringSkipOptions::default());
+
+        // Start a block comment
+        assert_eq!(p.process("/* start"), 0);
+        assert!(p.is_in_multiline_context());
+
+        // Checkpoint the state
+        let checkpoint = p.checkpoint();
+
+        // Continue processing
+        assert_eq!(p.process("middle"), 0);
+        assert_eq!(p.process("*/"), 0);
+        assert!(!p.is_in_multiline_context());
+
+        // Restore to checkpoint
+        p.restore(checkpoint);
+        assert!(p.is_in_multiline_context());
+    }
+
+    #[test]
+    fn test_nesting_c_style_stateful_checkpoint_restore() {
+        let mut p = NestingCStyleProcessor::new(StringSkipOptions::default());
+
+        // Start nested block comments
+        assert_eq!(p.process("/* outer /* inner */"), 0);
+        assert!(p.is_in_multiline_context());
+
+        // Checkpoint
+        let checkpoint = p.checkpoint();
+        assert_eq!(checkpoint.block_comment_depth, 1);
+
+        // Close the outer comment
+        assert_eq!(p.process("*/"), 0);
+        assert!(!p.is_in_multiline_context());
+
+        // Restore
+        p.restore(checkpoint);
+        assert!(p.is_in_multiline_context());
+        assert_eq!(p.get_state().block_comment_depth, 1);
+    }
+
+    #[test]
+    fn test_state_get_set() {
+        let mut p = CStyleProcessor::new(StringSkipOptions::default());
+
+        // Initially not in comment
+        let state = p.get_state();
+        assert!(!state.in_block_comment);
+
+        // Set state manually
+        p.set_state(CStyleState {
+            in_block_comment: true,
+        });
+        assert!(p.is_in_multiline_context());
+        assert!(p.is_in_block_comment());
     }
 }

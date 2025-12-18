@@ -5,7 +5,7 @@ pub mod processors;
 pub mod string_utils;
 
 use comment_style::CommentStyle;
-pub use processor_trait::{LineProcessor, LineStats};
+pub use processor_trait::{LineProcessor, LineStats, StatefulProcessor};
 #[allow(clippy::wildcard_imports)]
 use processors::*;
 use string_utils::StringSkipOptions;

@@ -11,6 +11,7 @@ pub mod error;
 pub mod filesystem;
 pub mod options;
 pub mod parsers;
+pub mod path_security;
 pub mod presentation;
 pub mod stats;
 pub mod watch;

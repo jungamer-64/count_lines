@@ -28,7 +28,7 @@ pub mod vhdl_style;
 pub mod visual_basic_style;
 
 pub use assembly_style::GasAssemblyProcessor;
-pub use c_style::{CStyleProcessor, NestingCStyleProcessor};
+pub use c_style::{CStyleProcessor, CStyleState, NestingCStyleProcessor, NestingCStyleState};
 pub use dlang_style::DLangProcessor;
 pub use fortran_processor::FortranProcessor;
 pub use haskell_style::HaskellProcessor;

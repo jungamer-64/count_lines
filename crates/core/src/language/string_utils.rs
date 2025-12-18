@@ -457,6 +457,99 @@ pub fn find_outside_string_with_options(
     None
 }
 
+/// Result of multi-pattern search.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PatternMatch {
+    /// The position where the pattern was found.
+    pub position: usize,
+    /// Index of the matched pattern in the input array.
+    pub pattern_index: usize,
+}
+
+/// Find the first occurrence of any pattern outside string literals.
+///
+/// Returns `None` if no pattern is found.
+/// If multiple patterns could match at the same position, returns the one
+/// with the smallest index (first in the array).
+///
+/// # Performance
+///
+/// - Time: O(n × p) where n = line length, p = number of patterns
+/// - Space: O(1)
+///
+/// This is more efficient than calling `find_outside_string_with_options` multiple times
+/// because it scans the line only once.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use count_lines_core::language::string_utils::{find_any_outside_string, StringSkipOptions};
+///
+/// let line = "int x = 1; // comment";
+/// let patterns = ["//", "/*"];
+/// if let Some(m) = find_any_outside_string(line, &patterns, StringSkipOptions::default()) {
+///     match m.pattern_index {
+///         0 => println!("Line comment at {}", m.position),
+///         1 => println!("Block comment at {}", m.position),
+///         _ => {}
+///     }
+/// }
+/// ```
+#[must_use]
+pub fn find_any_outside_string(
+    line: &str,
+    patterns: &[&str],
+    options: StringSkipOptions,
+) -> Option<PatternMatch> {
+    let line_bytes = line.as_bytes();
+
+    if patterns.is_empty() || line_bytes.is_empty() {
+        return None;
+    }
+
+    // Pre-convert patterns to bytes for efficiency
+    let pattern_bytes: alloc::vec::Vec<&[u8]> = patterns.iter().map(|p| p.as_bytes()).collect();
+
+    // Find minimum pattern length for early termination
+    let min_pattern_len = pattern_bytes.iter().map(|p| p.len()).min().unwrap_or(0);
+    if min_pattern_len == 0 || line_bytes.len() < min_pattern_len {
+        return None;
+    }
+
+    let mut i = 0;
+    while i <= line_bytes.len() - min_pattern_len {
+        // Skip string literals
+        if let Some(skip) = try_skip_prefixed_string(line_bytes, i, options) {
+            i += skip;
+            continue;
+        }
+        if let Some(skip) = try_skip_quoted_string(line_bytes, i, options) {
+            i += skip;
+            continue;
+        }
+        if let Some(skip) = try_skip_regex(line_bytes, i, options) {
+            i += skip;
+            continue;
+        }
+
+        // Check all patterns at current position
+        for (pattern_index, pattern) in pattern_bytes.iter().enumerate() {
+            if i + pattern.len() <= line_bytes.len()
+                && &line_bytes[i..i + pattern.len()] == *pattern
+            {
+                return Some(PatternMatch {
+                    position: i,
+                    pattern_index,
+                });
+            }
+        }
+
+        i += 1;
+    }
+
+    None
+}
+
 /// Rust raw文字列リテラルをスキップする
 ///
 /// `r"..."`, `r#"..."#`, `r##"..."##` などの形式を処理
@@ -1460,6 +1553,138 @@ mod tests {
             let result =
                 find_outside_string_with_options("var s = `pattern: /abc/`;", "//", options);
             assert_eq!(result, None);
+        }
+    }
+
+    // =========================================================================
+    // find_any_outside_string (multi-pattern search) tests
+    // =========================================================================
+
+    mod find_any_outside_string_tests {
+        use super::*;
+
+        #[test]
+        fn test_find_first_pattern() {
+            let options = StringSkipOptions::default();
+            let patterns = ["//", "/*"];
+            let result = find_any_outside_string("int x = 1; // comment", &patterns, options);
+            assert_eq!(
+                result,
+                Some(PatternMatch {
+                    position: 11,
+                    pattern_index: 0
+                })
+            );
+        }
+
+        #[test]
+        fn test_find_block_comment_first() {
+            let options = StringSkipOptions::default();
+            let patterns = ["//", "/*"];
+            let result = find_any_outside_string("int x = 1; /* block */", &patterns, options);
+            assert_eq!(
+                result,
+                Some(PatternMatch {
+                    position: 11,
+                    pattern_index: 1
+                })
+            );
+        }
+
+        #[test]
+        fn test_pattern_priority() {
+            // When both patterns match at same position, first one wins
+            let options = StringSkipOptions::default();
+            let patterns = ["//", "/"];
+            let result = find_any_outside_string("x // y", &patterns, options);
+            assert_eq!(
+                result,
+                Some(PatternMatch {
+                    position: 2,
+                    pattern_index: 0
+                })
+            );
+        }
+
+        #[test]
+        fn test_no_match() {
+            let options = StringSkipOptions::default();
+            let patterns = ["//", "/*"];
+            let result = find_any_outside_string("int x = 1;", &patterns, options);
+            assert_eq!(result, None);
+        }
+
+        #[test]
+        fn test_empty_patterns() {
+            let options = StringSkipOptions::default();
+            let patterns: [&str; 0] = [];
+            let result = find_any_outside_string("int x = 1;", &patterns, options);
+            assert_eq!(result, None);
+        }
+
+        #[test]
+        fn test_empty_line() {
+            let options = StringSkipOptions::default();
+            let patterns = ["//", "/*"];
+            let result = find_any_outside_string("", &patterns, options);
+            assert_eq!(result, None);
+        }
+
+        #[test]
+        fn test_patterns_inside_string() {
+            let options = StringSkipOptions::basic();
+            let patterns = ["//", "/*"];
+            let result =
+                find_any_outside_string(r#"let s = "// /* not comment";"#, &patterns, options);
+            assert_eq!(result, None);
+        }
+
+        #[test]
+        fn test_pattern_after_string() {
+            let options = StringSkipOptions::basic();
+            let patterns = ["//", "/*"];
+            let result =
+                find_any_outside_string(r#"let s = "text"; // comment"#, &patterns, options);
+            assert_eq!(
+                result,
+                Some(PatternMatch {
+                    position: 16,
+                    pattern_index: 0
+                })
+            );
+        }
+
+        #[test]
+        fn test_multiple_patterns_various_lengths() {
+            let options = StringSkipOptions::default();
+            let patterns = ["/*", "*/", "//", "#"];
+            let result = find_any_outside_string("x # y", &patterns, options);
+            assert_eq!(
+                result,
+                Some(PatternMatch {
+                    position: 2,
+                    pattern_index: 3
+                })
+            );
+        }
+
+        #[test]
+        fn test_rust_options() {
+            let options = StringSkipOptions::rust();
+            let patterns = ["//", "/*"];
+            // Raw string should be skipped
+            let result = find_any_outside_string(
+                r#"let s = r"// not a comment"; // real"#,
+                &patterns,
+                options,
+            );
+            assert_eq!(
+                result,
+                Some(PatternMatch {
+                    position: 29,
+                    pattern_index: 0
+                })
+            );
         }
     }
 }
