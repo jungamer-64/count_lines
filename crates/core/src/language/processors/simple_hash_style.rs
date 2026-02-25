@@ -7,6 +7,8 @@ use super::super::processor_trait::LineProcessor;
 
 /// 単純な Hash コメントプロセッサ
 #[derive(Default)]
+/// Simple hash-comment SLOC processor.
+#[derive(Debug)]
 pub struct SimpleHashProcessor {
     line_count: usize,
 }
@@ -18,6 +20,7 @@ impl LineProcessor for SimpleHashProcessor {
 }
 
 impl SimpleHashProcessor {
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         let trimmed = line.trim();
 

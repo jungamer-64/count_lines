@@ -10,6 +10,8 @@ use super::super::processor_trait::LineProcessor;
 
 /// Luaプロセッサ
 #[derive(Default)]
+/// Lua SLOC processor.
+#[derive(Debug)]
 pub struct LuaProcessor {
     in_block_comment: bool,
     block_level: usize,
@@ -27,11 +29,13 @@ impl LineProcessor for LuaProcessor {
 
 impl LuaProcessor {
     #[must_use]
+    /// Creates a new `LuaProcessor`.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         if self.in_block_comment {
             if find_lua_block_end(line, self.block_level).is_some() {

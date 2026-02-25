@@ -8,6 +8,8 @@ use super::super::processor_trait::LineProcessor;
 /// HTML/XML プロセッサ
 ///
 /// `<!-- -->` コメントを処理します。
+/// HTML/Markup SLOC processor.
+#[derive(Debug)]
 pub struct HtmlProcessor {
     in_comment: bool,
 }
@@ -30,11 +32,13 @@ impl LineProcessor for HtmlProcessor {
 
 impl HtmlProcessor {
     #[must_use]
+    /// Creates a new `HtmlProcessor`.
     pub const fn new() -> Self {
         Self { in_comment: false }
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         if self.in_comment {
             if line.contains("-->") {

@@ -9,6 +9,8 @@ use super::super::processor_trait::LineProcessor;
 
 /// MATLAB プロセッサ
 #[derive(Default)]
+/// MATLAB SLOC processor.
+#[derive(Debug)]
 pub struct MatlabProcessor {
     in_block_comment: bool,
 }
@@ -25,12 +27,14 @@ impl LineProcessor for MatlabProcessor {
 
 impl MatlabProcessor {
     #[must_use]
+    /// Creates a new `MatlabProcessor`.
     pub const fn new() -> Self {
         Self {
             in_block_comment: false,
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         let trimmed = line.trim();
 

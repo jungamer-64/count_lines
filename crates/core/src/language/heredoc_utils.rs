@@ -26,6 +26,7 @@ pub struct HeredocContext {
 }
 
 impl HeredocContext {
+    /// Creates a new empty `HeredocContext`.
     #[must_use]
     pub const fn new() -> Self {
         Self { stack: Vec::new() }

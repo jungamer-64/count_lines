@@ -15,8 +15,11 @@ use super::super::heredoc_utils::HeredocContext;
 use super::super::processor_trait::LineProcessor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ruby scope state.
 pub enum RubyScope {
+    /// String interpolation scope.
     Interpolation, // #{ ... }
+    /// String literal scope.
     String(u8),    // String with quote char (", ', `)
 }
 
@@ -210,6 +213,7 @@ impl RubyProcessor {
         usize::from(has_code_token)
     }
 
+    /// Resets the processor state.
     pub fn reset(&mut self) {
         self.in_embedded_doc = false;
         self.heredoc_ctx.reset();

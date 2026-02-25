@@ -10,6 +10,8 @@ use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string_swift;
 
 /// Swift プロセッサ
+/// Swift SLOC processor.
+#[derive(Debug)]
 pub struct SwiftProcessor {
     block_comment_depth: usize,
     in_block_comment: bool,
@@ -33,6 +35,7 @@ impl LineProcessor for SwiftProcessor {
 
 impl SwiftProcessor {
     #[must_use]
+    /// Creates a new `SwiftProcessor`.
     pub const fn new() -> Self {
         Self {
             block_comment_depth: 0,
@@ -40,6 +43,7 @@ impl SwiftProcessor {
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         if self.block_comment_depth > 0 {
             self.process_nesting_block_line(line);

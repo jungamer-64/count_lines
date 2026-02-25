@@ -53,18 +53,27 @@ use alloc::vec::Vec;
 use super::super::processor_trait::LineProcessor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Python scope state.
 pub enum PythonScope {
+    /// F-string interpolation scope.
     Interpolation, // { ... }
+    /// String literal scope.
     String(PythonStringState),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::struct_excessive_bools)]
+/// Python string literal state.
 pub struct PythonStringState {
+    /// Quote character (`"` or `'`).
     pub quote: u8,    // " or '
+    /// Whether this is a triple-quoted string.
     pub triple: bool, // """ or '''
+    /// Whether this is an f-string.
     pub is_f_string: bool,
+    /// Whether this is a raw string.
     pub is_raw: bool,
+    /// Whether this string is a doc comment.
     pub is_doc_comment: bool, // Treat content as comment?
 }
 
@@ -99,6 +108,7 @@ impl LineProcessor for PythonProcessor {
 
 impl PythonProcessor {
     #[must_use]
+    /// Creates a new `PythonProcessor`.
     pub fn new() -> Self {
         Self::default()
     }

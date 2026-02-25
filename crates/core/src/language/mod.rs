@@ -1,6 +1,7 @@
 pub mod comment_style;
 pub mod heredoc_utils;
 pub mod processor_trait;
+/// Language-specific SLOC processor implementations.
 pub mod processors;
 pub mod string_utils;
 

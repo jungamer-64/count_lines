@@ -47,14 +47,23 @@ use super::super::processor_trait::LineProcessor;
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// JavaScript scope state.
 pub enum JsScope {
+    /// Template literal interpolation scope.
     Interpolation, // ${ ... }
+    /// Block comment scope.
     BlockComment,  // /* ... */
+    /// String literal scope.
     String(u8),    // " ' `
-    Regex { in_class: bool },
+    /// Regex literal scope.
+    Regex {
+        /// Whether inside a character class `[...]`.
+        in_class: bool,
+    },
 }
 
 #[derive(Default, Clone, Debug)]
+/// JavaScript/TypeScript SLOC processor.
 pub struct JavaScriptProcessor {
     stack: Vec<JsScope>,
     // Track if last token was value-like (for regex heuristics)
@@ -74,10 +83,12 @@ impl LineProcessor for JavaScriptProcessor {
 
 impl JavaScriptProcessor {
     #[must_use]
+    /// Creates a new `JavaScriptProcessor`.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         let trimmed = line.trim();
 
@@ -228,6 +239,7 @@ impl JavaScriptProcessor {
         // So `.` handling typically doesn't matter for Regex start detection.
     }
 
+    /// Resets the processor state.
     pub fn reset(&mut self) {
         self.stack.clear();
         self.last_token_is_value = false;

@@ -10,6 +10,8 @@ use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string;
 
 /// D言語 プロセッサ
+/// D language SLOC processor.
+#[derive(Debug)]
 pub struct DLangProcessor {
     block_comment_depth: usize,
     in_c_block: bool,
@@ -33,6 +35,7 @@ impl LineProcessor for DLangProcessor {
 
 impl DLangProcessor {
     #[must_use]
+    /// Creates a new `DLangProcessor`.
     pub const fn new() -> Self {
         Self {
             block_comment_depth: 0,
@@ -40,6 +43,7 @@ impl DLangProcessor {
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         // ネストブロックコメント内
         if self.block_comment_depth > 0 {

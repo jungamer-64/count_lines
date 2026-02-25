@@ -9,6 +9,8 @@ use super::super::processor_trait::LineProcessor;
 
 /// OCaml プロセッサ
 #[derive(Default)]
+/// OCaml SLOC processor.
+#[derive(Debug)]
 pub struct OCamlProcessor {
     block_comment_depth: usize,
 }
@@ -25,12 +27,14 @@ impl LineProcessor for OCamlProcessor {
 
 impl OCamlProcessor {
     #[must_use]
+    /// Creates a new `OCamlProcessor`.
     pub const fn new() -> Self {
         Self {
             block_comment_depth: 0,
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         if self.block_comment_depth > 0 {
             self.process_nesting_block(line);

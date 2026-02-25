@@ -135,6 +135,7 @@ impl PerlProcessor {
         1
     }
 
+    /// Resets the processor state.
     pub fn reset(&mut self) {
         self.in_pod = false;
         self.line_count = 0;

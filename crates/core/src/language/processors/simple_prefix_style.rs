@@ -65,6 +65,8 @@
 /// assert_eq!(p.process("REM comment"), 0);
 /// assert_eq!(p.process("echo hello"), 1);
 /// ```
+/// Prefix-based comment SLOC processor.
+#[derive(Debug)]
 pub struct SimplePrefixProcessor {
     prefixes: &'static [&'static str],
     ignore_case: bool,
@@ -199,6 +201,7 @@ impl SimplePrefixProcessor {
         Self::new_ignore_case(VB_PREFIXES)
     }
 
+    /// Resets the processor state.
     pub const fn reset(&mut self) {}
 }
 

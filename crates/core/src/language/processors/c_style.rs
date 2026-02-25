@@ -58,6 +58,8 @@ use super::super::string_utils::{
 
 /// C系言語プロセッサ (//, /* */) - ネスト非対応
 #[derive(Default)]
+/// C-style comment SLOC processor.
+#[derive(Debug)]
 pub struct CStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
@@ -90,6 +92,8 @@ use super::super::processor_trait::LineStats;
 
 impl CStyleProcessor {
     #[must_use]
+    /// Creates a new `CStyleProcessor` with the given options.
+    /// Creates a new `NestingCStyleProcessor` with the given options.
     pub const fn new(options: StringSkipOptions) -> Self {
         Self {
             options,
@@ -97,10 +101,12 @@ impl CStyleProcessor {
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         self.process_line_stats(line, false, false).sloc
     }
 
+    /// Processes a line and returns detailed statistics.
     pub fn process_line_stats(
         &mut self,
         line: &str,
@@ -262,6 +268,8 @@ impl CStyleProcessor {
 
 /// C系言語プロセッサ - ネスト対応 (Rust, Kotlin, Scala)
 #[derive(Default)]
+/// C-style SLOC processor with nested block comment support.
+#[derive(Debug)]
 pub struct NestingCStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
@@ -285,6 +293,7 @@ impl LineProcessor for NestingCStyleProcessor {
 
 impl NestingCStyleProcessor {
     #[must_use]
+    /// Creates a new `NestingCStyleProcessor` with the given options.
     pub const fn new(options: StringSkipOptions) -> Self {
         Self {
             options,
@@ -293,6 +302,7 @@ impl NestingCStyleProcessor {
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         if line.trim().is_empty() {
             return 0;

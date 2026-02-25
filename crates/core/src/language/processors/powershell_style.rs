@@ -7,6 +7,8 @@ use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_hash_outside_string;
 
 /// `PowerShell` プロセッサ
+/// PowerShell SLOC processor.
+#[derive(Debug)]
 pub struct PowerShellProcessor {
     in_block_comment: bool,
 }
@@ -29,12 +31,14 @@ impl LineProcessor for PowerShellProcessor {
 
 impl PowerShellProcessor {
     #[must_use]
+    /// Creates a new `PowerShellProcessor`.
     pub const fn new() -> Self {
         Self {
             in_block_comment: false,
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         let trimmed = line.trim();
 

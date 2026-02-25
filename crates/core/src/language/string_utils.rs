@@ -46,6 +46,7 @@ pub fn from_utf8_lossy(input: &[u8]) -> Cow<'_, str> {
     }
 }
 
+/// Options controlling which string literal syntaxes to recognize.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StringSkipOptions {
     flags: u16,
@@ -63,47 +64,58 @@ impl StringSkipOptions {
     const SINGLE_QUOTE: u16 = 1 << 8;
     const REGEX_LITERAL: u16 = 1 << 9;
 
+    /// Returns `true` if Rust raw string literals (`r"..."`) are enabled.
     #[must_use]
     pub const fn rust_raw_string(self) -> bool {
         self.flags & Self::RUST_RAW_STRING != 0
     }
+    /// Returns `true` if Rust byte string literals (`b"..."`) are enabled.
     #[must_use]
     pub const fn rust_byte_string(self) -> bool {
         self.flags & Self::RUST_BYTE_STRING != 0
     }
+    /// Returns `true` if Rust lifetime annotation handling (`'a`) is enabled.
     #[must_use]
     pub const fn rust_lifetime(self) -> bool {
         self.flags & Self::RUST_LIFETIME != 0
     }
+    /// Returns `true` if C++ raw string literals (`R"(...)"`) are enabled.
     #[must_use]
     pub const fn cpp_raw_string(self) -> bool {
         self.flags & Self::CPP_RAW_STRING != 0
     }
+    /// Returns `true` if C# verbatim strings (`@"..."`) are enabled.
     #[must_use]
     pub const fn csharp_verbatim(self) -> bool {
         self.flags & Self::CSHARP_VERBATIM != 0
     }
+    /// Returns `true` if text blocks (`"""..."""`) are enabled.
     #[must_use]
     pub const fn text_block(self) -> bool {
         self.flags & Self::TEXT_BLOCK != 0
     }
+    /// Returns `true` if backtick strings are enabled.
     #[must_use]
     pub const fn backtick_string(self) -> bool {
         self.flags & Self::BACKTICK_STRING != 0
     }
+    /// Returns `true` if double-quote strings are enabled.
     #[must_use]
     pub const fn double_quote(self) -> bool {
         self.flags & Self::DOUBLE_QUOTE != 0
     }
+    /// Returns `true` if single-quote strings are enabled.
     #[must_use]
     pub const fn single_quote(self) -> bool {
         self.flags & Self::SINGLE_QUOTE != 0
     }
+    /// Returns `true` if regex literals (`/.../`) are enabled.
     #[must_use]
     pub const fn regex_literal(self) -> bool {
         self.flags & Self::REGEX_LITERAL != 0
     }
 
+    /// Sets the given flag bit and returns the modified options.
     #[must_use]
     pub const fn with_flag(mut self, flag: u16) -> Self {
         self.flags |= flag;
@@ -300,6 +312,7 @@ pub const fn is_ident_char(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
+/// Try to skip a prefixed string literal (e.g. `r"..."`, `b"..."`, `@"..."`, `R"(...)"`).
 #[must_use]
 pub fn try_skip_prefixed_string(
     line: &[u8],
@@ -327,6 +340,7 @@ pub fn try_skip_prefixed_string(
     None
 }
 
+/// Try to skip a quoted string literal (`"..."`, `'...'`, or backtick).
 #[must_use]
 pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
     let bytes = &line[i..];
@@ -393,6 +407,7 @@ pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions)
     None
 }
 
+/// Try to skip a regex literal (`/.../`).
 #[must_use]
 pub fn try_skip_regex(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
     if options.regex_literal() && line[i] == b'/' {

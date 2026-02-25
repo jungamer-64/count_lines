@@ -161,6 +161,7 @@ impl PhpProcessor {
         1
     }
 
+    /// Resets the processor state.
     pub fn reset(&mut self) {
         self.in_block_comment = false;
         self.heredoc_ctx.reset();

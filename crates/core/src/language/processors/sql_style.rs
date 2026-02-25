@@ -11,6 +11,8 @@ use super::super::string_utils::find_outside_string_sql;
 /// - 行コメント: `--` から行末まで
 /// - ブロックコメント: `/* */`
 /// - 文字列リテラル (`'...'` と `"..."`) 内のコメントマーカーを無視
+/// SQL SLOC processor.
+#[derive(Debug)]
 pub struct SqlProcessor {
     in_block_comment: bool,
 }
@@ -33,6 +35,7 @@ impl LineProcessor for SqlProcessor {
 
 impl SqlProcessor {
     #[must_use]
+    /// Creates a new `SqlProcessor`.
     pub const fn new() -> Self {
         Self {
             in_block_comment: false,
@@ -40,6 +43,7 @@ impl SqlProcessor {
     }
 
     /// 行を処理し、SLOCカウント (0 or 1) を返す
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         if self.in_block_comment {
             if let Some(pos) = line.find("*/") {

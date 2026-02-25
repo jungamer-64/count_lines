@@ -36,7 +36,11 @@
 #![allow(clippy::multiple_crate_versions)]
 extern crate alloc;
 
+/// Configuration options for analysis.
 pub mod config;
+/// Main counting entry point.
 pub mod counter;
+/// Language-specific SLOC processors.
 pub mod language;
+/// Statistical result types.
 pub mod stats;

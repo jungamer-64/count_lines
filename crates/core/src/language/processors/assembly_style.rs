@@ -9,6 +9,8 @@ use super::super::processor_trait::LineProcessor;
 
 /// GAS Assembly プロセッサ
 #[derive(Default)]
+/// GAS assembly SLOC processor.
+#[derive(Debug)]
 pub struct GasAssemblyProcessor {
     in_block_comment: bool,
 }
@@ -25,12 +27,14 @@ impl LineProcessor for GasAssemblyProcessor {
 
 impl GasAssemblyProcessor {
     #[must_use]
+    /// Creates a new `GasAssemblyProcessor`.
     pub const fn new() -> Self {
         Self {
             in_block_comment: false,
         }
     }
 
+    /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
         let trimmed = line.trim();
 
