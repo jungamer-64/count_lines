@@ -1,4 +1,4 @@
-// src/language/heredoc_utils.rs
+// crates/core/src/language/heredoc_utils.rs
 //! ヒアドキュメント処理ユーティリティ
 //!
 //! 複数行にわたる文字リテラル（ヒアドキュメント）の状態管理を提供します。

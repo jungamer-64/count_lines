@@ -1,3 +1,4 @@
+// crates/cli/src/main.rs
 use clap::Parser;
 use count_lines_cli::args::Args;
 use count_lines_cli::config::Config;

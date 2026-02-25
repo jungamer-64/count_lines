@@ -1,3 +1,4 @@
+// crates/engine/src/watch.rs
 use crate::config::Config;
 use crate::error::Result;
 use notify::{RecursiveMode, Watcher};

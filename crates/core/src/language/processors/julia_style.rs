@@ -1,4 +1,4 @@
-// src/language/processors/julia_style.rs
+// crates/core/src/language/processors/julia_style.rs
 //! Julia言語のコメント処理
 //!
 //! Julia固有の対応:

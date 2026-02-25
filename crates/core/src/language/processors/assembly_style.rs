@@ -1,4 +1,4 @@
-// src/language/processors/assembly_style.rs
+// crates/core/src/language/processors/assembly_style.rs
 //! GAS (GNU Assembler) アセンブリ言語のコメント処理
 //!
 //! GAS固有の対応:

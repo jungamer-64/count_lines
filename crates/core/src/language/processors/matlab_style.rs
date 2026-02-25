@@ -1,4 +1,4 @@
-// src/language/processors/matlab_style.rs
+// crates/core/src/language/processors/matlab_style.rs
 //! MATLAB/Octave言語のコメント処理
 //!
 //! MATLAB固有の対応:

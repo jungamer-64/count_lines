@@ -1,3 +1,4 @@
+// crates/core/src/counter.rs
 use crate::config::AnalysisConfig;
 use crate::language::get_processor;
 use crate::stats::AnalysisResult;

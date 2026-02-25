@@ -1,4 +1,4 @@
-// src/language/processors/lisp_style.rs
+// crates/core/src/language/processors/lisp_style.rs
 //! Lisp系言語のコメント処理
 //!
 //! 対象: Lisp, Scheme, Clojure, Emacs Lisp 等

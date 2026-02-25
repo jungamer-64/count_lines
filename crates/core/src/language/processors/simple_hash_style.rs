@@ -1,4 +1,4 @@
-// src/language/processors/simple_hash_style.rs
+// crates/core/src/language/processors/simple_hash_style.rs
 //! シンプルな Hash スタイル (#) のコメント処理
 //!
 //! 対象: Shell, YAML, TOML, Dockerfile, Makefile, Config系など

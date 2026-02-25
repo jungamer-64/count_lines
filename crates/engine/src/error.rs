@@ -1,3 +1,4 @@
+// crates/engine/src/error.rs
 use thiserror::Error;
 
 #[derive(Debug, Error)]

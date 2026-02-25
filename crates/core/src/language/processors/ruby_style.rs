@@ -1,4 +1,4 @@
-// src/language/processors/ruby_style.rs
+// crates/core/src/language/processors/ruby_style.rs
 //! Ruby言語のコメント処理
 //!
 //! Ruby固有の対応:

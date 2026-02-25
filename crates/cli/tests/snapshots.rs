@@ -1,3 +1,4 @@
+// crates/cli/tests/snapshots.rs
 use assert_cmd::Command;
 use insta::{assert_snapshot, assert_json_snapshot};
 use serde_json::Value;

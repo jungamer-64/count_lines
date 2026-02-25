@@ -1,3 +1,4 @@
+// crates/core/src/lib.rs
 #![no_std]
 #![warn(missing_docs, missing_debug_implementations)]
 

@@ -1,3 +1,4 @@
+// crates/engine/src/path_security.rs
 //! Path Security Utilities
 //!
 //! Provides protection against path traversal attacks and symlink-based attacks.

@@ -1,4 +1,4 @@
-// src/language/processors/lua_style.rs
+// crates/core/src/language/processors/lua_style.rs
 //! Lua言語のコメント処理
 //!
 //! Lua固有の対応:

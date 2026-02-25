@@ -1,4 +1,4 @@
-// src/language/processors/sql_style.rs
+// crates/core/src/language/processors/sql_style.rs
 //! SQL言語のコメント処理
 //!
 //! SQL の -- 行コメントと /* */ ブロックコメントを処理します。

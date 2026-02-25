@@ -1,4 +1,4 @@
-// src/language/processors/fortran_style.rs
+// crates/core/src/language/processors/fortran_style.rs
 //! Fortran言語のコメント処理
 //!
 //! Fortran固有の対応:

@@ -1,4 +1,4 @@
-// crates/infra/src/measurement/strategies/sloc_counter/comment_style.rs
+// crates/core/src/language/comment_style.rs
 //! コメント構文の種類定義
 
 /// コメント構文の種類

@@ -1,3 +1,4 @@
+// crates/core/src/config.rs
 use alloc::string::String;
 
 use hashbrown::HashMap;

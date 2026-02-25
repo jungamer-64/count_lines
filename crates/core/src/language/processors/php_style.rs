@@ -1,4 +1,4 @@
-// src/language/processors/php_style.rs
+// crates/core/src/language/processors/php_style.rs
 //! PHP のコメント処理
 //!
 //! PHP は C系の `//, /* */` に加えて、Perl/Shell系の `#` 行コメントもサポートします。

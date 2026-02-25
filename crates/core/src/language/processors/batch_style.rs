@@ -1,4 +1,4 @@
-// src/language/processors/batch_style.rs
+// crates/core/src/language/processors/batch_style.rs
 //! Windows バッチファイルのコメント処理
 //!
 //! バッチファイル固有の対応:

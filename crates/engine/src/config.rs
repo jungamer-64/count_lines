@@ -1,3 +1,4 @@
+// crates/engine/src/config.rs
 use crate::options::{ByMode, OutputFormat, OutputMode, SortKey, WatchOutput};
 use derive_builder::Builder;
 use std::path::PathBuf;

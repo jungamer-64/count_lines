@@ -1,4 +1,4 @@
-// src/language/processors/shell_style.rs
+// crates/core/src/language/processors/shell_style.rs
 //! Shell言語のコメント・ヒアドキュメント処理
 //!
 //! シェルスクリプト (sh, bash, zsh) 固有の対応:

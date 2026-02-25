@@ -1,4 +1,4 @@
-// src/language/processors/erlang_style.rs
+// crates/core/src/language/processors/erlang_style.rs
 //! Erlang / LaTeX / Prolog 等のコメント処理
 //!
 //! 対象: Erlang, LaTeX (.tex, .sty, .bib), Prolog 等

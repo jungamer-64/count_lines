@@ -1,4 +1,4 @@
-// src/args.rs
+// crates/cli/src/args.rs
 use crate::options::{ByMode, OutputFormat, OutputMode, SortSpec, WatchOutput};
 use crate::parsers::{self, DateTimeArg, SizeArg};
 use clap::{Args as ClapArgs, Parser, ValueHint};

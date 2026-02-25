@@ -1,4 +1,4 @@
-// src/language/processors/python_style.rs
+// crates/core/src/language/processors/python_style.rs
 //! # Python Processor
 //!
 //! SLOC counter processor for Python with special handling for docstrings and f-strings.

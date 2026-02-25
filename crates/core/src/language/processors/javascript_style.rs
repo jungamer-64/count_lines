@@ -1,4 +1,4 @@
-// src/language/processors/javascript_style.rs
+// crates/core/src/language/processors/javascript_style.rs
 //! # JavaScript/TypeScript Processor
 //!
 //! SLOC counter processor for JavaScript, TypeScript, and related languages.

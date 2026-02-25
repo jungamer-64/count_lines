@@ -1,3 +1,4 @@
+// crates/cli/benches/benchmark.rs
 use clap::Parser;
 use count_lines_cli::args::Args;
 use criterion::{Criterion, criterion_group, criterion_main};

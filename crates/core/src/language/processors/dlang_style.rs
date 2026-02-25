@@ -1,4 +1,4 @@
-// src/language/processors/dlang_style.rs
+// crates/core/src/language/processors/dlang_style.rs
 //! D言語のコメント処理
 //!
 //! D言語固有の対応:

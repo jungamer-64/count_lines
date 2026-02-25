@@ -1,4 +1,4 @@
-// src/language/processors/swift_style.rs
+// crates/core/src/language/processors/swift_style.rs
 //! Swift言語のコメント処理
 //!
 //! Swift固有の対応:

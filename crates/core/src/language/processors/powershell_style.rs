@@ -1,4 +1,4 @@
-// src/language/processors/powershell_style.rs
+// crates/core/src/language/processors/powershell_style.rs
 //! `PowerShell` のコメント処理
 //!
 //! `PowerShell` は `#` 行コメントと `<# #>` ブロックコメントを使用します。

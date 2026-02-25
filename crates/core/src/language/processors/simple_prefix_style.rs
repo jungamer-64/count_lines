@@ -1,4 +1,4 @@
-// src/language/processors/simple_prefix_style.rs
+// crates/core/src/language/processors/simple_prefix_style.rs
 //! # Simple Prefix Comment Processor
 //!
 //! SLOC counter processor for languages with simple prefix-based line comments.

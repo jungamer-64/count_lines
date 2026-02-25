@@ -1,3 +1,4 @@
+// crates/cli/src/options.rs
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;

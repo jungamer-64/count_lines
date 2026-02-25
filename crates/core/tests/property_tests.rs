@@ -1,3 +1,4 @@
+// crates/core/tests/property_tests.rs
 use count_lines_core::config::AnalysisConfig;
 use count_lines_core::counter::count_bytes;
 use proptest::prelude::*;

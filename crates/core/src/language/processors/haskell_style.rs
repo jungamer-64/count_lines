@@ -1,4 +1,4 @@
-// src/language/processors/haskell_style.rs
+// crates/core/src/language/processors/haskell_style.rs
 //! Haskell言語のコメント処理
 //!
 //! Haskell固有の対応:

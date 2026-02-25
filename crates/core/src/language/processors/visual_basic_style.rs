@@ -1,4 +1,4 @@
-// src/language/processors/visual_basic_style.rs
+// crates/core/src/language/processors/visual_basic_style.rs
 //! `Visual Basic` / `VBA` / `VBScript` のコメント処理
 //!
 //! `VB`系言語固有の対応:

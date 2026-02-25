@@ -1,4 +1,4 @@
-// src/language/processors/perl_style.rs
+// crates/core/src/language/processors/perl_style.rs
 //! Perl言語のコメント処理
 //!
 //! Perl固有の対応:

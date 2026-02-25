@@ -1,4 +1,4 @@
-// src/language/processors/markup_style.rs
+// crates/core/src/language/processors/markup_style.rs
 //! マークアップ言語のコメント処理
 //!
 //! HTML/XML/SVG などの <!-- --> コメントを処理します。

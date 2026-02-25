@@ -1,4 +1,4 @@
-// src/language/processors/ocaml_style.rs
+// crates/core/src/language/processors/ocaml_style.rs
 //! `OCaml`言語のコメント処理
 //!
 //! `OCaml`固有の対応:

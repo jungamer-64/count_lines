@@ -1,3 +1,4 @@
+// crates/engine/src/filesystem.rs
 use crate::config::{FilterConfig, WalkOptions};
 use crate::error::Result;
 use crate::path_security::{PathSanitizeOptions, is_path_safe, sanitize_path};

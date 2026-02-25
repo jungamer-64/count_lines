@@ -1,4 +1,4 @@
-// src/language/processors/vhdl_style.rs
+// crates/core/src/language/processors/vhdl_style.rs
 //! VHDLのコメント処理
 //!
 //! `--` 行コメントのみをサポートします。
