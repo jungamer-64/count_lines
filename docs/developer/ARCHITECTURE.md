@@ -25,80 +25,57 @@
 
 ```text
 count_lines/
-├── src/                            # メインソースコード
-│   ├── main.rs                     # CLIエントリポイント
-│   ├── lib.rs                      # ライブラリルート（公開API）
-│   ├── args.rs                     # CLI引数定義（clap derive）
-│   ├── config.rs                   # 実行時設定構造体
-│   ├── engine.rs                   # ファイル処理エンジン
-│   ├── filesystem.rs               # ファイルシステム探索
-│   ├── stats.rs                    # 統計データ構造
-│   ├── options.rs                  # 出力オプション定義
-│   ├── parsers.rs                  # CLIパーサーユーティリティ
-│   ├── presentation.rs             # 出力フォーマット処理
-│   ├── compare.rs                  # スナップショット比較機能
-│   ├── watch.rs                    # ファイル監視機能
-│   ├── error.rs                    # エラー型定義
-│   └── language/                   # SLOC言語別処理
-│       ├── mod.rs                  # SlocProcessor enum（ディスパッチ）
-│       ├── processor_trait.rs      # LineProcessor trait
-│       ├── comment_style.rs        # 言語別コメントスタイル定義
-│       ├── string_utils.rs         # 文字列リテラル処理ユーティリティ
-│       ├── heredoc_utils.rs        # ヒアドキュメント処理
-│       └── processors/             # 各言語プロセッサ実装
-│           ├── c_style.rs          # C/C++/Java等
-│           ├── python_style.rs     # Python
-│           ├── javascript_style.rs # JavaScript/TypeScript
-│           ├── ruby_style.rs       # Ruby
-│           └── ...                 # その他言語
-├── tests/                          # 統合テスト
-│   └── e2e/                        # エンドツーエンドテスト
-├── benches/                        # ベンチマーク
-│   └── end_to_end.rs               # パフォーマンス計測
-├── scripts/                        # 開発・検証スクリプト
+├── crates/
+│   ├── core/                       # 純粋な計算ロジック (no_std)
+│   │   ├── src/lib.rs              # コアライブラリ
+│   │   └── ...
+│   ├── engine/                     # ファイル処理エンジン (I/O, Rayon)
+│   │   ├── src/lib.rs              # エンジンエントリポイント
+│   │   ├── filesystem.rs           # ファイル探索
+│   │   ├── config.rs               # 設定定義
+│   │   ├── stats.rs                # 統計データ構造
+│   │   └── ...
+│   └── cli/                        # コマンドラインインターフェース
+│       ├── src/main.rs             # CLIエントリポイント
+│       ├── args.rs                 # Clap定義
+│       ├── presentation.rs         # 出力整形
+│       └── ...
 ├── docs/                           # ドキュメント
-│   ├── user/                       # ユーザー向けドキュメント
-│   ├── developer/                  # 開発者向けドキュメント
-│   └── project/                    # プロジェクト管理
-└── Cargo.toml                      # プロジェクト設定
+├── scripts/                        # 開発スクリプト
+└── Cargo.toml                      # ワークスペース設定
 ```
 
 ## モジュール構成
 
-### コアモジュール
+### クレート構成
+
+| クレート | 役割 | 依存関係 |
+|---------|------|----------|
+| `count_lines_core` | `no_std` 環境でも動作する純粋な計算処理（行数、文字数、SLOC判定など） | なし (allocのみ) |
+| `count_lines_engine` | ファイルシステム操作、並列処理、設定管理を行うライブラリ | `core`, `rayon`, `ignore` |
+| `count_lines_cli` | ユーザー入出力、引数解析、結果の表示 | `engine` |
+
+### Engine (`crates/engine`)
+
+アプリケーションの中核ロジックを担当します。
 
 | モジュール | 責務 |
 |-----------|------|
-| `args.rs` | clap による CLI 引数の定義とパース |
-| `config.rs` | 引数から実行時設定（`Config`）への変換 |
-| `engine.rs` | ファイル処理のオーケストレーション |
-| `filesystem.rs` | ディレクトリ探索、フィルタリング |
-| `stats.rs` | `FileStats` 構造体（行数・文字数等） |
+| `config.rs` | アプリケーション全体の `Config` 構造体定義 |
+| `filesystem.rs` | `ignore` クレートを使用したファイル探索 |
+| `stats.rs` | `FileStats` 構造体（`PathBuf` や `SystemTime` を含む） |
+| `watch.rs` | ファイルシステムの変更監視 (`notify`) |
 
-### 出力モジュール
+### CLI (`crates/cli`)
+
+ユーザーとのインターフェースを担当します。
 
 | モジュール | 責務 |
 |-----------|------|
-| `options.rs` | `OutputFormat`, `SortKey`, `OutputMode` 等の定義 |
-| `presentation.rs` | 表形式、CSV、JSON 等への整形・出力 |
-| `compare.rs` | JSON スナップショット間の差分計算 |
+| `args.rs` | `clap` によるコマンドライン引数定義 |
+| `presentation.rs` | エンジンから受け取った結果の整形・表示 |
+| `config_adapter.rs` | `clap` の引数から `engine::Config` への変換 |
 
-### SLOC処理 (`language/`)
-
-言語別のソースコード行数（SLOC）計算を担当します。
-
-```text
-SlocProcessor (enum)
-├── CStyleProcessor         # C, C++, Java, Go, etc.
-├── NestingCStyleProcessor  # Rust, Kotlin, Scala (ネストコメント対応)
-├── JavaScriptProcessor     # JS/TS (テンプレートリテラル対応)
-├── PythonProcessor         # Python (docstring対応)
-├── RubyProcessor           # Ruby (=begin/=end対応)
-├── ...                     # その他20+言語
-└── NoComment               # プレーンテキスト
-```
-
-各プロセッサは `LineProcessor` trait を実装し、行ごとに「コードかコメントか」を判定します。
 
 ## データフロー
 

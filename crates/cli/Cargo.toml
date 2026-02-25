@@ -1,0 +1,44 @@
+[package]
+name = "count_lines_cli"
+version = "0.9.0"
+edition = "2024"
+description = "ファイル行数/文字数/単語数の集計ツール (拡張版)"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/jungamer-64/count_lines"
+readme = "../../README.md"
+keywords = ["count", "lines", "statistics", "files", "metrics"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "count_lines"
+path = "src/main.rs"
+
+[dependencies]
+count_lines_engine = { path = "../engine" }
+
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+
+unicode-segmentation = "1.12.0"
+serde_yaml = { workspace = true }
+comfy-table = "7.2.1"
+terminal_size = "0.4.3"
+num_cpus.workspace = true
+hashbrown.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+predicates.workspace = true
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+proptest = "1.9.0"
+criterion = "0.7.0"
+insta = { version = "1.46.0", features = ["json", "redactions"] }
+count_lines_core = { path = "../core" }
+
+[[bench]]
+name = "end_to_end"
+harness = false

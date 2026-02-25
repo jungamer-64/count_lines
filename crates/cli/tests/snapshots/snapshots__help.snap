@@ -1,0 +1,219 @@
+---
+source: crates/cli/tests/snapshots.rs
+expression: stdout
+---
+ファイル行数/文字数/単語数の集計ツール
+
+Usage: count_lines [OPTIONS] [PATHS]...
+
+Options:
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
+
+出力:
+      --format <FORMAT>
+          出力フォーマット
+          
+          [default: table]
+          [possible values: table, csv, tsv, json, yaml, md, jsonl]
+
+      --sort <SORT>
+          ソートキー（複数可, 例: lines:desc,chars:desc,name）
+          
+          [default: lines]
+
+      --top <TOP>
+          上位N件のみ表示（一覧）
+
+      --by <BY>
+          サマリ軸 (ext, dir, dir=N, mtime[:day|week|month]) — 複数可
+
+      --output-mode <OUTPUT_MODE>
+          出力モード (full, summary, total-only)
+
+          Possible values:
+          - full:       全ファイルを個別表示
+          - summary:    拡張子/ディレクトリ別サマリーのみ
+          - total-only: 合計のみ表示
+          
+          [default: full]
+
+      --by-limit <BY_LIMIT>
+          集計テーブルの上位N件のみ表示
+
+      --total-row
+          CSV/TSV 末尾に TOTAL 行を出力
+
+      --count-newlines-in-chars
+          改行も文字数に含める
+
+      --progress
+          進捗表示
+
+      --ratio
+          比率列を追加
+
+      --output <OUTPUT>
+          出力先ファイル
+
+フィルタ:
+      --include <INCLUDE>
+          
+
+      --exclude <EXCLUDE>
+          
+
+      --include-path <INCLUDE_PATH>
+          
+
+      --exclude-path <EXCLUDE_PATH>
+          
+
+      --exclude-dir <EXCLUDE_DIR>
+          
+
+      --exclude-dir-only <EXCLUDE_DIR_ONLY>
+          
+
+      --ext <EXT>
+          
+
+      --force-text-ext <FORCE_TEXT_EXT>
+          
+
+      --force-binary-ext <FORCE_BINARY_EXT>
+          
+
+      --max-size <MAX_SIZE>
+          
+
+      --min-size <MIN_SIZE>
+          
+
+      --min-lines <MIN_LINES>
+          
+
+      --max-lines <MAX_LINES>
+          
+
+      --min-chars <MIN_CHARS>
+          
+
+      --max-chars <MAX_CHARS>
+          
+
+      --words
+          
+
+      --sloc
+          
+
+      --min-words <MIN_WORDS>
+          
+
+      --max-words <MAX_WORDS>
+          
+
+      --filter <FILTER>
+          
+
+      --mtime-since <MTIME_SINCE>
+          
+
+      --mtime-until <MTIME_UNTIL>
+          
+
+      --map-ext <MAP_EXT>
+          拡張子と言語の紐づけ (例: h=cpp, mylang=sh)
+
+走査/入力:
+      --text-only
+          
+
+      --fast-text-detect
+          
+
+      --files-from <FILES_FROM>
+          
+
+      --files-from0 <FILES_FROM0>
+          
+
+      --hidden
+          
+
+      --case-insensitive-dedup
+          
+
+      --follow
+          
+
+      --git
+          
+
+      --no-gitignore
+          
+
+      --jobs <JOBS>
+          
+
+      --max-depth <MAX_DEPTH>
+          
+
+      --walk-threads <WALK_THREADS>
+          
+
+      --no-default-prune
+          
+
+      --override-include <OVERRIDE_INCLUDE>
+          
+
+      --override-exclude <OVERRIDE_EXCLUDE>
+          
+
+  [PATHS]...
+          対象パス
+
+パス出力:
+      --abs-path
+          
+
+      --abs-canonical
+          
+
+      --trim-root <TRIM_ROOT>
+          
+
+動作:
+      --strict
+          
+
+      --incremental
+          
+
+      --cache-dir <CACHE_DIR>
+          
+
+      --cache-verify
+          
+
+      --clear-cache
+          
+
+  -w, --watch
+          
+
+      --watch-output <WATCH_OUTPUT>
+          [default: full]
+          [possible values: full, jsonl]
+
+ウォッチング:
+      --watch-interval <WATCH_INTERVAL>
+          
+
+比較:
+      --compare <OLD> <NEW>

@@ -30,7 +30,7 @@ cargo install --git https://github.com/jungamer-64/count_lines
 # または、ソースからビルド
 git clone https://github.com/jungamer-64/count_lines.git
 cd count_lines
-cargo build --release
+cargo install --path crates/cli
 ```
 
 ### 基本的な使い方
@@ -64,11 +64,14 @@ count_lines --git --top 30
 
 ```rust
 use clap::Parser;
-use count_lines::{run_from_args, Args};
+use count_lines_cli::args::Args;
+use count_lines_cli::config::Config;
+use count_lines_cli::engine;
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse_from(["count_lines", "--format", "json", "."]);
-    run_from_args(args)
+    let config = Config::from(args);
+    engine::run(&config).map(|_| ())
 }
 ```
 

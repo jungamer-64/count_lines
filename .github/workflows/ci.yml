@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 env:
   CARGO_TERM_COLOR: always
@@ -63,8 +63,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
-        rust: [ stable, beta, nightly ]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [stable, beta, nightly]
     continue-on-error: ${{ matrix.rust == 'nightly' }}
     steps:
       - name: Checkout
@@ -107,7 +107,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
@@ -171,9 +171,35 @@ jobs:
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@ef301417264190a1eb9f26fcf171642070085c5b
 
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+      - name: Install tarpaulin
+        run: cargo binstall cargo-tarpaulin -y
+      - name: Run coverage
+        run: cargo tarpaulin --verbose --workspace --timeout 120 --out Xml
+
+  benchmark:
+    name: Check Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build benchmarks
+        run: cargo bench --no-run
+
   ci-success:
     name: CI Success
-    needs: [ fmt, clippy, test, build, deny ]
+    needs: [fmt, clippy, test, build, deny, coverage, benchmark]
     runs-on: ubuntu-latest
     steps:
       - name: Success

@@ -1,0 +1,30 @@
+[package]
+name = "count_lines_core"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "no_std compatible core library for counting lines, characters, and words in source code"
+repository = "https://github.com/jungamer-64/count_lines"
+readme = "../../README.md"
+keywords = ["count", "lines", "sloc", "no_std", "metrics"]
+categories = ["no-std", "parsing", "development-tools"]
+
+[dependencies]
+# no_std dependencies
+regex = { version = "1", default-features = false, features = [
+    "perf",
+    "unicode-perl",
+] }
+# "regex" 1.9+ with `default-features = false` uses `alloc` but should not use `std`.
+
+
+hashbrown = { workspace = true }
+serde = { workspace = true, features = ["derive", "alloc"] }
+once_cell = { version = "1.19", default-features = false, features = [
+    "race",
+    "alloc",
+] }
+bytecount.workspace = true
+
+[dev-dependencies]
+proptest = "1.9.0"
