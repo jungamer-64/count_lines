@@ -8,16 +8,12 @@ use super::super::string_utils::find_hash_outside_string;
 
 /// `PowerShell` プロセッサ
 /// PowerShell SLOC processor.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PowerShellProcessor {
     in_block_comment: bool,
 }
 
-impl Default for PowerShellProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 impl LineProcessor for PowerShellProcessor {
     fn process_line(&mut self, line: &str) -> usize {

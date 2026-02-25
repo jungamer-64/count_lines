@@ -11,17 +11,13 @@ use super::super::string_utils::find_outside_string_swift;
 
 /// Swift プロセッサ
 /// Swift SLOC processor.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SwiftProcessor {
     block_comment_depth: usize,
     in_block_comment: bool,
 }
 
-impl Default for SwiftProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 impl LineProcessor for SwiftProcessor {
     fn process_line(&mut self, line: &str) -> usize {

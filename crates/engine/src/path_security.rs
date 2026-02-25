@@ -55,7 +55,7 @@ impl Default for PathSanitizeOptions {
     fn default() -> Self {
         Self {
             allow_symlinks: false,
-            allowed_roots: vec![],
+            allowed_roots: Vec::new(),
             max_depth: 256,
             reject_null_bytes: true,
         }

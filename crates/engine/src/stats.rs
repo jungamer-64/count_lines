@@ -5,23 +5,34 @@ use std::path::PathBuf;
 
 use crate::error::EngineError;
 
+/// Statistics for a single processed file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct FileStats {
+    /// The path to the file.
     pub path: PathBuf,
+    /// The number of lines in the file.
     pub lines: usize,
+    /// The number of characters in the file.
     pub chars: usize,
+    /// The number of words in the file, if calculated.
     pub words: Option<usize>,
     /// SLOC (Source Lines of Code) - 空行を除外した純粋コード行数
     #[serde(default)]
     pub sloc: Option<usize>,
+    /// The size of the file in bytes.
     pub size: u64,
+    /// The last modification time of the file.
     pub mtime: Option<DateTime<Local>>,
+    /// The file extension.
     pub ext: String,
+    /// The file name.
     pub name: String,
+    /// Whether the file is considered binary.
     pub is_binary: bool,
 }
 
 impl FileStats {
+    /// Creates a new `FileStats` instance for the given path.
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
         let name = path
@@ -59,6 +70,7 @@ pub struct RunResult {
 }
 
 impl RunResult {
+    /// Creates a new, empty `RunResult`.
     #[must_use]
     pub fn new() -> Self {
         Self::default()

@@ -17,11 +17,7 @@ pub struct DLangProcessor {
     in_c_block: bool,
 }
 
-impl Default for DLangProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 impl LineProcessor for DLangProcessor {
     fn process_line(&mut self, line: &str) -> usize {
@@ -30,6 +26,12 @@ impl LineProcessor for DLangProcessor {
 
     fn is_in_block_comment(&self) -> bool {
         self.block_comment_depth > 0 || self.in_c_block
+    }
+}
+
+impl Default for DLangProcessor {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

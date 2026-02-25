@@ -142,62 +142,23 @@ fn filter_config_from_args(args: &Args) -> FilterConfig {
 
 // From trait implementations for CLI -> Engine enum conversion
 
-impl From<options::OutputFormat> for engine_options::OutputFormat {
-    fn from(f: options::OutputFormat) -> Self {
-        match f {
-            options::OutputFormat::Table => Self::Table,
-            options::OutputFormat::Csv => Self::Csv,
-            options::OutputFormat::Tsv => Self::Tsv,
-            options::OutputFormat::Json => Self::Json,
-            options::OutputFormat::Yaml => Self::Yaml,
-            options::OutputFormat::Md => Self::Md,
-            options::OutputFormat::Jsonl => Self::Jsonl,
+macro_rules! map_enum {
+    ($from:ty, $to:ty, $($variant:ident),+ $(,)?) => {
+        impl From<$from> for $to {
+            fn from(f: $from) -> Self {
+                match f {
+                    $( <$from>::$variant => <$to>::$variant, )+
+                }
+            }
         }
-    }
+    };
 }
 
-impl From<options::OutputMode> for engine_options::OutputMode {
-    fn from(m: options::OutputMode) -> Self {
-        match m {
-            options::OutputMode::Full => Self::Full,
-            options::OutputMode::Summary => Self::Summary,
-            options::OutputMode::TotalOnly => Self::TotalOnly,
-        }
-    }
-}
-
-impl From<options::WatchOutput> for engine_options::WatchOutput {
-    fn from(w: options::WatchOutput) -> Self {
-        match w {
-            options::WatchOutput::Full => Self::Full,
-            options::WatchOutput::Jsonl => Self::Jsonl,
-        }
-    }
-}
-
-impl From<options::SortKey> for engine_options::SortKey {
-    fn from(k: options::SortKey) -> Self {
-        match k {
-            options::SortKey::Lines => Self::Lines,
-            options::SortKey::Chars => Self::Chars,
-            options::SortKey::Words => Self::Words,
-            options::SortKey::Size => Self::Size,
-            options::SortKey::Name => Self::Name,
-            options::SortKey::Ext => Self::Ext,
-            options::SortKey::Sloc => Self::Sloc,
-        }
-    }
-}
-
-impl From<options::Granularity> for engine_options::Granularity {
-    fn from(g: options::Granularity) -> Self {
-        match g {
-            options::Granularity::Day => Self::Day,
-            options::Granularity::Week => Self::Week,
-            options::Granularity::Month => Self::Month,
-        }
-    }
-}
+map_enum!(options::OutputFormat, engine_options::OutputFormat, Table, Csv, Tsv, Json, Yaml, Md, Jsonl);
+map_enum!(options::OutputMode, engine_options::OutputMode, Full, Summary, TotalOnly);
+map_enum!(options::WatchOutput, engine_options::WatchOutput, Full, Jsonl);
+map_enum!(options::SortKey, engine_options::SortKey, Lines, Chars, Words, Size, Name, Ext, Sloc);
+map_enum!(options::Granularity, engine_options::Granularity, Day, Week, Month);
 
 impl From<options::ByMode> for engine_options::ByMode {
     fn from(b: options::ByMode) -> Self {
@@ -208,4 +169,3 @@ impl From<options::ByMode> for engine_options::ByMode {
         }
     }
 }
-

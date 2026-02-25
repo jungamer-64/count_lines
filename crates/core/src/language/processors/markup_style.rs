@@ -9,16 +9,12 @@ use super::super::processor_trait::LineProcessor;
 ///
 /// `<!-- -->` コメントを処理します。
 /// HTML/Markup SLOC processor.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct HtmlProcessor {
     in_comment: bool,
 }
 
-impl Default for HtmlProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 impl LineProcessor for HtmlProcessor {
     fn process_line(&mut self, line: &str) -> usize {

@@ -11,16 +11,12 @@ use super::super::string_utils::find_outside_string_sql;
 /// - Line comments: `--` to end of line
 /// - Block comments: `/* */`
 /// - Ignores comment markers inside string literals (`'...'` and `"..."`)
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct SqlProcessor {
     in_block_comment: bool,
 }
 
-impl Default for SqlProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 impl LineProcessor for SqlProcessor {
     fn process_line(&mut self, line: &str) -> usize {

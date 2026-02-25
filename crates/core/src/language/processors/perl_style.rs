@@ -22,6 +22,12 @@ pub struct PerlProcessor {
     heredoc_re: Regex,
 }
 
+impl Default for PerlProcessor {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LineProcessor for PerlProcessor {
     fn process_line(&mut self, line: &str) -> usize {
         self.process(line)
@@ -32,11 +38,7 @@ impl LineProcessor for PerlProcessor {
     }
 }
 
-impl Default for PerlProcessor {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+
 
 impl PerlProcessor {
     /// Creates a new `PerlProcessor`.
