@@ -22,11 +22,7 @@ pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> An
         return stats;
     }
 
-    // 2. Convert to lossy string
-    // We use lossy to handle potential non-UTF8 text files gracefully.
-    let text = crate::language::string_utils::from_utf8_lossy(input);
-
-    // 3. Process
+    // 2. Process line by line
     let mut processor = get_processor(extension, &config.map_ext);
 
     let mut lines = 0;
@@ -34,11 +30,16 @@ pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> An
     let mut words = 0;
     let mut sloc = 0;
 
-    for line in text.split_inclusive('\n') {
+    // Use split_inclusive on bytes to avoid allocating a full String for the file
+    // if it contains invalid UTF-8.
+    for line_bytes in input.split_inclusive(|&b| b == b'\n') {
         lines += 1;
 
+        // Convert line to lossy string (zero-copy if valid UTF-8)
+        let line = crate::language::string_utils::from_utf8_lossy(line_bytes);
+
         let l_stats =
-            processor.process_line_stats(line, config.count_words, config.count_newlines_in_chars);
+            processor.process_line_stats(&line, config.count_words, config.count_newlines_in_chars);
 
         chars += l_stats.chars;
         sloc += l_stats.sloc;

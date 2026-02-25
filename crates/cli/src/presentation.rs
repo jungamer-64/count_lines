@@ -1,6 +1,6 @@
 use crate::config::Config;
-use crate::options::{OutputFormat, SortKey, WatchOutput};
-use crate::stats::FileStats;
+use count_lines_engine::options::{OutputFormat, SortKey, WatchOutput};
+use count_lines_engine::stats::FileStats;
 use std::cmp::Ordering;
 use std::fmt::Write;
 

@@ -14,34 +14,30 @@ name = "count_lines"
 path = "src/main.rs"
 
 [dependencies]
-count_lines_core = { path = "../core" }
+count_lines_engine = { path = "../engine" }
 
-bytecount = { workspace = true }
 clap = { workspace = true }
-ignore = { workspace = true }
-notify = { workspace = true }
-num_cpus = { workspace = true }
-regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 chrono = { workspace = true }
-rayon = { workspace = true }
-hashbrown = { workspace = true }
 thiserror = { workspace = true }
 
 unicode-segmentation = "1.12.0"
-crossbeam-channel = "0.5.15"
 serde_yaml = { workspace = true }
 comfy-table = "7.2.1"
 terminal_size = "0.4.3"
+num_cpus.workspace = true
+hashbrown.workspace = true
 
 [dev-dependencies]
-assert_cmd = { workspace = true }
-predicates = { workspace = true }
+assert_cmd.workspace = true
+predicates.workspace = true
 serde_json = { workspace = true }
 tempfile = { workspace = true }
 proptest = "1.9.0"
 criterion = "0.7.0"
+insta = { version = "1.46.0", features = ["json", "redactions"] }
+count_lines_core = { path = "../core" }
 
 [[bench]]
 name = "end_to_end"

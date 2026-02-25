@@ -1,5 +1,5 @@
 use crate::error::{AppError, Result};
-use crate::stats::FileStats;
+use count_lines_engine::stats::FileStats;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;

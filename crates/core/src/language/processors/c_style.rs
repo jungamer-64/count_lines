@@ -68,6 +68,15 @@ impl LineProcessor for CStyleProcessor {
         self.process(line)
     }
 
+    fn process_line_stats(
+        &mut self,
+        line: &str,
+        count_words: bool,
+        count_newlines_in_chars: bool,
+    ) -> LineStats {
+        self.process_line_stats(line, count_words, count_newlines_in_chars)
+    }
+
     fn is_in_block_comment(&self) -> bool {
         self.in_block_comment
     }
@@ -76,6 +85,8 @@ impl LineProcessor for CStyleProcessor {
         self.in_block_comment = false;
     }
 }
+
+use super::super::processor_trait::LineStats;
 
 impl CStyleProcessor {
     #[must_use]
@@ -87,34 +98,70 @@ impl CStyleProcessor {
     }
 
     pub fn process(&mut self, line: &str) -> usize {
+        self.process_line_stats(line, false, false).sloc
+    }
+
+    pub fn process_line_stats(
+        &mut self,
+        line: &str,
+        count_words: bool,
+        count_newlines_in_chars: bool,
+    ) -> LineStats {
         let bytes = line.as_bytes();
         let mut i = 0;
         let mut has_code = false;
+        let mut chars = 0;
+        let mut words = 0;
+        let mut in_word = false;
 
         while i < bytes.len() {
             if self.in_block_comment {
-                if i + 1 < bytes.len() && bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                // Find "*/" or end of line
+                let mut end = i;
+                let mut found_end = false;
+                while end + 1 < bytes.len() {
+                    if bytes[end] == b'*' && bytes[end + 1] == b'/' {
+                        found_end = true;
+                        break;
+                    }
+                    end += 1;
+                }
+
+                let segment_end = if found_end { end + 2 } else { bytes.len() };
+                let segment = &line[i..segment_end];
+                
+                Self::update_stats_segment(
+                    segment, 
+                    &mut chars, 
+                    &mut words, 
+                    &mut in_word, 
+                    count_words, 
+                    count_newlines_in_chars
+                );
+
+                i = segment_end;
+                if found_end {
                     self.in_block_comment = false;
-                    i += 2;
-                } else {
-                    i += 1;
                 }
                 continue;
             }
 
             // Check for string literals to skip (strings count as code)
-            if let Some(skip) = try_skip_prefixed_string(bytes, i, self.options) {
+            let skip_opt = try_skip_prefixed_string(bytes, i, self.options)
+                .or_else(|| try_skip_quoted_string(bytes, i, self.options))
+                .or_else(|| try_skip_regex(bytes, i, self.options));
+            
+            if let Some(skip) = skip_opt {
                 has_code = true;
-                i += skip;
-                continue;
-            }
-            if let Some(skip) = try_skip_quoted_string(bytes, i, self.options) {
-                has_code = true;
-                i += skip;
-                continue;
-            }
-            if let Some(skip) = try_skip_regex(bytes, i, self.options) {
-                has_code = true;
+                let segment = &line[i..i + skip];
+                Self::update_stats_segment(
+                    segment, 
+                    &mut chars, 
+                    &mut words, 
+                    &mut in_word, 
+                    count_words, 
+                    count_newlines_in_chars
+                );
                 i += skip;
                 continue;
             }
@@ -122,24 +169,94 @@ impl CStyleProcessor {
             // Check for comments
             if i + 1 < bytes.len() && bytes[i] == b'/' {
                 if bytes[i + 1] == b'/' {
-                    // Line comment: the rest of the line is ignored
+                    // Line comment: the rest of the line is ignored for code, but counted for stats
+                    let segment = &line[i..];
+                    Self::update_stats_segment(
+                        segment, 
+                        &mut chars, 
+                        &mut words, 
+                        &mut in_word, 
+                        count_words, 
+                        count_newlines_in_chars
+                    );
                     break;
                 } else if bytes[i + 1] == b'*' {
                     // Block comment open
                     self.in_block_comment = true;
+                    let segment = &line[i..i + 2];
+                    Self::update_stats_segment(
+                        segment, 
+                        &mut chars, 
+                        &mut words, 
+                        &mut in_word, 
+                        count_words, 
+                        count_newlines_in_chars
+                    );
                     i += 2;
                     continue;
                 }
             }
 
             // Normal code character
-            if !bytes[i].is_ascii_whitespace() {
+            // We need to extract one char
+            let remaining = &line[i..];
+            // SAFETY: i is always at char boundary
+            let c = remaining.chars().next().unwrap();
+            
+            // Update stats
+            if count_newlines_in_chars || (c != '\n' && c != '\r') {
+                chars += 1;
+            }
+            if count_words {
+                if c.is_whitespace() {
+                    in_word = false;
+                } else if !in_word {
+                    in_word = true;
+                    words += 1;
+                }
+            }
+
+            if !c.is_whitespace() {
                 has_code = true;
             }
-            i += 1;
+            i += c.len_utf8();
         }
 
-        usize::from(has_code)
+        LineStats { sloc: usize::from(has_code), chars, words }
+    }
+
+    fn update_stats_segment(
+        segment: &str,
+        chars: &mut usize,
+        words: &mut usize,
+        in_word: &mut bool,
+        count_words: bool,
+        count_newlines_in_chars: bool,
+    ) {
+        if count_words {
+             for c in segment.chars() {
+                if count_newlines_in_chars || (c != '\n' && c != '\r') {
+                    *chars += 1;
+                }
+                if c.is_whitespace() {
+                    *in_word = false;
+                } else if !*in_word {
+                    *in_word = true;
+                    *words += 1;
+                }
+            }
+        } else {
+            // Optimization if we don't count words
+            if count_newlines_in_chars {
+                *chars += segment.chars().count();
+            } else {
+                for c in segment.chars() {
+                     if c != '\n' && c != '\r' {
+                         *chars += 1;
+                     }
+                }
+            }
+        }
     }
 }
 

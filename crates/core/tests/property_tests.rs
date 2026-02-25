@@ -32,4 +32,13 @@ proptest! {
         let expected = content.chars().count();
         prop_assert_eq!(stats.chars, expected);
     }
+
+    #[test]
+    fn test_c_style_stability(
+        content in "\\PC{0,1000}" // Any unicode chars
+    ) {
+        // Just verify it doesn't panic and stats are somewhat sane
+        let stats = count_bytes(content.as_bytes(), "c", &AnalysisConfig::default());
+        prop_assert!(stats.lines >= stats.sloc.unwrap_or(0));
+    }
 }

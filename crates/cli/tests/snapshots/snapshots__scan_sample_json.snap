@@ -1,0 +1,18 @@
+---
+source: crates/cli/tests/snapshots.rs
+expression: json
+---
+[
+  {
+    "chars": 40,
+    "ext": "rs",
+    "is_binary": false,
+    "lines": 3,
+    "mtime": "[MTIME]",
+    "name": "sample.rs",
+    "path": "tests/fixtures/sample.rs",
+    "size": 46,
+    "sloc": null,
+    "words": null
+  }
+]

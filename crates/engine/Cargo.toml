@@ -1,0 +1,31 @@
+[package]
+name = "count_lines_engine"
+version = "0.1.0"
+edition = "2024"
+authors = ["jungamer-64"]
+description = "File processing engine for count_lines"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+count_lines_core = { path = "../core" }
+
+# Workspace dependencies
+bytecount = { workspace = true }
+ignore = { workspace = true }
+notify = { workspace = true }
+num_cpus = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true, features = ["derive"] } # serialization might be needed for config
+chrono = { workspace = true }
+hashbrown = { workspace = true }
+crossbeam-channel = "0.5.15"
+
+# Local dependencies
+thiserror = { workspace = true }
+log = "0.4"
+derive_builder = "0.20.2"
+serde_json.workspace = true
+regex.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
