@@ -38,8 +38,6 @@ impl LineProcessor for PerlProcessor {
     }
 }
 
-
-
 impl PerlProcessor {
     /// Creates a new `PerlProcessor`.
     ///

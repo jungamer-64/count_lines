@@ -22,15 +22,15 @@ fn main() -> ExitCode {
         // Define the callback for the watch loop
         let run_cycle = || {
             presentation::print_clear_screen(&config.watch_output);
-            
+
             match count_lines_engine::run(&config) {
-                 Ok(result) => {
+                Ok(result) => {
                     for (path, err) in &result.errors {
                         eprintln!("Error processing {}: {err}", path.display());
                     }
                     presentation::print_results(&result.stats, &config);
-                 }
-                 Err(e) => eprintln!("Error in watch cycle: {e}"),
+                }
+                Err(e) => eprintln!("Error in watch cycle: {e}"),
             }
         };
 

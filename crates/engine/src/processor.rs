@@ -1,15 +1,21 @@
+// crates/engine/src/processor.rs
 use crate::config::Config;
 use crate::error::{EngineError, Result};
 use crate::stats::FileStats;
-use chrono::Local;
+use count_lines_core::language::LineProcessor;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
-/// Process a single file and return its statistics.
-pub fn process_file((path, meta): (PathBuf, std::fs::Metadata), config: &Config) -> Result<FileStats> {
+pub fn process_file(
+    (path, meta): (PathBuf, std::fs::Metadata),
+    config: &Config,
+) -> Result<FileStats> {
     let size = meta.len();
-    let mtime = meta.modified().ok().map(chrono::DateTime::<Local>::from);
+    let mtime = meta
+        .modified()
+        .ok()
+        .map(chrono::DateTime::<chrono::Local>::from);
     let mut stats = FileStats::new(path.clone());
     stats.size = size;
     stats.mtime = mtime;
@@ -113,6 +119,15 @@ fn process_content_sloc<R: BufRead>(
 }
 
 /// 高速処理用のストリーミング処理
+///
+/// Binary detection strategy:
+/// 1. Initial check: Look for NUL bytes in first buffer (done in `process_file`)
+/// 2. Streaming check: Detect invalid UTF-8 during word counting
+///
+/// Word counting:
+/// - When word counting is enabled, we validate UTF-8 and use Unicode-aware splitting
+/// - If invalid UTF-8 is detected, the file is marked as binary
+/// - When word counting is disabled, we use fast byte counting without UTF-8 validation
 fn process_content_streaming<R: BufRead>(
     reader: &mut R,
     config: &Config,

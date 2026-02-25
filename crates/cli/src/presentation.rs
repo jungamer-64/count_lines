@@ -5,7 +5,6 @@ use count_lines_engine::stats::FileStats;
 use std::cmp::Ordering;
 use std::fmt::Write;
 
-
 pub fn print_clear_screen(output: &WatchOutput) {
     if matches!(output, WatchOutput::Full) {
         print!("\x1B[2J\x1B[1;1H");

@@ -17,8 +17,6 @@ pub struct SwiftProcessor {
     in_block_comment: bool,
 }
 
-
-
 impl LineProcessor for SwiftProcessor {
     fn process_line(&mut self, line: &str) -> usize {
         self.process(line)

@@ -2,8 +2,7 @@
 use crate::args::Args;
 use crate::options::{self, SortKey};
 pub use count_lines_engine::config::{
-    Config, ConfigBuilder, FilterConfig, FilterConfigBuilder, WalkOptions,
-    WalkOptionsBuilder,
+    Config, ConfigBuilder, FilterConfig, FilterConfigBuilder, WalkOptions, WalkOptionsBuilder,
 };
 use count_lines_engine::options as engine_options;
 use std::path::PathBuf;
@@ -45,7 +44,12 @@ impl From<Args> for Config {
         let format: engine_options::OutputFormat = args.output.format.into();
         let output_mode: engine_options::OutputMode = args.output.output_mode.into();
         let watch_output: engine_options::WatchOutput = args.behavior.watch_output.into();
-        let by_mode: Vec<_> = args.output.by.into_iter().map(engine_options::ByMode::from).collect();
+        let by_mode: Vec<_> = args
+            .output
+            .by
+            .into_iter()
+            .map(engine_options::ByMode::from)
+            .collect();
         let sort: Vec<_> = args
             .output
             .sort
@@ -154,11 +158,48 @@ macro_rules! map_enum {
     };
 }
 
-map_enum!(options::OutputFormat, engine_options::OutputFormat, Table, Csv, Tsv, Json, Yaml, Md, Jsonl);
-map_enum!(options::OutputMode, engine_options::OutputMode, Full, Summary, TotalOnly);
-map_enum!(options::WatchOutput, engine_options::WatchOutput, Full, Jsonl);
-map_enum!(options::SortKey, engine_options::SortKey, Lines, Chars, Words, Size, Name, Ext, Sloc);
-map_enum!(options::Granularity, engine_options::Granularity, Day, Week, Month);
+map_enum!(
+    options::OutputFormat,
+    engine_options::OutputFormat,
+    Table,
+    Csv,
+    Tsv,
+    Json,
+    Yaml,
+    Md,
+    Jsonl
+);
+map_enum!(
+    options::OutputMode,
+    engine_options::OutputMode,
+    Full,
+    Summary,
+    TotalOnly
+);
+map_enum!(
+    options::WatchOutput,
+    engine_options::WatchOutput,
+    Full,
+    Jsonl
+);
+map_enum!(
+    options::SortKey,
+    engine_options::SortKey,
+    Lines,
+    Chars,
+    Words,
+    Size,
+    Name,
+    Ext,
+    Sloc
+);
+map_enum!(
+    options::Granularity,
+    engine_options::Granularity,
+    Day,
+    Week,
+    Month
+);
 
 impl From<options::ByMode> for engine_options::ByMode {
     fn from(b: options::ByMode) -> Self {

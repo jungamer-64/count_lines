@@ -43,7 +43,6 @@ pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> An
         }
     }
 
-
     stats.lines = lines;
     stats.chars = chars;
     if config.count_words {

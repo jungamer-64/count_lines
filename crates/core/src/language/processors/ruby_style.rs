@@ -20,7 +20,7 @@ pub enum RubyScope {
     /// String interpolation scope.
     Interpolation, // #{ ... }
     /// String literal scope.
-    String(u8),    // String with quote char (", ', `)
+    String(u8), // String with quote char (", ', `)
 }
 
 /// Rubyプロセッサ

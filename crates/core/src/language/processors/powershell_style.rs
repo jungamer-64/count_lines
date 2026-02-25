@@ -13,8 +13,6 @@ pub struct PowerShellProcessor {
     in_block_comment: bool,
 }
 
-
-
 impl LineProcessor for PowerShellProcessor {
     fn process_line(&mut self, line: &str) -> usize {
         self.process(line)

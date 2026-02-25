@@ -14,8 +14,6 @@ pub struct HtmlProcessor {
     in_comment: bool,
 }
 
-
-
 impl LineProcessor for HtmlProcessor {
     fn process_line(&mut self, line: &str) -> usize {
         self.process(line)

@@ -66,7 +66,7 @@ pub enum PythonScope {
 /// Python string literal state.
 pub struct PythonStringState {
     /// Quote character (`"` or `'`).
-    pub quote: u8,    // " or '
+    pub quote: u8, // " or '
     /// Whether this is a triple-quoted string.
     pub triple: bool, // """ or '''
     /// Whether this is an f-string.

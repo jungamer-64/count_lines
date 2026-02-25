@@ -1,6 +1,6 @@
 // crates/cli/tests/snapshots.rs
 use assert_cmd::Command;
-use insta::{assert_snapshot, assert_json_snapshot};
+use insta::{assert_json_snapshot, assert_snapshot};
 use serde_json::Value;
 
 #[test]
@@ -18,8 +18,10 @@ fn test_help() {
 fn test_scan_sample_json() {
     #[allow(deprecated)]
     let mut cmd = Command::cargo_bin("count_lines").unwrap();
-    cmd.current_dir(env!("CARGO_MANIFEST_DIR")); 
-    cmd.arg("tests/fixtures/sample.rs").arg("--format").arg("json");
+    cmd.current_dir(env!("CARGO_MANIFEST_DIR"));
+    cmd.arg("tests/fixtures/sample.rs")
+        .arg("--format")
+        .arg("json");
 
     let assert = cmd.assert().success();
     let output = assert.get_output();

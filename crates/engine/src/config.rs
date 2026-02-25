@@ -4,7 +4,6 @@ use derive_builder::Builder;
 use std::path::PathBuf;
 use std::time::Duration;
 
-
 #[derive(Debug, Clone, Builder)]
 #[builder(setter(into))]
 pub struct WalkOptions {

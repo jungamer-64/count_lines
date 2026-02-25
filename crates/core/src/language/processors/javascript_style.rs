@@ -52,9 +52,9 @@ pub enum JsScope {
     /// Template literal interpolation scope.
     Interpolation, // ${ ... }
     /// Block comment scope.
-    BlockComment,  // /* ... */
+    BlockComment, // /* ... */
     /// String literal scope.
-    String(u8),    // " ' `
+    String(u8), // " ' `
     /// Regex literal scope.
     Regex {
         /// Whether inside a character class `[...]`.

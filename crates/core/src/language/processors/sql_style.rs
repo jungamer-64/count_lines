@@ -16,8 +16,6 @@ pub struct SqlProcessor {
     in_block_comment: bool,
 }
 
-
-
 impl LineProcessor for SqlProcessor {
     fn process_line(&mut self, line: &str) -> usize {
         self.process(line)

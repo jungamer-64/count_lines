@@ -132,14 +132,14 @@ impl CStyleProcessor {
 
                 let segment_end = if found_end { end + 2 } else { bytes.len() };
                 let segment = &line[i..segment_end];
-                
+
                 Self::update_stats_segment(
-                    segment, 
-                    &mut chars, 
-                    &mut words, 
-                    &mut in_word, 
-                    count_words, 
-                    count_newlines_in_chars
+                    segment,
+                    &mut chars,
+                    &mut words,
+                    &mut in_word,
+                    count_words,
+                    count_newlines_in_chars,
                 );
 
                 i = segment_end;
@@ -153,17 +153,17 @@ impl CStyleProcessor {
             let skip_opt = try_skip_prefixed_string(bytes, i, self.options)
                 .or_else(|| try_skip_quoted_string(bytes, i, self.options))
                 .or_else(|| try_skip_regex(bytes, i, self.options));
-            
+
             if let Some(skip) = skip_opt {
                 has_code = true;
                 let segment = &line[i..i + skip];
                 Self::update_stats_segment(
-                    segment, 
-                    &mut chars, 
-                    &mut words, 
-                    &mut in_word, 
-                    count_words, 
-                    count_newlines_in_chars
+                    segment,
+                    &mut chars,
+                    &mut words,
+                    &mut in_word,
+                    count_words,
+                    count_newlines_in_chars,
                 );
                 i += skip;
                 continue;
@@ -175,12 +175,12 @@ impl CStyleProcessor {
                     // Line comment: the rest of the line is ignored for code, but counted for stats
                     let segment = &line[i..];
                     Self::update_stats_segment(
-                        segment, 
-                        &mut chars, 
-                        &mut words, 
-                        &mut in_word, 
-                        count_words, 
-                        count_newlines_in_chars
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut in_word,
+                        count_words,
+                        count_newlines_in_chars,
                     );
                     break;
                 } else if bytes[i + 1] == b'*' {
@@ -188,12 +188,12 @@ impl CStyleProcessor {
                     self.in_block_comment = true;
                     let segment = &line[i..i + 2];
                     Self::update_stats_segment(
-                        segment, 
-                        &mut chars, 
-                        &mut words, 
-                        &mut in_word, 
-                        count_words, 
-                        count_newlines_in_chars
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut in_word,
+                        count_words,
+                        count_newlines_in_chars,
                     );
                     i += 2;
                     continue;
@@ -205,7 +205,7 @@ impl CStyleProcessor {
             let remaining = &line[i..];
             // SAFETY: i is always at char boundary
             let c = remaining.chars().next().unwrap();
-            
+
             // Update stats
             if count_newlines_in_chars || (c != '\n' && c != '\r') {
                 chars += 1;
@@ -225,7 +225,11 @@ impl CStyleProcessor {
             i += c.len_utf8();
         }
 
-        LineStats { sloc: usize::from(has_code), chars, words }
+        LineStats {
+            sloc: usize::from(has_code),
+            chars,
+            words,
+        }
     }
 
     fn update_stats_segment(
@@ -237,7 +241,7 @@ impl CStyleProcessor {
         count_newlines_in_chars: bool,
     ) {
         if count_words {
-             for c in segment.chars() {
+            for c in segment.chars() {
                 if count_newlines_in_chars || (c != '\n' && c != '\r') {
                     *chars += 1;
                 }
@@ -254,9 +258,9 @@ impl CStyleProcessor {
                 *chars += segment.chars().count();
             } else {
                 for c in segment.chars() {
-                     if c != '\n' && c != '\r' {
-                         *chars += 1;
-                     }
+                    if c != '\n' && c != '\r' {
+                        *chars += 1;
+                    }
                 }
             }
         }

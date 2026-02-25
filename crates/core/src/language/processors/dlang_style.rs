@@ -17,8 +17,6 @@ pub struct DLangProcessor {
     in_c_block: bool,
 }
 
-
-
 impl LineProcessor for DLangProcessor {
     fn process_line(&mut self, line: &str) -> usize {
         self.process(line)

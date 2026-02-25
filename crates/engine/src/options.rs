@@ -1,6 +1,5 @@
 // crates/engine/src/options.rs
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 
 /// Supported output formats for the results.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -81,32 +80,4 @@ pub enum ByMode {
     Dir(usize),
     /// Group by modification time with given granularity.
     Mtime(Granularity),
-}
-
-impl FromStr for ByMode {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "ext" => Ok(Self::Ext),
-            _ if s.starts_with("dir") => {
-                let depth = s
-                    .strip_prefix("dir=")
-                    .and_then(|d| d.parse().ok())
-                    .unwrap_or(1);
-                Ok(Self::Dir(depth))
-            }
-            _ if s.starts_with("mtime") => {
-                let gran = s.split(':').nth(1).unwrap_or("day");
-                let g = match gran {
-                    "day" => Granularity::Day,
-                    "week" => Granularity::Week,
-                    "month" => Granularity::Month,
-                    _ => return Err(format!("Unknown mtime granularity: {gran}")),
-                };
-                Ok(Self::Mtime(g))
-            }
-            other => Err(format!("Unknown --by mode: {other}")),
-        }
-    }
 }
