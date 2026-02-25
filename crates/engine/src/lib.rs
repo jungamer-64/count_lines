@@ -139,9 +139,14 @@ fn process_content_sloc<R: BufRead>(
     path: &Path,
 ) -> Result<FileStats> {
     let mut stats = FileStats::new(path.to_path_buf());
+    stats.sloc = Some(0);
 
     let count_words = config.count_words;
     let count_newlines = config.count_newlines_in_chars;
+
+    if count_words {
+        stats.words = Some(0);
+    }
 
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
     let mut processor = count_lines_core::language::get_processor(ext, &config.filter.map_ext);
@@ -163,18 +168,10 @@ fn process_content_sloc<R: BufRead>(
                 let l_stats = processor.process_line_stats(line_str, count_words, count_newlines);
 
                 stats.chars += l_stats.chars;
-                if let Some(s) = stats.sloc {
-                    stats.sloc = Some(s + l_stats.sloc);
-                } else {
-                    stats.sloc = Some(l_stats.sloc);
-                }
+                *stats.sloc.as_mut().unwrap() += l_stats.sloc;
 
-                if count_words {
-                    if let Some(w) = stats.words {
-                        stats.words = Some(w + l_stats.words);
-                    } else {
-                        stats.words = Some(l_stats.words);
-                    }
+                if let Some(w) = stats.words.as_mut() {
+                    *w += l_stats.words;
                 }
             }
             Err(e) => {
@@ -186,13 +183,6 @@ fn process_content_sloc<R: BufRead>(
         }
     }
 
-    // Initialize Option fields if they were used
-    if stats.sloc.is_none() {
-        stats.sloc = Some(0);
-    }
-    if count_words && stats.words.is_none() {
-        stats.words = Some(0);
-    }
 
     Ok(stats)
 }

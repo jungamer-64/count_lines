@@ -6,12 +6,11 @@
 use super::super::processor_trait::LineProcessor;
 use super::super::string_utils::find_outside_string_sql;
 
-/// SQL プロセッサ
-///
-/// - 行コメント: `--` から行末まで
-/// - ブロックコメント: `/* */`
-/// - 文字列リテラル (`'...'` と `"..."`) 内のコメントマーカーを無視
 /// SQL SLOC processor.
+///
+/// - Line comments: `--` to end of line
+/// - Block comments: `/* */`
+/// - Ignores comment markers inside string literals (`'...'` and `"..."`)
 #[derive(Debug)]
 pub struct SqlProcessor {
     in_block_comment: bool,

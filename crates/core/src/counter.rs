@@ -5,20 +5,14 @@ use crate::stats::AnalysisResult;
 /// Count lines/chars/words/sloc in a byte slice.
 ///
 /// This is the core entry point for the library.
-/// It mimics the logic from the original `process_content_sloc` but works on in-memory bytes.
-/// It also handles binary detection (simplistic check).
+/// Processes in-memory bytes with binary detection and per-line SLOC analysis.
 #[must_use]
 pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> AnalysisResult {
     let mut stats = AnalysisResult::new();
 
-    // 1. Binary check
+    // Binary check: skip counting for binary files
     if is_binary(input) {
         stats.is_binary = true;
-        // If binary, we usually stop or simplistic count?
-        // Original logic: if binary, return stats with is_binary=true.
-        // Usually line counting binary files is not useful.
-        // But for compatibility let's just mark it and maybe return 0 lines or simple line count?
-        // Original `process_file` returns early if binary.
         return stats;
     }
 
@@ -48,14 +42,6 @@ pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> An
         }
     }
 
-    // Handle trailing newline case if necessary?
-    // text.lines() ignores the final newline.
-    // Note: The original implementation in `process_content_sloc` used `read_until(b'\n')`
-    // and then processed the line.
-    // If the input ends with a newline, `lines()` will NOT yield an empty string for the part after it.
-    // However, if the file is just "a\n", `lines()` yields "a". Count is 1.
-    // If the file is "a", `lines()` yields "a". Count is 1.
-    // So lines() is mostly correct for line counting.
 
     stats.lines = lines;
     stats.chars = chars;
@@ -68,8 +54,7 @@ pub fn count_bytes(input: &[u8], extension: &str, config: &AnalysisConfig) -> An
 }
 
 fn is_binary(input: &[u8]) -> bool {
-    // Determine if content is binary by checking for NUL bytes in the first 8KB
-    // Original used 1024 bytes buffer from BufReader
+    // Check for NUL bytes in the first 8KB to detect binary content
     let len = input.len().min(8 * 1024);
     input[..len].contains(&0)
 }

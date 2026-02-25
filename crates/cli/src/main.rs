@@ -20,13 +20,7 @@ fn main() -> ExitCode {
     } else if config.watch {
         // Define the callback for the watch loop
         let run_cycle = || {
-            // Clear screen if WatchOutput is Full
-            if matches!(
-                config.watch_output,
-                count_lines_engine::options::WatchOutput::Full
-            ) {
-                print!("\x1B[2J\x1B[1;1H");
-            }
+            presentation::print_clear_screen(&config.watch_output);
             
             match count_lines_engine::run(&config) {
                  Ok(result) => {

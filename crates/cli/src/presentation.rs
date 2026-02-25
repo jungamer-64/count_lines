@@ -4,15 +4,12 @@ use count_lines_engine::stats::FileStats;
 use std::cmp::Ordering;
 use std::fmt::Write;
 
-// ... (existing code)
 
 pub fn print_clear_screen(output: &WatchOutput) {
     if matches!(output, WatchOutput::Full) {
         print!("\x1B[2J\x1B[1;1H");
     }
 }
-
-const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub fn print_results(stats: &[FileStats], config: &Config) {
     // Filter out binary files
@@ -53,7 +50,7 @@ fn print_table(stats: &[FileStats], config: &Config) {
     let threads = config.walk.threads;
 
     // Print version header
-    println!("count_lines v{VERSION} · parallel={threads}");
+    println!("count_lines v{} · parallel={threads}", crate::VERSION);
     println!();
 
     // Print column header
@@ -112,7 +109,7 @@ fn print_yaml(stats: &[FileStats]) {
 }
 
 fn print_jsonl(stats: &[FileStats]) {
-    let version = env!("CARGO_PKG_VERSION");
+    let version = crate::VERSION;
     for s in stats {
         if let Ok(mut v) = serde_json::to_value(s) {
             if let Some(obj) = v.as_object_mut() {
