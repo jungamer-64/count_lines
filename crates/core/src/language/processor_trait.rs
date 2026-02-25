@@ -1,4 +1,4 @@
-// crates/infra/src/measurement/strategies/sloc_counter/processor_trait.rs
+// crates/core/src/language/processor_trait.rs
 //! SLOC行処理トレイト
 //!
 //! 各言語のコメント処理プロセッサに共通のインターフェースを提供します。

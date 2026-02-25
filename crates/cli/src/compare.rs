@@ -1,3 +1,4 @@
+// crates/cli/src/compare.rs
 use crate::error::{AppError, Result};
 use count_lines_engine::stats::FileStats;
 use std::collections::HashMap;
@@ -213,8 +214,7 @@ fn print_comparison_results(
 fn load_stats(path: &PathBuf) -> Result<Vec<FileStats>> {
     let file = File::open(path).map_err(AppError::Io)?;
     let reader = BufReader::new(file);
-    let stats: Vec<FileStats> = serde_json::from_reader(reader)
-        .map_err(|e| AppError::Io(std::io::Error::new(std::io::ErrorKind::InvalidData, e)))?;
+    let stats: Vec<FileStats> = serde_json::from_reader(reader)?;
     Ok(stats)
 }
 

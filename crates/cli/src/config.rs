@@ -1,3 +1,4 @@
+// crates/cli/src/config.rs
 use crate::args::Args;
 use crate::options::{self, SortKey};
 pub use count_lines_engine::config::{
@@ -122,7 +123,6 @@ fn filter_config_from_args(args: &Args) -> FilterConfig {
 
     FilterConfigBuilder::default()
         .allow_ext(opts.ext.clone())
-        // deny_ext is empty in CLI config?
         .min_lines(opts.min_lines)
         .max_lines(opts.max_lines)
         .min_chars(opts.min_chars)

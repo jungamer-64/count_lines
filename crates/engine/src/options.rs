@@ -1,3 +1,4 @@
+// crates/engine/src/options.rs
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -81,19 +82,5 @@ impl FromStr for ByMode {
             }
             other => Err(format!("Unknown --by mode: {other}")),
         }
-    }
-}
-
-
-pub fn parse_sort_key(key_str: &str) -> Result<SortKey, String> {
-    match key_str.to_ascii_lowercase().as_str() {
-        "lines" => Ok(SortKey::Lines),
-        "chars" => Ok(SortKey::Chars),
-        "words" => Ok(SortKey::Words),
-        "size" => Ok(SortKey::Size),
-        "name" => Ok(SortKey::Name),
-        "ext" => Ok(SortKey::Ext),
-        "sloc" => Ok(SortKey::Sloc),
-        other => Err(format!("Unknown sort key: {other}")),
     }
 }

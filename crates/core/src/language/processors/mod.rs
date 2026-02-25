@@ -1,4 +1,4 @@
-// src/language/processors/mod.rs
+// crates/core/src/language/processors/mod.rs
 pub mod assembly_style;
 pub mod batch_style;
 pub mod c_style;

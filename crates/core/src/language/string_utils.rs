@@ -1,4 +1,4 @@
-// crates/infra/src/measurement/strategies/sloc_counter/string_utils.rs
+// crates/core/src/language/string_utils.rs
 //! 文字列リテラル検出ユーティリティ
 //!
 //! 各種言語の文字列リテラル（通常文字列、Raw文字列、バイト文字列等）を

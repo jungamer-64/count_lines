@@ -1,4 +1,4 @@
-// src/language/processors/c_style.rs
+// crates/core/src/language/processors/c_style.rs
 //! # C-Style Comment Processor
 //!
 //! SLOC counter processor for C-family languages with `//` and `/* */` comments.
@@ -56,10 +56,8 @@ use super::super::string_utils::{
     try_skip_quoted_string, try_skip_regex,
 };
 
-/// C系言語プロセッサ (//, /* */) - ネスト非対応
-#[derive(Default)]
-/// C-style comment SLOC processor.
-#[derive(Debug)]
+/// C-style comment SLOC processor (`//`, `/* */`) — non-nesting.
+#[derive(Default, Debug)]
 pub struct CStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
@@ -91,9 +89,8 @@ impl LineProcessor for CStyleProcessor {
 use super::super::processor_trait::LineStats;
 
 impl CStyleProcessor {
-    #[must_use]
     /// Creates a new `CStyleProcessor` with the given options.
-    /// Creates a new `NestingCStyleProcessor` with the given options.
+    #[must_use]
     pub const fn new(options: StringSkipOptions) -> Self {
         Self {
             options,
@@ -266,10 +263,8 @@ impl CStyleProcessor {
     }
 }
 
-/// C系言語プロセッサ - ネスト対応 (Rust, Kotlin, Scala)
-#[derive(Default)]
-/// C-style SLOC processor with nested block comment support.
-#[derive(Debug)]
+/// C-style SLOC processor with nested block comment support (Rust, Kotlin, Scala).
+#[derive(Default, Debug)]
 pub struct NestingCStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
