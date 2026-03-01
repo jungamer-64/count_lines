@@ -7,9 +7,9 @@
 use alloc::string::ToString;
 use regex::Regex;
 
-use super::super::heredoc_utils::HeredocContext;
-use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::find_outside_string;
+use crate::language::heredoc_utils::HeredocContext;
+use crate::language::processor_trait::LineProcessor;
+use crate::language::string_utils::find_outside_string;
 
 /// PHP プロセッサ
 #[derive(Clone, Debug)]
@@ -194,7 +194,7 @@ fn is_inside_string(line: &str, target_pos: usize) -> bool {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `PhpProcessor`.
 ///

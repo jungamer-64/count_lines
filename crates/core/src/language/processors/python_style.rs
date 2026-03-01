@@ -50,7 +50,7 @@ use core::str::CharIndices;
 
 use alloc::vec::Vec;
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Python scope state.
@@ -404,7 +404,7 @@ impl PythonProcessor {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `PythonProcessor`.
 #[derive(Debug, Clone, Default)]

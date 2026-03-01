@@ -5,7 +5,7 @@
 //! - 行コメント: `#`
 //! - ブロックコメント: `#=` ～ `=#` (ネスト対応)
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// Julia プロセッサ
 #[derive(Default)]

@@ -72,7 +72,7 @@ pub struct SimplePrefixProcessor {
     ignore_case: bool,
 }
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 impl LineProcessor for SimplePrefixProcessor {
     fn process_line(&mut self, line: &str) -> usize {

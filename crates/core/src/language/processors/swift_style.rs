@@ -6,8 +6,8 @@
 //! - `/* */` ブロックコメント（ネスト対応）
 //! - 拡張デリミタ文字列 `#"..."#`, `##"..."##` 等
 
-use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::find_outside_string_swift;
+use crate::language::processor_trait::LineProcessor;
+use crate::language::string_utils::find_outside_string_swift;
 
 /// Swift プロセッサ
 /// Swift SLOC processor.

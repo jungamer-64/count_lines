@@ -3,7 +3,7 @@
 //!
 //! HTML/XML/SVG などの <!-- --> コメントを処理します。
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// HTML/XML プロセッサ
 ///
@@ -68,7 +68,7 @@ impl HtmlProcessor {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `HtmlProcessor`.
 #[derive(Debug, Clone, Default)]

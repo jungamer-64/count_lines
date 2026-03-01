@@ -16,7 +16,7 @@
 #[derive(Default, Clone, Debug)]
 pub struct FortranProcessor;
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 impl LineProcessor for FortranProcessor {
     fn process_line(&mut self, line: &str) -> usize {

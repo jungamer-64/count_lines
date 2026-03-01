@@ -3,8 +3,8 @@
 //!
 //! `PowerShell` は `#` 行コメントと `<# #>` ブロックコメントを使用します。
 
-use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::find_hash_outside_string;
+use crate::language::processor_trait::LineProcessor;
+use crate::language::string_utils::find_hash_outside_string;
 
 /// `PowerShell` プロセッサ
 /// PowerShell SLOC processor.

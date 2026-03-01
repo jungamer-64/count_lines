@@ -9,9 +9,9 @@
 use alloc::string::ToString;
 use regex::Regex;
 
-use super::super::heredoc_utils::HeredocContext;
-use super::super::processor_trait::LineProcessor;
-use super::simple_hash_style::find_hash_outside_simple_string;
+use crate::language::heredoc_utils::HeredocContext;
+use crate::language::processor_trait::LineProcessor;
+use crate::language::processors::simple_hash_style::find_hash_outside_simple_string;
 
 /// Perlプロセッサ
 #[derive(Clone, Debug)]
@@ -197,7 +197,7 @@ pub fn is_perl_pod_start(line: &str) -> bool {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `PerlProcessor`.
 ///

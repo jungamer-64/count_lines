@@ -5,7 +5,7 @@
 //! - 行コメント: `--`
 //! - ブロックコメント: `{-` ～ `-}` (ネスト対応)
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// Haskell プロセッサ
 #[derive(Default)]
@@ -90,7 +90,7 @@ impl HaskellProcessor {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `HaskellProcessor`.
 #[derive(Debug, Clone, Default)]

@@ -3,7 +3,7 @@
 //!
 //! 対象: Shell, YAML, TOML, Dockerfile, Makefile, Config系など
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// 単純な Hash コメントプロセッサ
 #[derive(Default)]

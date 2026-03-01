@@ -5,7 +5,7 @@
 //! - 行コメント: `#` と `@`
 //! - Cスタイルブロックコメント: `/* */`
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// GAS Assembly プロセッサ
 #[derive(Default)]

@@ -43,7 +43,7 @@
 //! assert_eq!(proc.process_line("const re = /pattern/;"), 1);
 //! ```
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -251,7 +251,7 @@ impl JavaScriptProcessor {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `JavaScriptProcessor`.
 #[derive(Debug, Clone, Default)]

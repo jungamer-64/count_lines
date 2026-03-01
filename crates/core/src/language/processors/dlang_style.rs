@@ -6,8 +6,8 @@
 //! - ブロックコメント: `/* */`
 //! - ネストブロックコメント: `/+ +/` (ネスト対応)
 
-use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::find_outside_string;
+use crate::language::processor_trait::LineProcessor;
+use crate::language::string_utils::find_outside_string;
 
 /// D言語 プロセッサ
 /// D language SLOC processor.

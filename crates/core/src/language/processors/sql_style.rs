@@ -3,8 +3,8 @@
 //!
 //! SQL の -- 行コメントと /* */ ブロックコメントを処理します。
 
-use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::find_outside_string_sql;
+use crate::language::processor_trait::LineProcessor;
+use crate::language::string_utils::find_outside_string_sql;
 
 /// SQL SLOC processor.
 ///

@@ -5,7 +5,7 @@
 //! - ブロックコメント: `(*` ～ `*)` (ネスト対応)
 //! - 行コメントなし
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// OCaml プロセッサ
 #[derive(Default)]

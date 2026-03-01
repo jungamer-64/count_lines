@@ -23,9 +23,9 @@ fn get_heredoc_re() -> &'static Regex {
     })
 }
 
-use super::super::heredoc_utils::HeredocContext;
-use super::super::processor_trait::LineProcessor;
-use super::simple_hash_style::find_hash_outside_simple_string;
+use crate::language::heredoc_utils::HeredocContext;
+use crate::language::processor_trait::LineProcessor;
+use crate::language::processors::simple_hash_style::find_hash_outside_simple_string;
 
 /// Shellプロセッサ
 #[derive(Clone, Debug)]
@@ -197,7 +197,7 @@ fn is_inside_string(line: &str, target_pos: usize) -> bool {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `ShellProcessor`.
 ///

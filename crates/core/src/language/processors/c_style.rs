@@ -50,8 +50,8 @@
 //! assert_eq!(proc.process_line("int y = 2; // inline"), 1);
 //! ```
 
-use super::super::processor_trait::LineProcessor;
-use super::super::string_utils::{
+use crate::language::processor_trait::LineProcessor;
+use crate::language::string_utils::{
     PatternMatch, StringSkipOptions, find_any_outside_string, try_skip_prefixed_string,
     try_skip_quoted_string, try_skip_regex,
 };
@@ -86,7 +86,7 @@ impl LineProcessor for CStyleProcessor {
     }
 }
 
-use super::super::processor_trait::LineStats;
+use crate::language::processor_trait::LineStats;
 
 impl CStyleProcessor {
     /// Creates a new `CStyleProcessor` with the given options.
@@ -388,7 +388,7 @@ impl NestingCStyleProcessor {
 // StatefulProcessor implementations
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `CStyleProcessor`.
 #[derive(Debug, Clone, Default)]

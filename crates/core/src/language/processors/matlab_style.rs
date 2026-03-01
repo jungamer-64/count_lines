@@ -5,7 +5,7 @@
 //! - 行コメント: `%`
 //! - ブロックコメント: `%{` ～ `%}`
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// MATLAB プロセッサ
 #[derive(Default)]

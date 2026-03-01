@@ -6,7 +6,7 @@
 //! - ブロックコメント: `--[[` ～ `]]`
 //! - 等号付きブロックコメント: `--[=[` ～ `]=]`, `--[==[` ～ `]==]` 等
 
-use super::super::processor_trait::LineProcessor;
+use crate::language::processor_trait::LineProcessor;
 
 /// Luaプロセッサ
 #[derive(Default)]
@@ -118,7 +118,7 @@ fn find_lua_block_end(s: &str, level: usize) -> Option<usize> {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `LuaProcessor`.
 #[derive(Debug, Clone, Default)]

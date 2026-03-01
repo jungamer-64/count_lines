@@ -11,8 +11,8 @@ use alloc::string::ToString;
 use alloc::vec::Vec;
 use regex::Regex;
 
-use super::super::heredoc_utils::HeredocContext;
-use super::super::processor_trait::LineProcessor;
+use crate::language::heredoc_utils::HeredocContext;
+use crate::language::processor_trait::LineProcessor;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Ruby scope state.
@@ -225,7 +225,7 @@ impl RubyProcessor {
 // StatefulProcessor implementation
 // ============================================================================
 
-use super::super::processor_trait::StatefulProcessor;
+use crate::language::processor_trait::StatefulProcessor;
 
 /// State for `RubyProcessor`.
 ///
