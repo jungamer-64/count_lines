@@ -10,7 +10,7 @@ use comment_style::CommentStyle;
 pub use processor_trait::{LineProcessor, LineStats, StatefulProcessor};
 #[allow(clippy::wildcard_imports)]
 use processors::*;
-use string_utils::StringSkipOptions;
+pub use string_utils::StringSkipOptions;
 
 use alloc::boxed::Box;
 use alloc::string::String;

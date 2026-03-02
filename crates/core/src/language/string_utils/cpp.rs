@@ -1,11 +1,13 @@
 // crates/core/src/language/string_utils/cpp.rs
+use crate::language::string_utils::SkipResult;
+
 /// C++ Raw String Literal をスキップ
 /// 形式: R"delimiter(...)delimiter" (delimiterは0-16文字の英数字)
 #[must_use]
-pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
+pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> SkipResult {
     // R" で始まる必要がある
     if bytes.len() < 3 || bytes[0] != b'R' || bytes[1] != b'"' {
-        return None;
+        return SkipResult::None;
     }
 
     let mut i = 2;
@@ -18,13 +20,13 @@ pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
         }
         // デリミタに使える文字: 英数字とアンダースコア（スペースや括弧は除く）
         if !bytes[i].is_ascii_alphanumeric() && bytes[i] != b'_' {
-            return None;
+            return SkipResult::None;
         }
         i += 1;
     }
 
     if i >= bytes.len() || bytes[i] != b'(' {
-        return None;
+        return SkipResult::None;
     }
 
     let delimiter = &bytes[delimiter_start..i];
@@ -38,12 +40,12 @@ pub fn try_skip_cpp_raw_string(bytes: &[u8]) -> Option<usize> {
                 && &remaining[..delimiter.len()] == delimiter
                 && remaining[delimiter.len()] == b'"'
             {
-                return Some(i + 1 + delimiter.len() + 1);
+                return SkipResult::Closed(i + 1 + delimiter.len() + 1);
             }
         }
         i += 1;
     }
 
     // 行末まで閉じられていない
-    Some(bytes.len())
+    SkipResult::Unclosed(bytes.len())
 }

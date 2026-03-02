@@ -1,9 +1,9 @@
 // crates/core/src/language/string_utils/skip.rs
 use crate::language::StringSkipOptions;
-use crate::language::string_utils::try_skip_byte_string;
-use crate::language::string_utils::try_skip_char_literal;
-use crate::language::string_utils::try_skip_cpp_raw_string;
-use crate::language::string_utils::try_skip_raw_string;
+use crate::language::string_utils::{
+    try_skip_byte_string, try_skip_char_literal, try_skip_cpp_raw_string, try_skip_raw_string,
+    SkipResult,
+};
 
 /// 識別子に使える文字かどうかを判定
 #[inline]
@@ -18,7 +18,7 @@ pub fn try_skip_prefixed_string(
     line: &[u8],
     i: usize,
     options: StringSkipOptions,
-) -> Option<usize> {
+) -> SkipResult {
     let bytes = &line[i..];
 
     if options.csharp_verbatim() && bytes.len() >= 2 && bytes[0] == b'@' && bytes[1] == b'"' {
@@ -37,12 +37,12 @@ pub fn try_skip_prefixed_string(
         return try_skip_byte_string(bytes);
     }
 
-    None
+    SkipResult::None
 }
 
 /// Try to skip a quoted string literal (`"..."`, `'...'`, or backtick).
 #[must_use]
-pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions) -> SkipResult {
     let bytes = &line[i..];
     let b = bytes[0];
 
@@ -59,20 +59,20 @@ pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions)
                 continue;
             }
             if bytes[j] == b'"' {
-                return Some(j + 1);
+                return SkipResult::Closed(j + 1);
             }
             j += 1;
         }
-        return Some(bytes.len());
+        return SkipResult::Unclosed(bytes.len());
     }
 
     if options.single_quote() && b == b'\'' {
         if options.rust_lifetime() {
             if let Some(skip) = try_skip_char_literal(bytes) {
-                return Some(skip);
+                return SkipResult::Closed(skip);
             }
             // Lifetime annotation, just skip '
-            return Some(1);
+            return SkipResult::Closed(1);
         }
 
         let mut j = 1;
@@ -82,11 +82,11 @@ pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions)
                 continue;
             }
             if bytes[j] == b'\'' {
-                return Some(j + 1);
+                return SkipResult::Closed(j + 1);
             }
             j += 1;
         }
-        return Some(bytes.len());
+        return SkipResult::Unclosed(bytes.len());
     }
 
     if options.backtick_string() && b == b'`' {
@@ -97,19 +97,19 @@ pub fn try_skip_quoted_string(line: &[u8], i: usize, options: StringSkipOptions)
                 continue;
             }
             if bytes[j] == b'`' {
-                return Some(j + 1);
+                return SkipResult::Closed(j + 1);
             }
             j += 1;
         }
-        return Some(bytes.len());
+        return SkipResult::Unclosed(bytes.len());
     }
 
-    None
+    SkipResult::None
 }
 
 /// Try to skip a regex literal (`/.../`).
 #[must_use]
-pub fn try_skip_regex(line: &[u8], i: usize, options: StringSkipOptions) -> Option<usize> {
+pub fn try_skip_regex(line: &[u8], i: usize, options: StringSkipOptions) -> SkipResult {
     if options.regex_literal() && line[i] == b'/' {
         let is_line_comment = i + 1 < line.len() && line[i + 1] == b'/';
         let is_block_comment = i + 1 < line.len() && line[i + 1] == b'*';
@@ -118,14 +118,15 @@ pub fn try_skip_regex(line: &[u8], i: usize, options: StringSkipOptions) -> Opti
             return try_skip_regex_literal(line, i);
         }
     }
-    None
+    SkipResult::None
 }
+
 /// C# Verbatim String をスキップ
 /// 形式: @"..." ( " は "" でエスケープ、\ はエスケープしない)
 #[must_use]
-pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
+pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> SkipResult {
     if bytes.len() < 2 || bytes[0] != b'@' || bytes[1] != b'"' {
-        return None;
+        return SkipResult::None;
     }
 
     let mut i = 2;
@@ -137,22 +138,22 @@ pub fn try_skip_csharp_verbatim_string(bytes: &[u8]) -> Option<usize> {
                 continue;
             }
             // 単独の " は文字列終了
-            return Some(i + 1);
+            return SkipResult::Closed(i + 1);
         }
         i += 1;
     }
 
     // 行末まで閉じられていない (C# verbatim string は改行を許可するためこれでOK)
-    Some(bytes.len())
+    SkipResult::Unclosed(bytes.len())
 }
 
 /// Java/Kotlin Text Block (三重クォート) をスキップ
 /// 形式: """..."""
 #[must_use]
-pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
+pub fn try_skip_text_block(bytes: &[u8]) -> SkipResult {
     // 最低でも6文字必要: """ + """
     if bytes.len() < 6 || bytes[0] != b'"' || bytes[1] != b'"' || bytes[2] != b'"' {
-        return None;
+        return SkipResult::None;
     }
 
     let mut i = 3;
@@ -165,13 +166,13 @@ pub fn try_skip_text_block(bytes: &[u8]) -> Option<usize> {
 
         // 終了の """ を探す
         if bytes[i] == b'"' && i + 2 < bytes.len() && bytes[i + 1] == b'"' && bytes[i + 2] == b'"' {
-            return Some(i + 3);
+            return SkipResult::Closed(i + 3);
         }
         i += 1;
     }
 
     // 行末まで閉じられていない (複数行文字列の途中)
-    Some(bytes.len())
+    SkipResult::Unclosed(bytes.len())
 }
 // ============================================================================
 // 正規表現リテラルのスキップ
@@ -307,20 +308,19 @@ fn is_regex_preceding_keyword(bytes: &[u8], end_pos: usize) -> bool {
 /// * `start_pos` - `/` の開始位置
 ///
 /// # 戻り値
-/// * `Some(n)` - スキップするバイト数
-/// * `None` - 正規表現リテラルではない
+/// * `SkipResult` - スキップの結果
 #[must_use]
-pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
+pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> SkipResult {
     // 正規表現の開始として妥当かチェック
     if !is_likely_regex_start(bytes, start_pos) {
-        return None;
+        return SkipResult::None;
     }
 
     let mut i = start_pos + 1; // 開始の `/` をスキップ
 
     // 空の正規表現 `//` は除算と区別がつかないのでスキップしない
     if i >= bytes.len() || bytes[i] == b'/' {
-        return None;
+        return SkipResult::None;
     }
 
     // 閉じる `/` を探す
@@ -357,12 +357,12 @@ pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
                 while i < bytes.len() && is_regex_flag_char(bytes[i]) {
                     i += 1;
                 }
-                return Some(i - start_pos);
+                return SkipResult::Closed(i - start_pos);
             }
 
             // 行末に達した場合（正規表現は単一行）
             b'\n' | b'\r' => {
-                return None;
+                return SkipResult::None;
             }
 
             _ => {
@@ -372,7 +372,7 @@ pub fn try_skip_regex_literal(bytes: &[u8], start_pos: usize) -> Option<usize> {
     }
 
     // 閉じる `/` が見つからなかった
-    None
+    SkipResult::None
 }
 
 /// 正規表現フラグ文字かどうかを判定

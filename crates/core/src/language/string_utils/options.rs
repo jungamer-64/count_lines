@@ -1,4 +1,33 @@
 // crates/core/src/language/string_utils/options.rs
+
+/// Result of a string skipping operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkipResult {
+    /// No string literal found at the current position.
+    None,
+    /// A string literal was found and successfully closed. Contains the total bytes to skip.
+    Closed(usize),
+    /// A string literal was found but reached the end of the line without closing.
+    /// Contains the total bytes to skip (usually to the end of the line).
+    Unclosed(usize),
+}
+
+impl SkipResult {
+    /// Returns the number of bytes to skip, if any.
+    #[must_use]
+    pub const fn skip_count(self) -> usize {
+        match self {
+            Self::None => 0,
+            Self::Closed(n) | Self::Unclosed(n) => n,
+        }
+    }
+
+    /// Returns `true` if a string was found (whether closed or not).
+    #[must_use]
+    pub const fn is_some(self) -> bool {
+        !matches!(self, Self::None)
+    }
+}
 /// Options controlling which string literal syntaxes to recognize.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct StringSkipOptions {

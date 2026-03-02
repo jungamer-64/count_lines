@@ -15,14 +15,14 @@ mod tests {
     // =========================================================================
 
     mod regex_literal_tests {
-        use crate::language::string_utils::try_skip_regex_literal;
+        use crate::language::string_utils::{try_skip_regex_literal, SkipResult};
 
         #[test]
         fn test_simple_regex_literal() {
             // 単純な正規表現リテラル
             let bytes = b"/abc/";
             let result = try_skip_regex_literal(bytes, 0);
-            assert_eq!(result, Some(5));
+            assert_eq!(result, SkipResult::Closed(5));
         }
 
         #[test]
@@ -30,7 +30,7 @@ mod tests {
             // フラグ付き正規表現
             let bytes = b"/abc/gi";
             let result = try_skip_regex_literal(bytes, 0);
-            assert_eq!(result, Some(7));
+            assert_eq!(result, SkipResult::Closed(7));
         }
 
         #[test]
@@ -38,7 +38,7 @@ mod tests {
             // エスケープされたスラッシュ
             let bytes = b"/a\\/b/";
             let result = try_skip_regex_literal(bytes, 0);
-            assert_eq!(result, Some(6));
+            assert_eq!(result, SkipResult::Closed(6));
         }
 
         #[test]
@@ -46,7 +46,7 @@ mod tests {
             // 文字クラス内のスラッシュ
             let bytes = b"/[/]/";
             let result = try_skip_regex_literal(bytes, 0);
-            assert_eq!(result, Some(5));
+            assert_eq!(result, SkipResult::Closed(5));
         }
 
         #[test]
@@ -54,7 +54,7 @@ mod tests {
             // 正規表現内の // パターン
             let bytes = b"/https:\\/\\//";
             let result = try_skip_regex_literal(bytes, 0);
-            assert_eq!(result, Some(12));
+            assert_eq!(result, SkipResult::Closed(12));
         }
 
         #[test]
@@ -62,7 +62,7 @@ mod tests {
             // 数値の後の除算
             let bytes = b"10/2";
             let result = try_skip_regex_literal(bytes, 2);
-            assert_eq!(result, None);
+            assert_eq!(result, SkipResult::None);
         }
 
         #[test]
@@ -70,7 +70,7 @@ mod tests {
             // 識別子の後の除算
             let bytes = b"x/2";
             let result = try_skip_regex_literal(bytes, 1);
-            assert_eq!(result, None);
+            assert_eq!(result, SkipResult::None);
         }
 
         #[test]
@@ -78,7 +78,7 @@ mod tests {
             // 閉じ括弧の後の除算
             let bytes = b"(x+y)/2";
             let result = try_skip_regex_literal(bytes, 5);
-            assert_eq!(result, None);
+            assert_eq!(result, SkipResult::None);
         }
 
         #[test]
@@ -86,7 +86,7 @@ mod tests {
             // = の後の正規表現
             let bytes = b"x = /abc/";
             let result = try_skip_regex_literal(bytes, 4);
-            assert_eq!(result, Some(5));
+            assert_eq!(result, SkipResult::Closed(5));
         }
 
         #[test]
@@ -94,7 +94,7 @@ mod tests {
             // return の後の正規表現
             let bytes = b"return /abc/";
             let result = try_skip_regex_literal(bytes, 7);
-            assert_eq!(result, Some(5));
+            assert_eq!(result, SkipResult::Closed(5));
         }
 
         #[test]
@@ -102,7 +102,7 @@ mod tests {
             // ( の後の正規表現
             let bytes = b"if (/abc/.test(s))";
             let result = try_skip_regex_literal(bytes, 4);
-            assert_eq!(result, Some(5));
+            assert_eq!(result, SkipResult::Closed(5));
         }
 
         #[test]
@@ -110,7 +110,7 @@ mod tests {
             // 空の正規表現は除算として扱う
             let bytes = b"//";
             let result = try_skip_regex_literal(bytes, 0);
-            assert_eq!(result, None);
+            assert_eq!(result, SkipResult::None);
         }
 
         #[test]
@@ -118,7 +118,15 @@ mod tests {
             // 行頭の正規表現
             let bytes = b"/abc/g.test(x)";
             let result = try_skip_regex_literal(bytes, 0);
-            assert_eq!(result, Some(6));
+            assert_eq!(result, SkipResult::Closed(6));
+        }
+
+        #[test]
+        fn test_unclosed_regex() {
+            // 閉じられていない正規表現
+            let bytes = b"/abc";
+            let result = try_skip_regex_literal(bytes, 0);
+            assert_eq!(result, SkipResult::None);
         }
     }
 

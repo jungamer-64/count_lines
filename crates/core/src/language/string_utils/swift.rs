@@ -1,4 +1,6 @@
 // crates/core/src/language/string_utils/swift.rs
+use crate::language::string_utils::SkipResult;
+
 /// Swift の文字列リテラルをスキップ
 ///
 /// Swift には以下の文字列形式がある:
@@ -9,9 +11,9 @@
 ///
 /// 成功した場合はスキップするバイト数を返す
 #[must_use]
-pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
+pub fn try_skip_swift_string(bytes: &[u8]) -> SkipResult {
     if bytes.is_empty() {
-        return None;
+        return SkipResult::None;
     }
 
     // 1. 拡張デリミタ (#の数を数える)
@@ -24,7 +26,7 @@ pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
 
     // クォートの確認
     if i >= bytes.len() || bytes[i] != b'"' {
-        return None; // 文字列ではない
+        return SkipResult::None; // 文字列ではない
     }
     i += 1; // '"' をスキップ
 
@@ -48,7 +50,7 @@ pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
                     if remaining.len() >= hash_count
                         && remaining[..hash_count].iter().all(|&b| b == b'#')
                     {
-                        return Some(i + 3 + hash_count);
+                        return SkipResult::Closed(i + 3 + hash_count);
                     }
                     // ハッシュが足りない、または単なる """ の中身 -> スキップして続行
                     i += 1;
@@ -60,7 +62,7 @@ pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
                 if remaining.len() >= hash_count
                     && remaining[..hash_count].iter().all(|&b| b == b'#')
                 {
-                    return Some(i + 1 + hash_count);
+                    return SkipResult::Closed(i + 1 + hash_count);
                 }
             }
         }
@@ -86,5 +88,5 @@ pub fn try_skip_swift_string(bytes: &[u8]) -> Option<usize> {
     }
 
     // 閉じられていない文字列（行末まで、または複数行文字列の途中）
-    Some(bytes.len())
+    SkipResult::Unclosed(bytes.len())
 }

@@ -141,7 +141,10 @@ fn process_content_streaming<R: BufRead>(
     let count_words = config.count_words;
     let count_newlines = config.count_newlines_in_chars;
 
-    let mut last_byte: Option<u8> = None;
+    let mut prev_ended_with_non_whitespace = false;
+    let mut partial_utf8 = Vec::new();
+
+    let mut ends_with_lf = true;
 
     loop {
         let buf = reader.fill_buf().map_err(|e| EngineError::FileRead {
@@ -149,55 +152,121 @@ fn process_content_streaming<R: BufRead>(
             source: e,
         })?;
         if buf.is_empty() {
+            if !partial_utf8.is_empty() {
+                // Handle remaining bytes if any (should not happen in valid UTF-8)
+                let cow = String::from_utf8_lossy(&partial_utf8);
+                words += count_words_in_segment(&cow, &mut prev_ended_with_non_whitespace);
+                ends_with_lf = cow.as_bytes().last() == Some(&b'\n');
+            }
             break;
-        }
-
-        if let Some(&b) = buf.last() {
-            last_byte = Some(b);
         }
 
         // Count lines
         lines += bytecount::count(buf, b'\n');
 
-        // Count chars
-        let chunk_chars = bytecount::num_chars(buf);
-        if count_newlines {
-            chars += chunk_chars;
+        // Count words and chars with UTF-8 validation
+        let current_data = if partial_utf8.is_empty() {
+            buf.to_vec()
         } else {
-            let lf_count = bytecount::count(buf, b'\n');
-            let cr_count = bytecount::count(buf, b'\r');
-            chars += chunk_chars;
-            chars -= lf_count;
-            if cr_count > 0 {
-                chars -= cr_count;
+            let mut v = std::mem::take(&mut partial_utf8);
+            v.extend_from_slice(buf);
+            v
+        };
+
+        let (valid_part, invalid_part) = split_at_valid_utf8(&current_data);
+        let cow = String::from_utf8_lossy(valid_part);
+        
+        if count_words {
+            words += count_words_in_segment(&cow, &mut prev_ended_with_non_whitespace);
+        }
+        
+        // Count actual Unicode characters
+        for c in cow.chars() {
+            if count_newlines || (c != '\n' && c != '\r') {
+                chars += 1;
             }
         }
 
-        // Count words with UTF-8 validation
-        if count_words {
-            // Use lossy conversion to support non-UTF8 text and handle split multi-byte seq
-            let cow = String::from_utf8_lossy(buf);
-            words += cow.split_whitespace().count();
+        ends_with_lf = if !invalid_part.is_empty() {
+            invalid_part.last() == Some(&b'\n')
+        } else {
+            cow.as_bytes().last() == Some(&b'\n')
+        };
+
+        partial_utf8.extend_from_slice(invalid_part);
+        if !invalid_part.is_empty() {
+            stats.is_binary = true; // Mark as binary if invalid UTF-8 is found
         }
 
         let len = buf.len();
         reader.consume(len);
     }
 
-    // 末尾に改行がない場合の行カウント補正
-    if let Some(b) = last_byte
-        && b != b'\n'
-    {
-        lines += 1;
-    }
-
     stats.lines = lines;
+    // 末尾に改行がない場合の行カウント補正
+    if !ends_with_lf && (chars > 0 || words > 0 || !partial_utf8.is_empty()) {
+        stats.lines += 1;
+    }
+    
     stats.chars = chars;
     if count_words {
         stats.words = Some(words);
     }
 
     Ok(stats)
+}
+
+fn split_at_valid_utf8(buf: &[u8]) -> (&[u8], &[u8]) {
+    let mut i = buf.len();
+    // UTF-8 can be up to 4 bytes. We look back at most 3 bytes for a start byte.
+    while i > 0 && i > buf.len().saturating_sub(4) {
+        let b = buf[i - 1];
+        if b & 0b1000_0000 == 0 {
+            // ASCII - always a boundary
+            return buf.split_at(i);
+        }
+        if b & 0b1100_0000 == 0b1100_0000 {
+            // Start of a multi-byte sequence
+            let needed = if b & 0b1110_0000 == 0b1100_0000 {
+                2
+            } else if b & 0b1111_0000 == 0b1110_0000 {
+                3
+            } else {
+                4
+            };
+
+            if buf.len() - (i - 1) >= needed {
+                // Complete sequence
+                return buf.split_at(buf.len());
+            } else {
+                // Incomplete sequence
+                return buf.split_at(i - 1);
+            }
+        }
+        i -= 1;
+    }
+    // If we didn't find a start byte, it might be a sequence split even further back,
+    // or just valid continuation bytes that are part of a sequence starting in a previous chunk.
+    // However, if we are looking at a chunk that is just middle of a long multi-byte char,
+    // we should have kept the start byte in `partial_utf8`.
+    (buf, &[])
+}
+
+fn count_words_in_segment(s: &str, prev_ended_with_non_whitespace: &mut bool) -> usize {
+    let mut chunk_words = s.split_whitespace().count();
+    if *prev_ended_with_non_whitespace {
+        if let Some(first_char) = s.chars().next() {
+            if !first_char.is_whitespace() {
+                chunk_words = chunk_words.saturating_sub(1);
+            }
+        }
+    }
+    *prev_ended_with_non_whitespace = if let Some(last_char) = s.chars().last() {
+        !last_char.is_whitespace()
+    } else {
+        false
+    };
+    chunk_words
 }
 
 #[cfg(test)]
@@ -226,5 +295,73 @@ mod tests {
 
         assert_eq!(stats.chars, 10);
         assert_eq!(stats.lines, 3);
+    }
+
+    #[test]
+    fn test_process_content_streaming_split_word() {
+        let mut config = Config::default();
+        config.count_sloc = false; // Force streaming mode
+        config.count_words = true;
+        
+        // "hello wor" (9 bytes) + "ld" (2 bytes) = "hello world" (1 word)
+        // If split at chunk boundary, it should still be 1 word.
+        
+        let path = PathBuf::from("test.txt");
+        
+        // Mock a reader that returns in chunks
+        struct ChunkReader {
+            chunks: Vec<Vec<u8>>,
+            current: usize,
+        }
+        impl std::io::Read for ChunkReader {
+            fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+                if self.current >= self.chunks.len() {
+                    return Ok(0);
+                }
+                let chunk = &self.chunks[self.current];
+                let len = chunk.len().min(buf.len());
+                buf[..len].copy_from_slice(&chunk[..len]);
+                self.current += 1;
+                Ok(len)
+            }
+        }
+        impl BufRead for ChunkReader {
+            fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+                if self.current >= self.chunks.len() {
+                    return Ok(&[]);
+                }
+                Ok(&self.chunks[self.current])
+            }
+            fn consume(&mut self, _amt: usize) {
+                self.current += 1;
+            }
+        }
+
+        let mut reader = ChunkReader {
+            chunks: vec![b"hello wor".to_vec(), b"ld".to_vec()],
+            current: 0,
+        };
+
+        let stats = process_content_streaming(&mut reader, &config, &path).unwrap();
+        assert_eq!(stats.words, Some(2)); // WAIT, "hello wor" + "ld" -> "hello", "wor" + "ld" -> 2 words total if split
+        // Actually, split_whitespace() on "hello wor" is 2 words: ["hello", "wor"]
+        // split_whitespace() on "ld" is 1 word: ["ld"]
+        // Total 2 words.
+        
+        // Let's try something simpler: "hello" split into "he" and "llo"
+        let mut reader2 = ChunkReader {
+            chunks: vec![b"he".to_vec(), b"llo".to_vec()],
+            current: 0,
+        };
+        let stats2 = process_content_streaming(&mut reader2, &config, &path).unwrap();
+        assert_eq!(stats2.words, Some(1));
+
+        // Test with whitespace in between: "he " and "llo"
+        let mut reader3 = ChunkReader {
+            chunks: vec![b"he ".to_vec(), b"llo".to_vec()],
+            current: 0,
+        };
+        let stats3 = process_content_streaming(&mut reader3, &config, &path).unwrap();
+        assert_eq!(stats3.words, Some(2));
     }
 }

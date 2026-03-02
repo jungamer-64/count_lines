@@ -35,18 +35,21 @@ pub fn find_outside_string_with_options(
 
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
-        if let Some(skip) = try_skip_prefixed_string(line_bytes, i, options) {
-            i += skip;
+        let res = try_skip_prefixed_string(line_bytes, i, options);
+        if res.is_some() {
+            i += res.skip_count();
             continue;
         }
 
-        if let Some(skip) = try_skip_quoted_string(line_bytes, i, options) {
-            i += skip;
+        let res = try_skip_quoted_string(line_bytes, i, options);
+        if res.is_some() {
+            i += res.skip_count();
             continue;
         }
 
-        if let Some(skip) = try_skip_regex(line_bytes, i, options) {
-            i += skip;
+        let res = try_skip_regex(line_bytes, i, options);
+        if res.is_some() {
+            i += res.skip_count();
             continue;
         }
 
@@ -125,16 +128,19 @@ pub fn find_any_outside_string(
     let mut i = 0;
     while i <= line_bytes.len() - min_pattern_len {
         // Skip string literals
-        if let Some(skip) = try_skip_prefixed_string(line_bytes, i, options) {
-            i += skip;
+        let res = try_skip_prefixed_string(line_bytes, i, options);
+        if res.is_some() {
+            i += res.skip_count();
             continue;
         }
-        if let Some(skip) = try_skip_quoted_string(line_bytes, i, options) {
-            i += skip;
+        let res = try_skip_quoted_string(line_bytes, i, options);
+        if res.is_some() {
+            i += res.skip_count();
             continue;
         }
-        if let Some(skip) = try_skip_regex(line_bytes, i, options) {
-            i += skip;
+        let res = try_skip_regex(line_bytes, i, options);
+        if res.is_some() {
+            i += res.skip_count();
             continue;
         }
 
@@ -168,17 +174,19 @@ pub fn find_outside_string_swift(line: &str, pattern: &str) -> Option<usize> {
     let mut i = 0;
     while i <= line_bytes.len() - pattern_bytes.len() {
         // Swift 拡張デリミタ文字列: #"..."#, ##"..."##, #"""..."""# など
-        if line_bytes[i] == b'#'
-            && let Some(skip) = try_skip_swift_string(&line_bytes[i..])
-        {
-            i += skip;
-            continue;
+        if line_bytes[i] == b'#' {
+            let res = try_skip_swift_string(&line_bytes[i..]);
+            if res.is_some() {
+                i += res.skip_count();
+                continue;
+            }
         }
 
         // 通常/多重引用符文字列: "...", """..."""
         if line_bytes[i] == b'"' {
-            if let Some(skip) = try_skip_swift_string(&line_bytes[i..]) {
-                i += skip;
+            let res = try_skip_swift_string(&line_bytes[i..]);
+            if res.is_some() {
+                i += res.skip_count();
                 continue;
             }
             // フォールバック: 通常の文字列スキップ

@@ -1,12 +1,14 @@
 // crates/core/src/language/string_utils/rust.rs
+use crate::language::string_utils::SkipResult;
+
 /// Rust raw文字列リテラルをスキップする
 ///
 /// `r"..."`, `r#"..."#`, `r##"..."##` などの形式を処理
 /// 成功した場合はスキップするバイト数を返す
 #[must_use]
-pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
+pub fn try_skip_raw_string(bytes: &[u8]) -> SkipResult {
     if bytes.is_empty() || bytes[0] != b'r' {
-        return None;
+        return SkipResult::None;
     }
 
     let mut i = 1;
@@ -20,7 +22,7 @@ pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
 
     // '"' で始まる必要がある
     if i >= bytes.len() || bytes[i] != b'"' {
-        return None;
+        return SkipResult::None;
     }
     i += 1;
 
@@ -31,19 +33,19 @@ pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
             let remaining = &bytes[i + 1..];
             if hash_count == 0 {
                 // r"..." の場合
-                return Some(i + 1);
+                return SkipResult::Closed(i + 1);
             } else if remaining.len() >= hash_count
                 && remaining[..hash_count].iter().all(|&b| b == b'#')
             {
                 // r#"..."# や r##"..."## の場合
-                return Some(i + 1 + hash_count);
+                return SkipResult::Closed(i + 1 + hash_count);
             }
         }
         i += 1;
     }
 
     // 閉じられていない raw 文字列（行末まで）
-    Some(bytes.len())
+    SkipResult::Unclosed(bytes.len())
 }
 
 /// Rust byte文字列をスキップする
@@ -51,13 +53,13 @@ pub fn try_skip_raw_string(bytes: &[u8]) -> Option<usize> {
 /// `b"..."`, `br"..."`, `br#"..."#` などの形式を処理
 /// 成功した場合はスキップするバイト数を返す
 #[must_use]
-pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
+pub fn try_skip_byte_string(bytes: &[u8]) -> SkipResult {
     if bytes.is_empty() || bytes[0] != b'b' {
-        return None;
+        return SkipResult::None;
     }
 
     if bytes.len() < 2 {
-        return None;
+        return SkipResult::None;
     }
 
     // b"..." の場合
@@ -69,22 +71,24 @@ pub fn try_skip_byte_string(bytes: &[u8]) -> Option<usize> {
                 continue;
             }
             if bytes[i] == b'"' {
-                return Some(i + 1);
+                return SkipResult::Closed(i + 1);
             }
             i += 1;
         }
-        return Some(bytes.len());
+        return SkipResult::Unclosed(bytes.len());
     }
 
     // br"..." または br#"..."# の場合
     if bytes[1] == b'r' {
         // try_skip_raw_string に &bytes[1..] を渡して、+1 して返す
-        if let Some(skip) = try_skip_raw_string(&bytes[1..]) {
-            return Some(1 + skip);
+        match try_skip_raw_string(&bytes[1..]) {
+            SkipResult::None => return SkipResult::None,
+            SkipResult::Closed(skip) => return SkipResult::Closed(1 + skip),
+            SkipResult::Unclosed(skip) => return SkipResult::Unclosed(1 + skip),
         }
     }
 
-    None
+    SkipResult::None
 }
 
 /// 文字リテラルをスキップする（ライフタイム注釈との区別）

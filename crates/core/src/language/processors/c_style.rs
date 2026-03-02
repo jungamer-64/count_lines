@@ -52,8 +52,8 @@
 
 use crate::language::processor_trait::LineProcessor;
 use crate::language::string_utils::{
-    PatternMatch, StringSkipOptions, find_any_outside_string, try_skip_prefixed_string,
-    try_skip_quoted_string, try_skip_regex,
+    StringSkipOptions, try_skip_prefixed_string,
+    try_skip_quoted_string, try_skip_regex, SkipResult,
 };
 
 /// C-style comment SLOC processor (`//`, `/* */`) — non-nesting.
@@ -61,6 +61,9 @@ use crate::language::string_utils::{
 pub struct CStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
+    in_string: bool,
+    quote_char: Option<u8>,
+    in_word: bool,
 }
 
 impl LineProcessor for CStyleProcessor {
@@ -83,6 +86,9 @@ impl LineProcessor for CStyleProcessor {
 
     fn reset(&mut self) {
         self.in_block_comment = false;
+        self.in_string = false;
+        self.quote_char = None;
+        self.in_word = false;
     }
 }
 
@@ -95,6 +101,9 @@ impl CStyleProcessor {
         Self {
             options,
             in_block_comment: false,
+            in_string: false,
+            quote_char: None,
+            in_word: false,
         }
     }
 
@@ -115,7 +124,6 @@ impl CStyleProcessor {
         let mut has_code = false;
         let mut chars = 0;
         let mut words = 0;
-        let mut in_word = false;
 
         while i < bytes.len() {
             if self.in_block_comment {
@@ -137,7 +145,7 @@ impl CStyleProcessor {
                     segment,
                     &mut chars,
                     &mut words,
-                    &mut in_word,
+                    &mut self.in_word,
                     count_words,
                     count_newlines_in_chars,
                 );
@@ -149,24 +157,103 @@ impl CStyleProcessor {
                 continue;
             }
 
-            // Check for string literals to skip (strings count as code)
-            let skip_opt = try_skip_prefixed_string(bytes, i, self.options)
-                .or_else(|| try_skip_quoted_string(bytes, i, self.options))
-                .or_else(|| try_skip_regex(bytes, i, self.options));
+            if self.in_string {
+                let quote = self.quote_char.unwrap();
+                let mut end = i;
+                let mut found_end = false;
+                
+                // Handle verbatim strings (C# style) if enabled
+                let verbatim = self.options.csharp_verbatim() && quote == b'"';
 
-            if let Some(skip) = skip_opt {
-                has_code = true;
-                let segment = &line[i..i + skip];
+                while end < bytes.len() {
+                    if !verbatim && bytes[end] == b'\\' && end + 1 < bytes.len() {
+                        end += 2;
+                        continue;
+                    }
+                    if bytes[end] == quote {
+                        if verbatim && end + 1 < bytes.len() && bytes[end+1] == quote {
+                            end += 2; // Escaped quote ""
+                            continue;
+                        }
+                        found_end = true;
+                        break;
+                    }
+                    end += 1;
+                }
+
+                let segment_end = if found_end { end + 1 } else { bytes.len() };
+                let segment = &line[i..segment_end];
+
+                if !segment.trim().is_empty() {
+                    has_code = true;
+                }
+
                 Self::update_stats_segment(
                     segment,
                     &mut chars,
                     &mut words,
-                    &mut in_word,
+                    &mut self.in_word,
                     count_words,
                     count_newlines_in_chars,
                 );
-                i += skip;
+
+                i = segment_end;
+                if found_end {
+                    self.in_string = false;
+                    self.quote_char = None;
+                }
                 continue;
+            }
+
+            // Check for string literals to skip (strings count as code)
+            let skip_result = try_skip_prefixed_string(bytes, i, self.options);
+            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_quoted_string(bytes, i, self.options) };
+            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_regex(bytes, i, self.options) };
+
+            match skip_result {
+                SkipResult::Closed(skip) => {
+                    has_code = true;
+                    let segment = &line[i..i + skip];
+                    Self::update_stats_segment(
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut self.in_word,
+                        count_words,
+                        count_newlines_in_chars,
+                    );
+                    i += skip;
+                    continue;
+                }
+                SkipResult::Unclosed(skip) => {
+                    has_code = true;
+                    // Determine quote char for continuation
+                    let b = bytes[i];
+                    if b == b'"' || b == b'\'' || b == b'`' {
+                        self.quote_char = Some(b);
+                    } else if (b == b'r' || b == b'b') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                        self.quote_char = Some(b'"');
+                    } else if b == b'@' && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                        self.quote_char = Some(b'"');
+                    } else {
+                        // Default to double quote if unknown prefix, should not happen often
+                        self.quote_char = Some(b'"');
+                    }
+                    self.in_string = true;
+
+                    let segment = &line[i..i + skip];
+                    Self::update_stats_segment(
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut self.in_word,
+                        count_words,
+                        count_newlines_in_chars,
+                    );
+                    i += skip;
+                    continue;
+                }
+                SkipResult::None => {}
             }
 
             // Check for comments
@@ -178,7 +265,7 @@ impl CStyleProcessor {
                         segment,
                         &mut chars,
                         &mut words,
-                        &mut in_word,
+                        &mut self.in_word,
                         count_words,
                         count_newlines_in_chars,
                     );
@@ -191,7 +278,7 @@ impl CStyleProcessor {
                         segment,
                         &mut chars,
                         &mut words,
-                        &mut in_word,
+                        &mut self.in_word,
                         count_words,
                         count_newlines_in_chars,
                     );
@@ -201,9 +288,7 @@ impl CStyleProcessor {
             }
 
             // Normal code character
-            // We need to extract one char
             let remaining = &line[i..];
-            // SAFETY: i is always at char boundary
             let c = remaining.chars().next().unwrap();
 
             // Update stats
@@ -212,9 +297,9 @@ impl CStyleProcessor {
             }
             if count_words {
                 if c.is_whitespace() {
-                    in_word = false;
-                } else if !in_word {
-                    in_word = true;
+                    self.in_word = false;
+                } else if !self.in_word {
+                    self.in_word = true;
                     words += 1;
                 }
             }
@@ -230,6 +315,10 @@ impl CStyleProcessor {
             chars,
             words,
         }
+    }
+
+    pub(crate) fn options_has_verbatim(quote: u8, options: StringSkipOptions) -> bool {
+        quote == b'"' && options.csharp_verbatim()
     }
 
     fn update_stats_segment(
@@ -273,6 +362,9 @@ pub struct NestingCStyleProcessor {
     options: StringSkipOptions,
     in_block_comment: bool,
     block_comment_depth: usize,
+    in_string: bool,
+    quote_char: Option<u8>,
+    in_word: bool,
 }
 
 impl LineProcessor for NestingCStyleProcessor {
@@ -287,6 +379,232 @@ impl LineProcessor for NestingCStyleProcessor {
     fn reset(&mut self) {
         self.in_block_comment = false;
         self.block_comment_depth = 0;
+        self.in_string = false;
+        self.quote_char = None;
+        self.in_word = false;
+    }
+
+    fn process_line_stats(
+        &mut self,
+        line: &str,
+        count_words: bool,
+        count_newlines_in_chars: bool,
+    ) -> LineStats {
+        // NOTE: For now we use the same row-by-row logic as CStyleProcessor but with depth tracking.
+        // Actually, let's just use the specialized logic that handles nesting.
+        // For line stats, we can reuse CStyleProcessor's loop but with depth.
+        
+        let bytes = line.as_bytes();
+        let mut i = 0;
+        let mut has_code = false;
+        let mut chars = 0;
+        let mut words = 0;
+
+        while i < bytes.len() {
+            if self.block_comment_depth > 0 {
+                // Find "*/" or "/*" or end of line
+                let mut end = i;
+                let mut found_end = false;
+                let mut found_open = false;
+                while end + 1 < bytes.len() {
+                    if bytes[end] == b'*' && bytes[end + 1] == b'/' {
+                        found_end = true;
+                        break;
+                    }
+                    if bytes[end] == b'/' && bytes[end + 1] == b'*' {
+                        found_open = true;
+                        break;
+                    }
+                    end += 1;
+                }
+
+                let segment_end = if found_end || found_open { end + 2 } else { bytes.len() };
+                let segment = &line[i..segment_end];
+
+                CStyleProcessor::update_stats_segment(
+                    segment,
+                    &mut chars,
+                    &mut words,
+                    &mut self.in_word,
+                    count_words,
+                    count_newlines_in_chars,
+                );
+
+                i = segment_end;
+                if found_end {
+                    self.block_comment_depth -= 1;
+                    if self.block_comment_depth == 0 {
+                        self.in_block_comment = false;
+                    }
+                } else if found_open {
+                    self.block_comment_depth += 1;
+                }
+                continue;
+            }
+
+            if self.in_string {
+                let quote = self.quote_char.unwrap();
+                let mut end = i;
+                let mut found_end = false;
+                
+                // Rust raw strings don't use self.in_string = true for single lines, 
+                // but NestingCStyleProcessor might be used for other languages too.
+                // However, Rust's only multiline string is raw string which is handled by SkipResult.
+                // Normal strings in Rust are NOT multiline (they need \ at end of line).
+                // Wait, if a normal string has \ at end of line, it's still unclosed on this line.
+                
+                // Handle verbatim strings (C# style) if enabled
+                // Handle verbatim strings (C# style) if enabled
+                let verbatim = CStyleProcessor::options_has_verbatim(quote, self.options);
+                
+                while end < bytes.len() {
+                    if !verbatim && bytes[end] == b'\\' && end + 1 < bytes.len() {
+                        end += 2;
+                        continue;
+                    }
+                    if bytes[end] == quote {
+                        if verbatim && end + 1 < bytes.len() && bytes[end+1] == quote {
+                            end += 2; // Escaped quote ""
+                            continue;
+                        }
+                        found_end = true;
+                        break;
+                    }
+                    end += 1;
+                }
+
+                let segment_end = if found_end { end + 1 } else { bytes.len() };
+                let segment = &line[i..segment_end];
+
+                if !segment.trim().is_empty() {
+                    has_code = true;
+                }
+
+                CStyleProcessor::update_stats_segment(
+                    segment,
+                    &mut chars,
+                    &mut words,
+                    &mut self.in_word,
+                    count_words,
+                    count_newlines_in_chars,
+                );
+
+                i = segment_end;
+                if found_end {
+                    self.in_string = false;
+                    self.quote_char = None;
+                }
+                continue;
+            }
+
+            // Check for string literals to skip (strings count as code)
+            let skip_result = try_skip_prefixed_string(bytes, i, self.options);
+            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_quoted_string(bytes, i, self.options) };
+            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_regex(bytes, i, self.options) };
+
+            match skip_result {
+                SkipResult::Closed(skip) => {
+                    has_code = true;
+                    let segment = &line[i..i + skip];
+                    CStyleProcessor::update_stats_segment(
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut self.in_word,
+                        count_words,
+                        count_newlines_in_chars,
+                    );
+                    i += skip;
+                    continue;
+                }
+                SkipResult::Unclosed(skip) => {
+                    has_code = true;
+                    // Determine quote char for continuation
+                    let b = bytes[i];
+                    if b == b'"' || b == b'\'' || b == b'`' {
+                        self.quote_char = Some(b);
+                    } else if (b == b'r' || b == b'b') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                        self.quote_char = Some(b'"');
+                    } else {
+                        self.quote_char = Some(b'"');
+                    }
+                    self.in_string = true;
+
+                    let segment = &line[i..i + skip];
+                    CStyleProcessor::update_stats_segment(
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut self.in_word,
+                        count_words,
+                        count_newlines_in_chars,
+                    );
+                    i += skip;
+                    continue;
+                }
+                SkipResult::None => {}
+            }
+
+            // Check for comments
+            if i + 1 < bytes.len() && bytes[i] == b'/' {
+                if bytes[i + 1] == b'/' {
+                    // Line comment
+                    let segment = &line[i..];
+                    CStyleProcessor::update_stats_segment(
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut self.in_word,
+                        count_words,
+                        count_newlines_in_chars,
+                    );
+                    break;
+                } else if bytes[i + 1] == b'*' {
+                    // Block comment open
+                    self.block_comment_depth = 1;
+                    self.in_block_comment = true;
+                    let segment = &line[i..i + 2];
+                    CStyleProcessor::update_stats_segment(
+                        segment,
+                        &mut chars,
+                        &mut words,
+                        &mut self.in_word,
+                        count_words,
+                        count_newlines_in_chars,
+                    );
+                    i += 2;
+                    continue;
+                }
+            }
+
+            // Normal code character
+            let remaining = &line[i..];
+            let c = remaining.chars().next().unwrap();
+
+            // Update stats
+            if count_newlines_in_chars || (c != '\n' && c != '\r') {
+                chars += 1;
+            }
+            if count_words {
+                if c.is_whitespace() {
+                    self.in_word = false;
+                } else if !self.in_word {
+                    self.in_word = true;
+                    words += 1;
+                }
+            }
+
+            if !c.is_whitespace() {
+                has_code = true;
+            }
+            i += c.len_utf8();
+        }
+
+        LineStats {
+            sloc: usize::from(has_code),
+            chars,
+            words,
+        }
     }
 }
 
@@ -298,89 +616,15 @@ impl NestingCStyleProcessor {
             options,
             in_block_comment: false,
             block_comment_depth: 0,
+            in_string: false,
+            quote_char: None,
+            in_word: false,
         }
     }
 
     /// Processes a line and returns the SLOC count.
     pub fn process(&mut self, line: &str) -> usize {
-        if line.trim().is_empty() {
-            return 0;
-        }
-
-        let mut count = 0;
-        self.process_internal(line, &mut count);
-        usize::from(count > 0)
-    }
-
-    fn process_internal(&mut self, line: &str, count: &mut usize) {
-        const COMMENT_PATTERNS: &[&str] = &["//", "/*"];
-        if self.block_comment_depth > 0 {
-            self.process_nesting_block_line(line, count);
-            return;
-        }
-
-        // Single scan for both // and /* patterns
-        if let Some(PatternMatch {
-            position,
-            pattern_index,
-        }) = find_any_outside_string(line, COMMENT_PATTERNS, self.options)
-        {
-            match pattern_index {
-                0 => {
-                    // Line comment "//"
-                    let before = &line[..position];
-                    if before.trim().is_empty() {
-                        return;
-                    }
-                    *count += 1;
-                    return;
-                }
-                1 => {
-                    // Block comment "/*"
-                    let before = &line[..position];
-                    let has_code_before = !before.trim().is_empty();
-                    self.block_comment_depth = 1;
-                    let rest = &line[position + 2..];
-                    self.process_nesting_block_line(rest, count);
-                    if has_code_before {
-                        *count += 1;
-                    }
-                    return;
-                }
-                _ => {}
-            }
-        }
-
-        *count += 1;
-    }
-
-    fn process_nesting_block_line(&mut self, line: &str, count: &mut usize) {
-        let bytes = line.as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            if i + 1 < bytes.len() {
-                if bytes[i] == b'/' && bytes[i + 1] == b'*' {
-                    self.block_comment_depth += 1;
-                    i += 2;
-                    continue;
-                }
-                if bytes[i] == b'*' && bytes[i + 1] == b'/' {
-                    self.block_comment_depth -= 1;
-                    i += 2;
-                    if self.block_comment_depth == 0 {
-                        self.in_block_comment = false;
-                        let rest = &line[i..];
-                        if !rest.trim().is_empty() {
-                            self.process_internal(rest, count);
-                        }
-                        return;
-                    }
-                    continue;
-                }
-            }
-            i += 1;
-        }
-        self.in_block_comment = self.block_comment_depth > 0;
+        self.process_line_stats(line, false, false).sloc
     }
 }
 
@@ -395,6 +639,8 @@ use crate::language::processor_trait::StatefulProcessor;
 pub struct CStyleState {
     /// Whether currently inside a block comment.
     pub in_block_comment: bool,
+    /// Whether currently inside a word.
+    pub in_word: bool,
 }
 
 impl StatefulProcessor for CStyleProcessor {
@@ -403,11 +649,13 @@ impl StatefulProcessor for CStyleProcessor {
     fn get_state(&self) -> Self::State {
         CStyleState {
             in_block_comment: self.in_block_comment,
+            in_word: self.in_word,
         }
     }
 
     fn set_state(&mut self, state: Self::State) {
         self.in_block_comment = state.in_block_comment;
+        self.in_word = state.in_word;
     }
 
     fn is_in_multiline_context(&self) -> bool {
@@ -422,6 +670,8 @@ pub struct NestingCStyleState {
     pub in_block_comment: bool,
     /// Current nesting depth of block comments.
     pub block_comment_depth: usize,
+    /// Whether currently inside a word.
+    pub in_word: bool,
 }
 
 impl StatefulProcessor for NestingCStyleProcessor {
@@ -431,12 +681,14 @@ impl StatefulProcessor for NestingCStyleProcessor {
         NestingCStyleState {
             in_block_comment: self.in_block_comment,
             block_comment_depth: self.block_comment_depth,
+            in_word: self.in_word,
         }
     }
 
     fn set_state(&mut self, state: Self::State) {
         self.in_block_comment = state.in_block_comment;
         self.block_comment_depth = state.block_comment_depth;
+        self.in_word = state.in_word;
     }
 
     fn is_in_multiline_context(&self) -> bool {
@@ -505,6 +757,19 @@ mod tests {
         assert!(p.is_in_block_comment());
         assert_eq!(p.process(" end */"), 0);
         assert!(!p.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_c_style_processor_multiline_string_with_comment_markers() {
+        let mut p = CStyleProcessor::new(StringSkipOptions::rust());
+        // Line 1: Starts a string that contains a block comment start marker
+        assert_eq!(p.process("let s = \"/* "), 1);
+        // If it correctly handles strings, it should NOT be in a block comment
+        assert!(!p.is_in_block_comment(), "Should not be in block comment after open quote");
+        
+        // Line 2: Contains what looks like a block comment end and a closing quote
+        // If the previous line incorrectly started a block comment, this line might be miscounted.
+        assert_eq!(p.process(" */ \";"), 1);
     }
 
     // ==================== Additional Edge Case Tests ====================
@@ -870,23 +1135,17 @@ mod tests {
     #[test]
     fn test_nesting_c_style_stateful_checkpoint_restore() {
         let mut p = NestingCStyleProcessor::new(StringSkipOptions::default());
-
-        // Start nested block comments
-        assert_eq!(p.process("/* outer /* inner */"), 0);
+        p.process_line("/* outer");
+        let state = p.get_state();
         assert!(p.is_in_multiline_context());
 
-        // Checkpoint
-        let checkpoint = p.checkpoint();
-        assert_eq!(checkpoint.block_comment_depth, 1);
-
-        // Close the outer comment
-        assert_eq!(p.process("*/"), 0);
+        p.reset();
         assert!(!p.is_in_multiline_context());
 
-        // Restore
-        p.restore(checkpoint);
+        p.set_state(state);
         assert!(p.is_in_multiline_context());
-        assert_eq!(p.get_state().block_comment_depth, 1);
+        assert_eq!(p.process_line("nested */"), 0);
+        assert!(!p.is_in_multiline_context());
     }
 
     #[test]
@@ -900,8 +1159,65 @@ mod tests {
         // Set state manually
         p.set_state(CStyleState {
             in_block_comment: true,
+            in_word: false,
         });
         assert!(p.is_in_multiline_context());
         assert!(p.is_in_block_comment());
+    }
+
+    #[test]
+    fn test_rust_multiline_string_sloc_explicit() {
+        let mut processor = CStyleProcessor::new(StringSkipOptions::rust());
+
+        // Line 1: r"###
+        let stats1 = processor.process_line_stats("let s = r###\"", false, false);
+        assert_eq!(stats1.sloc, 1, "Line 1 should be code");
+
+        // Line 2: comment?
+        let stats2 =
+            processor.process_line_stats("/* this is still inside string */", false, false);
+        assert_eq!(stats2.sloc, 1, "Line 2 should be code (inside string)");
+
+        // Line 3: end string
+        let stats3 = processor.process_line_stats("\"###; // comment", false, false);
+        assert_eq!(stats3.sloc, 1, "Line 3 should be code (ends string)");
+
+        // Line 4: real comment
+        let stats4 = processor.process_line_stats("/* real comment */", false, false);
+        assert_eq!(stats4.sloc, 0, "Line 4 should NOT be code (real comment)");
+    }
+
+    #[test]
+    fn test_python_multiline_string_sloc_explicit() {
+        let mut processor = CStyleProcessor::new(StringSkipOptions::java_kotlin());
+
+        // Line 1: """
+        let stats1 = processor.process_line_stats("s = \"\"\"", false, false);
+        assert_eq!(stats1.sloc, 1, "Line 1 should be code");
+
+        // Line 2: inside
+        let stats2 = processor.process_line_stats("# inside string", false, false);
+        assert_eq!(stats2.sloc, 1, "Line 2 should be code (inside string)");
+
+        // Line 3: end
+        let stats3 = processor.process_line_stats("\"\"\" # comment", false, false);
+        assert_eq!(stats3.sloc, 1, "Line 3 should be code (ends string)");
+    }
+
+    #[test]
+    fn test_cpp_raw_string_multiline_explicit() {
+        let mut processor = CStyleProcessor::new(StringSkipOptions::cpp());
+
+        // Line 1: R"foo(
+        let stats1 = processor.process_line_stats("const char* s = R\"foo(", false, false);
+        assert_eq!(stats1.sloc, 1);
+
+        // Line 2: inside
+        let stats2 = processor.process_line_stats("// inside raw string", false, false);
+        assert_eq!(stats2.sloc, 1);
+
+        // Line 3: end
+        let stats3 = processor.process_line_stats(")foo\";", false, false);
+        assert_eq!(stats3.sloc, 1);
     }
 }

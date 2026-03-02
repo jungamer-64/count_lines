@@ -1,4 +1,6 @@
 // crates/core/src/language/string_utils/python.rs
+use crate::language::string_utils::SkipResult;
+
 /// 文字列外の # を検索（Python用）
 ///
 /// Python の文字列プレフィックスを考慮:
@@ -15,11 +17,12 @@ pub fn find_hash_outside_string(line: &str) -> Option<usize> {
     while i < bytes.len() {
         // Python の文字列プレフィックスをチェック
         // f, F, u, U, r, R, b, B の組み合わせ (最大2文字)
-        if is_python_string_prefix(bytes[i])
-            && let Some(skip) = try_skip_python_string(&bytes[i..])
-        {
-            i += skip;
-            continue;
+        if is_python_string_prefix(bytes[i]) {
+            let res = try_skip_python_string(&bytes[i..]);
+            if res.is_some() {
+                i += res.skip_count();
+                continue;
+            }
         }
 
         // 文字列: "..." または '...'
@@ -31,6 +34,7 @@ pub fn find_hash_outside_string(line: &str) -> Option<usize> {
             if i + 1 < bytes.len() && bytes[i] == quote && bytes[i + 1] == quote {
                 // 三重引用符: """...""" または '''...'''
                 i += 2; // 開始の3文字目
+                let mut found_end = false;
                 while i < bytes.len() {
                     if bytes[i] == b'\\' && i + 1 < bytes.len() {
                         i += 2;
@@ -42,14 +46,20 @@ pub fn find_hash_outside_string(line: &str) -> Option<usize> {
                         && bytes[i + 2] == quote
                     {
                         i += 3;
+                        found_end = true;
                         break;
                     }
                     i += 1;
                 }
-                continue;
+                if found_end {
+                    continue;
+                } else {
+                    break; // 行末まで
+                }
             }
 
             // 通常の文字列
+            let mut found_end = false;
             while i < bytes.len() {
                 if bytes[i] == b'\\' && i + 1 < bytes.len() {
                     i += 2;
@@ -57,11 +67,16 @@ pub fn find_hash_outside_string(line: &str) -> Option<usize> {
                 }
                 if bytes[i] == quote {
                     i += 1;
+                    found_end = true;
                     break;
                 }
                 i += 1;
             }
-            continue;
+            if found_end {
+                continue;
+            } else {
+                break; // 行末まで
+            }
         }
 
         if bytes[i] == b'#' {
@@ -85,9 +100,9 @@ const fn is_python_string_prefix(b: u8) -> bool {
 /// 対応するプレフィックス:
 /// - 単独: f, F, u, U, r, R, b, B
 /// - 複合: fr, rf, Fr, rF, FR, RF, fR, Rf, br, rb, Br, rB, BR, RB, bR, Rb
-fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
+fn try_skip_python_string(bytes: &[u8]) -> SkipResult {
     if bytes.is_empty() || !is_python_string_prefix(bytes[0]) {
-        return None;
+        return SkipResult::None;
     }
 
     let mut prefix_len = 1;
@@ -110,13 +125,13 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
 
     // プレフィックスの後にクォートがあるか確認
     if bytes.len() <= prefix_len {
-        return None;
+        return SkipResult::None;
     }
 
     let quote_start = prefix_len;
     let quote = bytes[quote_start];
     if quote != b'"' && quote != b'\'' {
-        return None;
+        return SkipResult::None;
     }
 
     let mut i = quote_start + 1;
@@ -135,11 +150,11 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
                 && bytes[i + 1] == quote
                 && bytes[i + 2] == quote
             {
-                return Some(i + 3);
+                return SkipResult::Closed(i + 3);
             }
             i += 1;
         }
-        return Some(bytes.len());
+        return SkipResult::Unclosed(bytes.len());
     }
 
     // 通常の文字列
@@ -149,12 +164,12 @@ fn try_skip_python_string(bytes: &[u8]) -> Option<usize> {
             continue;
         }
         if bytes[i] == quote {
-            return Some(i + 1);
+            return SkipResult::Closed(i + 1);
         }
         i += 1;
     }
 
-    Some(bytes.len())
+    SkipResult::Unclosed(bytes.len())
 }
 
 /// Docstring開始をチェック（三重クォートで始まるか）
