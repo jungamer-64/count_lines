@@ -146,56 +146,75 @@ fn process_content_streaming<R: BufRead>(
 
     let mut ends_with_lf = true;
 
+
     loop {
         let buf = reader.fill_buf().map_err(|e| EngineError::FileRead {
             path: path.to_path_buf(),
             source: e,
         })?;
+        
         if buf.is_empty() {
             if !partial_utf8.is_empty() {
-                // Handle remaining bytes if any (should not happen in valid UTF-8)
+                // Handle remaining bytes if any
                 let cow = String::from_utf8_lossy(&partial_utf8);
-                words += count_words_in_segment(&cow, &mut prev_ended_with_non_whitespace);
+                if count_words {
+                    words += count_words_in_segment(&cow, &mut prev_ended_with_non_whitespace);
+                }
+                
+                for c in cow.chars() {
+                    if count_newlines || (c != '\n' && c != '\r') {
+                        chars += 1;
+                    }
+                }
                 ends_with_lf = cow.as_bytes().last() == Some(&b'\n');
             }
             break;
         }
 
-        // Count lines
         lines += bytecount::count(buf, b'\n');
 
-        // Count words and chars with UTF-8 validation
-        let current_data = if partial_utf8.is_empty() {
-            buf.to_vec()
-        } else {
-            let mut v = std::mem::take(&mut partial_utf8);
-            v.extend_from_slice(buf);
-            v
-        };
+        // Optimized path for UTF-8 and words
+        if count_words || !count_newlines || true { // true because we always need chars currently or binary check
+            let current_data = if partial_utf8.is_empty() {
+                buf
+            } else {
+                partial_utf8.extend_from_slice(buf);
+                &partial_utf8
+            };
 
-        let (valid_part, invalid_part) = split_at_valid_utf8(&current_data);
-        let cow = String::from_utf8_lossy(valid_part);
-        
-        if count_words {
-            words += count_words_in_segment(&cow, &mut prev_ended_with_non_whitespace);
-        }
-        
-        // Count actual Unicode characters
-        for c in cow.chars() {
-            if count_newlines || (c != '\n' && c != '\r') {
-                chars += 1;
+            let (valid_part, invalid_part) = split_at_valid_utf8(current_data);
+            
+            if !valid_part.is_empty() {
+                // Safety: split_at_valid_utf8 ensures valid_part is valid UTF-8
+                let s = unsafe { std::str::from_utf8_unchecked(valid_part) };
+                
+                if count_words {
+                    words += count_words_in_segment(s, &mut prev_ended_with_non_whitespace);
+                }
+                
+                // Count actual Unicode characters
+                for c in s.chars() {
+                    if count_newlines || (c != '\n' && c != '\r') {
+                        chars += 1;
+                    }
+                }
+                
+                ends_with_lf = valid_part.last() == Some(&b'\n');
             }
-        }
 
-        ends_with_lf = if !invalid_part.is_empty() {
-            invalid_part.last() == Some(&b'\n')
-        } else {
-            cow.as_bytes().last() == Some(&b'\n')
-        };
-
-        partial_utf8.extend_from_slice(invalid_part);
-        if !invalid_part.is_empty() {
-            stats.is_binary = true; // Mark as binary if invalid UTF-8 is found
+            if !invalid_part.is_empty() {
+                // If we have an invalid part and it's not a split multi-byte char, it's binary
+                if invalid_part.len() >= 4 || !is_potentially_split_utf8(invalid_part) {
+                    stats.is_binary = true;
+                }
+                
+                // Keep for next chunk if it looks like a split UTF-8 character
+                let mut new_partial = Vec::with_capacity(invalid_part.len());
+                new_partial.extend_from_slice(invalid_part);
+                partial_utf8 = new_partial;
+            } else {
+                partial_utf8.clear();
+            }
         }
 
         let len = buf.len();
@@ -217,39 +236,42 @@ fn process_content_streaming<R: BufRead>(
 }
 
 fn split_at_valid_utf8(buf: &[u8]) -> (&[u8], &[u8]) {
-    let mut i = buf.len();
-    // UTF-8 can be up to 4 bytes. We look back at most 3 bytes for a start byte.
-    while i > 0 && i > buf.len().saturating_sub(4) {
-        let b = buf[i - 1];
-        if b & 0b1000_0000 == 0 {
-            // ASCII - always a boundary
-            return buf.split_at(i);
+    match std::str::from_utf8(buf) {
+        Ok(_) => (buf, &[]),
+        Err(e) => {
+            let valid_len = e.valid_up_to();
+            buf.split_at(valid_len)
         }
+    }
+}
+
+fn is_potentially_split_utf8(buf: &[u8]) -> bool {
+    let len = buf.len();
+    if len == 0 || len >= 4 {
+        return false;
+    }
+    // Look for a start byte
+    for i in (0..len).rev() {
+        let b = buf[i];
         if b & 0b1100_0000 == 0b1100_0000 {
-            // Start of a multi-byte sequence
-            let needed = if b & 0b1110_0000 == 0b1100_0000 {
+            // Found a start byte. Is it potentially asking for more bytes?
+            let expected = if b & 0b1110_0000 == 0b1100_0000 {
                 2
             } else if b & 0b1111_0000 == 0b1110_0000 {
                 3
-            } else {
+            } else if b & 0b1111_1000 == 0b1111_0000 {
                 4
-            };
-
-            if buf.len() - (i - 1) >= needed {
-                // Complete sequence
-                return buf.split_at(buf.len());
             } else {
-                // Incomplete sequence
-                return buf.split_at(i - 1);
-            }
+                0
+            };
+            return expected > (len - i);
         }
-        i -= 1;
+        if b & 0b1000_0000 == 0 {
+            // ASCII byte in the middle of invalid part? Shouldn't happen with split_at_valid_utf8 logic
+            return false;
+        }
     }
-    // If we didn't find a start byte, it might be a sequence split even further back,
-    // or just valid continuation bytes that are part of a sequence starting in a previous chunk.
-    // However, if we are looking at a chunk that is just middle of a long multi-byte char,
-    // we should have kept the start byte in `partial_utf8`.
-    (buf, &[])
+    true
 }
 
 fn count_words_in_segment(s: &str, prev_ended_with_non_whitespace: &mut bool) -> usize {
