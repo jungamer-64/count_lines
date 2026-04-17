@@ -5,7 +5,6 @@ pub use count_lines_engine::config::{
     Config, ConfigBuilder, FilterConfig, FilterConfigBuilder, WalkOptions, WalkOptionsBuilder,
 };
 use count_lines_engine::options as engine_options;
-use std::path::PathBuf;
 use std::time::Duration;
 
 impl From<Args> for Config {
@@ -42,14 +41,7 @@ impl From<Args> for Config {
 
         // Convert enums via From impls
         let format: engine_options::OutputFormat = args.output.format.into();
-        let output_mode: engine_options::OutputMode = args.output.output_mode.into();
         let watch_output: engine_options::WatchOutput = args.behavior.watch_output.into();
-        let by_mode: Vec<_> = args
-            .output
-            .by
-            .into_iter()
-            .map(engine_options::ByMode::from)
-            .collect();
         let sort: Vec<_> = args
             .output
             .sort
@@ -63,22 +55,12 @@ impl From<Args> for Config {
             .filter(filter)
             .format(format)
             .sort(sort)
-            .top_n(args.output.top)
-            .by(by_mode)
-            .output_mode(output_mode)
-            .by_limit(args.output.by_limit)
             .total_row(args.output.total_row)
             .count_newlines_in_chars(args.output.count_newlines_in_chars)
             .progress(args.output.progress)
-            .ratio(args.output.ratio)
-            .output_path(args.output.output)
             .count_words(count_words)
             .count_sloc(count_sloc)
             .strict(args.behavior.strict)
-            .incremental(args.behavior.incremental)
-            .cache_dir(args.behavior.cache_dir)
-            .verify_cache(args.behavior.cache_verify)
-            .clear_cache(args.behavior.clear_cache)
             .watch(args.behavior.watch)
             .watch_interval(Duration::from_secs(
                 args.behavior.watch_interval.unwrap_or(1),
@@ -100,7 +82,7 @@ fn walk_options_from_args(args: &Args) -> WalkOptions {
         .unwrap_or_else(num_cpus::get);
 
     let roots = if paths.is_empty() {
-        vec![PathBuf::from(".")]
+        vec![std::path::PathBuf::from(".")]
     } else {
         paths.clone()
     };
@@ -114,9 +96,6 @@ fn walk_options_from_args(args: &Args) -> WalkOptions {
         .follow_links(scan.follow)
         .override_include(scan.override_include.clone())
         .override_exclude(scan.override_exclude.clone())
-        .case_insensitive_dedup(scan.case_insensitive_dedup)
-        .files_from(scan.files_from.clone())
-        .files_from0(scan.files_from0.clone())
         .build()
         .expect("Failed to build walk options")
 }
@@ -170,13 +149,6 @@ map_enum!(
     Jsonl
 );
 map_enum!(
-    options::OutputMode,
-    engine_options::OutputMode,
-    Full,
-    Summary,
-    TotalOnly
-);
-map_enum!(
     options::WatchOutput,
     engine_options::WatchOutput,
     Full,
@@ -193,20 +165,3 @@ map_enum!(
     Ext,
     Sloc
 );
-map_enum!(
-    options::Granularity,
-    engine_options::Granularity,
-    Day,
-    Week,
-    Month
-);
-
-impl From<options::ByMode> for engine_options::ByMode {
-    fn from(b: options::ByMode) -> Self {
-        match b {
-            options::ByMode::Ext => Self::Ext,
-            options::ByMode::Dir(d) => Self::Dir(d),
-            options::ByMode::Mtime(g) => Self::Mtime(g.into()),
-        }
-    }
-}

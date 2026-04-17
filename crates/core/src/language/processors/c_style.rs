@@ -52,8 +52,7 @@
 
 use crate::language::processor_trait::LineProcessor;
 use crate::language::string_utils::{
-    StringSkipOptions, try_skip_prefixed_string,
-    try_skip_quoted_string, try_skip_regex, SkipResult,
+    SkipResult, StringSkipOptions, try_skip_prefixed_string, try_skip_quoted_string, try_skip_regex,
 };
 
 /// C-style comment SLOC processor (`//`, `/* */`) — non-nesting.
@@ -161,7 +160,7 @@ impl CStyleProcessor {
                 let quote = self.quote_char.unwrap();
                 let mut end = i;
                 let mut found_end = false;
-                
+
                 // Handle verbatim strings (C# style) if enabled
                 let verbatim = self.options.csharp_verbatim() && quote == b'"';
 
@@ -171,7 +170,7 @@ impl CStyleProcessor {
                         continue;
                     }
                     if bytes[end] == quote {
-                        if verbatim && end + 1 < bytes.len() && bytes[end+1] == quote {
+                        if verbatim && end + 1 < bytes.len() && bytes[end + 1] == quote {
                             end += 2; // Escaped quote ""
                             continue;
                         }
@@ -207,8 +206,16 @@ impl CStyleProcessor {
 
             // Check for string literals to skip (strings count as code)
             let skip_result = try_skip_prefixed_string(bytes, i, self.options);
-            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_quoted_string(bytes, i, self.options) };
-            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_regex(bytes, i, self.options) };
+            let skip_result = if skip_result.is_some() {
+                skip_result
+            } else {
+                try_skip_quoted_string(bytes, i, self.options)
+            };
+            let skip_result = if skip_result.is_some() {
+                skip_result
+            } else {
+                try_skip_regex(bytes, i, self.options)
+            };
 
             match skip_result {
                 SkipResult::Closed(skip) => {
@@ -231,9 +238,10 @@ impl CStyleProcessor {
                     let b = bytes[i];
                     if b == b'"' || b == b'\'' || b == b'`' {
                         self.quote_char = Some(b);
-                    } else if (b == b'r' || b == b'b') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
-                        self.quote_char = Some(b'"');
-                    } else if b == b'@' && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
+                    } else if (b == b'r' || b == b'b' || b == b'@')
+                        && i + 1 < bytes.len()
+                        && bytes[i + 1] == b'"'
+                    {
                         self.quote_char = Some(b'"');
                     } else {
                         // Default to double quote if unknown prefix, should not happen often
@@ -393,7 +401,7 @@ impl LineProcessor for NestingCStyleProcessor {
         // NOTE: For now we use the same row-by-row logic as CStyleProcessor but with depth tracking.
         // Actually, let's just use the specialized logic that handles nesting.
         // For line stats, we can reuse CStyleProcessor's loop but with depth.
-        
+
         let bytes = line.as_bytes();
         let mut i = 0;
         let mut has_code = false;
@@ -418,7 +426,11 @@ impl LineProcessor for NestingCStyleProcessor {
                     end += 1;
                 }
 
-                let segment_end = if found_end || found_open { end + 2 } else { bytes.len() };
+                let segment_end = if found_end || found_open {
+                    end + 2
+                } else {
+                    bytes.len()
+                };
                 let segment = &line[i..segment_end];
 
                 CStyleProcessor::update_stats_segment(
@@ -446,24 +458,24 @@ impl LineProcessor for NestingCStyleProcessor {
                 let quote = self.quote_char.unwrap();
                 let mut end = i;
                 let mut found_end = false;
-                
-                // Rust raw strings don't use self.in_string = true for single lines, 
+
+                // Rust raw strings don't use self.in_string = true for single lines,
                 // but NestingCStyleProcessor might be used for other languages too.
                 // However, Rust's only multiline string is raw string which is handled by SkipResult.
                 // Normal strings in Rust are NOT multiline (they need \ at end of line).
                 // Wait, if a normal string has \ at end of line, it's still unclosed on this line.
-                
+
                 // Handle verbatim strings (C# style) if enabled
                 // Handle verbatim strings (C# style) if enabled
                 let verbatim = CStyleProcessor::options_has_verbatim(quote, self.options);
-                
+
                 while end < bytes.len() {
                     if !verbatim && bytes[end] == b'\\' && end + 1 < bytes.len() {
                         end += 2;
                         continue;
                     }
                     if bytes[end] == quote {
-                        if verbatim && end + 1 < bytes.len() && bytes[end+1] == quote {
+                        if verbatim && end + 1 < bytes.len() && bytes[end + 1] == quote {
                             end += 2; // Escaped quote ""
                             continue;
                         }
@@ -499,8 +511,16 @@ impl LineProcessor for NestingCStyleProcessor {
 
             // Check for string literals to skip (strings count as code)
             let skip_result = try_skip_prefixed_string(bytes, i, self.options);
-            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_quoted_string(bytes, i, self.options) };
-            let skip_result = if skip_result.is_some() { skip_result } else { try_skip_regex(bytes, i, self.options) };
+            let skip_result = if skip_result.is_some() {
+                skip_result
+            } else {
+                try_skip_quoted_string(bytes, i, self.options)
+            };
+            let skip_result = if skip_result.is_some() {
+                skip_result
+            } else {
+                try_skip_regex(bytes, i, self.options)
+            };
 
             match skip_result {
                 SkipResult::Closed(skip) => {
@@ -523,8 +543,6 @@ impl LineProcessor for NestingCStyleProcessor {
                     let b = bytes[i];
                     if b == b'"' || b == b'\'' || b == b'`' {
                         self.quote_char = Some(b);
-                    } else if (b == b'r' || b == b'b') && i + 1 < bytes.len() && bytes[i + 1] == b'"' {
-                        self.quote_char = Some(b'"');
                     } else {
                         self.quote_char = Some(b'"');
                     }
@@ -765,8 +783,11 @@ mod tests {
         // Line 1: Starts a string that contains a block comment start marker
         assert_eq!(p.process("let s = \"/* "), 1);
         // If it correctly handles strings, it should NOT be in a block comment
-        assert!(!p.is_in_block_comment(), "Should not be in block comment after open quote");
-        
+        assert!(
+            !p.is_in_block_comment(),
+            "Should not be in block comment after open quote"
+        );
+
         // Line 2: Contains what looks like a block comment end and a closing quote
         // If the previous line incorrectly started a block comment, this line might be miscounted.
         assert_eq!(p.process(" */ \";"), 1);

@@ -1,5 +1,5 @@
 // crates/engine/src/config.rs
-use crate::options::{ByMode, OutputFormat, OutputMode, SortKey, WatchOutput};
+use crate::options::{OutputFormat, SortKey, WatchOutput};
 use derive_builder::Builder;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -23,12 +23,6 @@ pub struct WalkOptions {
     pub override_include: Vec<String>,
     #[builder(default)]
     pub override_exclude: Vec<String>,
-    #[builder(default)]
-    pub case_insensitive_dedup: bool,
-    #[builder(default)]
-    pub files_from: Option<PathBuf>,
-    #[builder(default)]
-    pub files_from0: Option<PathBuf>,
     #[builder(default, setter(strip_option))]
     pub types: Option<ignore::types::Types>,
 }
@@ -44,9 +38,6 @@ impl Default for WalkOptions {
             follow_links: false,
             override_include: vec![],
             override_exclude: vec![],
-            case_insensitive_dedup: false,
-            files_from: None,
-            files_from0: None,
             types: None,
         }
     }
@@ -103,23 +94,11 @@ pub struct Config {
     #[builder(default)]
     pub sort: Vec<(SortKey, bool)>,
     #[builder(default)]
-    pub top_n: Option<usize>,
-    #[builder(default)]
-    pub by: Vec<ByMode>,
-    #[builder(default)]
-    pub output_mode: OutputMode,
-    #[builder(default)]
-    pub by_limit: Option<usize>,
-    #[builder(default)]
     pub total_row: bool,
     #[builder(default)]
     pub count_newlines_in_chars: bool,
     #[builder(default)]
     pub progress: bool,
-    #[builder(default)]
-    pub ratio: bool,
-    #[builder(default)]
-    pub output_path: Option<PathBuf>,
 
     #[builder(default)]
     pub count_words: bool,
@@ -128,14 +107,6 @@ pub struct Config {
 
     #[builder(default)]
     pub strict: bool,
-    #[builder(default)]
-    pub incremental: bool,
-    #[builder(default)]
-    pub cache_dir: Option<PathBuf>,
-    #[builder(default)]
-    pub verify_cache: bool,
-    #[builder(default)]
-    pub clear_cache: bool,
     #[builder(default)]
     pub watch: bool,
     #[builder(default = "Duration::from_secs(1)")]
@@ -154,22 +125,12 @@ impl Default for Config {
             filter: FilterConfig::default(),
             format: OutputFormat::Table,
             sort: vec![],
-            top_n: None,
-            by: vec![],
-            output_mode: OutputMode::default(),
-            by_limit: None,
             total_row: false,
             count_newlines_in_chars: false,
             progress: false,
-            ratio: false,
-            output_path: None,
             count_words: false,
             count_sloc: false,
             strict: false,
-            incremental: false,
-            cache_dir: None,
-            verify_cache: false,
-            clear_cache: false,
             watch: false,
             watch_interval: Duration::from_secs(1),
             watch_output: WatchOutput::Full,

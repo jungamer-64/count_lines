@@ -8,13 +8,14 @@
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE-APACHE)
 
 Rayon による並列処理で大規模リポジトリでもスピーディーに集計。  
-多彩な出力フォーマット（Table / CSV / JSON / YAML / Markdown）に対応し、  
-`.gitignore` を尊重する Git モードや豊富なフィルタリングオプションを搭載しています。
+多彩な出力フォーマット（Table / CSV / TSV / JSON / YAML / Markdown / JSONL）に対応し、  
+実務向けのフィルタリングと比較機能を備えています。
 
 ## 📚 ドキュメント
 
 - **[📖 詳細な README](docs/user/README.md)** - プロジェクトの詳細情報・機能一覧
-- **[🚀 使用方法](docs/user/USAGE.md)** - CLI オプションの完全リファレンス
+- **[🚀 使用方法](docs/user/USAGE.md)** - よく使う実行パターン
+- **[🧾 CLI リファレンス](docs/user/CLI_REFERENCE.md)** - 現行オプション仕様
 - **[🤝 コントリビューション](docs/developer/CONTRIBUTING.md)** - 開発に参加する方法
 - **[🏗️ アーキテクチャ](docs/developer/ARCHITECTURE.md)** - プロジェクト構造とデザイン
 - **[📝 CHANGELOG](docs/project/CHANGELOG.md)** - 変更履歴
@@ -39,14 +40,11 @@ cargo install --path crates/cli
 # カレントディレクトリを集計
 count_lines
 
-# 上位20件を表示
-count_lines --top 20
-
 # Rust ファイルのみを対象に JSON 出力
 count_lines --ext rs --format json
 
-# Git リポジトリモード（.gitignore を尊重）
-count_lines --git --top 30
+# スナップショット差分比較
+count_lines --compare old.json new.json
 ```
 
 詳細は [使用方法ドキュメント](docs/user/USAGE.md) を参照してください。
@@ -54,19 +52,16 @@ count_lines --git --top 30
 ## 🌟 主な機能
 
 - ⚡ **高速並列処理** - Rayon による並列化で大規模プロジェクトも高速集計
-- 🎯 **柔軟なフィルタリング** - glob / サイズ / 行数 / 更新日時など多彩な条件
+- 🎯 **柔軟なフィルタリング** - include/exclude/ext、サイズ/行数/文字数/mtime 絞り込み
 - 📊 **多様な出力形式** - Table, CSV, TSV, JSON, YAML, Markdown, JSONL
-- 🔍 **Git 統合** - `.gitignore` を尊重した集計
-- 📈 **集計機能** - 拡張子別・ディレクトリ別・更新時刻別のグルーピング
-- 🔄 **スナップショット比較** - JSON 出力を使った履歴比較
+- 👀 **監視モード** - `--watch` で変更時に再計測
+- 🔄 **スナップショット比較** - `--compare` で JSON 差分を確認
 
 ## 📦 ライブラリとしての利用
 
 ```rust
 use clap::Parser;
-use count_lines_cli::args::Args;
-use count_lines_cli::config::Config;
-use count_lines_cli::engine;
+use count_lines_cli::{args::Args, config::Config, engine};
 
 fn main() -> anyhow::Result<()> {
     let args = Args::parse_from(["count_lines", "--format", "json", "."]);

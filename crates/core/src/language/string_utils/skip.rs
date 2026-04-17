@@ -1,8 +1,8 @@
 // crates/core/src/language/string_utils/skip.rs
 use crate::language::StringSkipOptions;
 use crate::language::string_utils::{
-    try_skip_byte_string, try_skip_char_literal, try_skip_cpp_raw_string, try_skip_raw_string,
-    SkipResult,
+    SkipResult, try_skip_byte_string, try_skip_char_literal, try_skip_cpp_raw_string,
+    try_skip_raw_string,
 };
 
 /// 識別子に使える文字かどうかを判定
@@ -14,11 +14,7 @@ pub const fn is_ident_char(b: u8) -> bool {
 
 /// Try to skip a prefixed string literal (e.g. `r"..."`, `b"..."`, `@"..."`, `R"(...)"`).
 #[must_use]
-pub fn try_skip_prefixed_string(
-    line: &[u8],
-    i: usize,
-    options: StringSkipOptions,
-) -> SkipResult {
+pub fn try_skip_prefixed_string(line: &[u8], i: usize, options: StringSkipOptions) -> SkipResult {
     let bytes = &line[i..];
 
     if options.csharp_verbatim() && bytes.len() >= 2 && bytes[0] == b'@' && bytes[1] == b'"' {

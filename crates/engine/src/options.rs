@@ -29,18 +29,6 @@ pub enum WatchOutput {
     Jsonl,
 }
 
-/// Output mode (alternative to `summary_only`/`total_only`)
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum OutputMode {
-    /// Show all files individually
-    #[default]
-    Full,
-    /// Summary by extension/directory only
-    Summary,
-    /// Show total only
-    TotalOnly,
-}
-
 /// Keys to sort the resulting statistics by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SortKey {
@@ -58,26 +46,4 @@ pub enum SortKey {
     Ext,
     /// SLOC (Source Lines of Code)
     Sloc,
-}
-
-/// Time granularity for grouping by modification time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Granularity {
-    /// Group by day.
-    Day,
-    /// Group by week.
-    Week,
-    /// Group by month.
-    Month,
-}
-
-/// Criteria to group the file statistics by.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum ByMode {
-    /// Group by file extension.
-    Ext,
-    /// Group by directory up to the given depth.
-    Dir(usize),
-    /// Group by modification time with given granularity.
-    Mtime(Granularity),
 }

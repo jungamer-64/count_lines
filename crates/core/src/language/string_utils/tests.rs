@@ -7,7 +7,7 @@ use crate::language::string_utils::find_any_outside_string;
 // ============================================================================
 
 #[cfg(test)]
-mod tests {
+mod suite {
     use super::*;
 
     // =========================================================================
@@ -15,7 +15,7 @@ mod tests {
     // =========================================================================
 
     mod regex_literal_tests {
-        use crate::language::string_utils::{try_skip_regex_literal, SkipResult};
+        use crate::language::string_utils::{SkipResult, try_skip_regex_literal};
 
         #[test]
         fn test_simple_regex_literal() {

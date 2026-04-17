@@ -12,7 +12,7 @@ pub mod watch;
 
 use crate::config::Config;
 use crate::error::{EngineError, Result};
-use crate::stats::RunResult;
+use crate::stats::{FileStats, RunResult};
 
 /// Run the file counting engine.
 ///
@@ -38,10 +38,12 @@ pub fn run(config: &Config) -> Result<RunResult> {
     std::thread::spawn(move || {
         let tx = tx.clone();
         let config = config_inner;
-        if let Err(e) = crate::filesystem::walk_parallel(&walk_cfg, &filter_cfg, move |path, meta| {
-            let res = processor::process_file((path, meta), &config);
-            let _ = tx.send(res);
-        }) {
+        if let Err(e) =
+            crate::filesystem::walk_parallel(&walk_cfg, &filter_cfg, move |path, meta| {
+                let res = processor::process_file((path, meta), &config);
+                let _ = tx.send(res);
+            })
+        {
             let _ = err_tx.send(e);
         }
     });
@@ -50,7 +52,11 @@ pub fn run(config: &Config) -> Result<RunResult> {
 
     for res in rx {
         match res {
-            Ok(stats) => result.stats.push(stats),
+            Ok(stats) => {
+                if matches_result_filter(&stats, &config.filter) {
+                    result.stats.push(stats);
+                }
+            }
             Err(e) => {
                 if config.strict {
                     return Err(e);
@@ -72,4 +78,35 @@ pub fn run(config: &Config) -> Result<RunResult> {
     }
 
     Ok(result)
+}
+
+fn matches_result_filter(stats: &FileStats, filter: &crate::config::FilterConfig) -> bool {
+    if filter.min_lines.is_some_and(|min| stats.lines < min) {
+        return false;
+    }
+    if filter.max_lines.is_some_and(|max| stats.lines > max) {
+        return false;
+    }
+
+    if filter.min_chars.is_some_and(|min| stats.chars < min) {
+        return false;
+    }
+    if filter.max_chars.is_some_and(|max| stats.chars > max) {
+        return false;
+    }
+
+    if filter.min_words.is_some() || filter.max_words.is_some() {
+        let Some(words) = stats.words else {
+            return false;
+        };
+
+        if filter.min_words.is_some_and(|min| words < min) {
+            return false;
+        }
+        if filter.max_words.is_some_and(|max| words > max) {
+            return false;
+        }
+    }
+
+    true
 }
